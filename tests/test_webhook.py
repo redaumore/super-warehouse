@@ -38,7 +38,9 @@ def test_ack_returns_quickly(client):
     """ACK is returned well under the 5-second SLA (happy path)."""
     body = b'{"message": {"chat": {"id": 1}, "text": "hola"}}'
     start = time.perf_counter()
-    r = client.post("/webhook/telegram", content=body, headers={"x-hub-signature-256": _signature(body)})
+    r = client.post(
+        "/webhook/telegram", content=body, headers={"x-hub-signature-256": _signature(body)}
+    )
     elapsed = time.perf_counter() - start
     assert r.status_code == 200
     assert r.text == "ACK"

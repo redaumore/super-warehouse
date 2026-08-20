@@ -11,7 +11,7 @@ design's tables and the `vector(1536)` column.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
 from src.config import get_settings

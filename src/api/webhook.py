@@ -45,7 +45,10 @@ def _signature_is_valid(payload_body: bytes, signature: str | None) -> bool:
     """
     if not signature:
         return False
-    expected = "sha256=" + hmac.new(settings.webhook_secret.encode(), payload_body, hashlib.sha256).hexdigest()
+    expected = (
+        "sha256="
+        + hmac.new(settings.webhook_secret.encode(), payload_body, hashlib.sha256).hexdigest()
+    )
     return hmac.compare_digest(expected, signature)
 
 

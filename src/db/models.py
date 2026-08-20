@@ -13,7 +13,6 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import List
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -61,7 +60,9 @@ class ListaPrecios(Base):
     lista_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     nombre: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     # Percent discount applied to list prices. Base=0, Gremio A=10, Gremio B=20.
-    descuento_lista_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    descuento_lista_pct: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal(0)
+    )
 
 
 class Cliente(Base):
@@ -73,8 +74,12 @@ class Cliente(Base):
     nombre_comercial: Mapped[str] = mapped_column(String(200), nullable=False)
     contacto: Mapped[str | None] = mapped_column(String(200), nullable=True)
     telefono_norm: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
-    lista_precios_id: Mapped[int] = mapped_column(ForeignKey("lista_precios.lista_id"), nullable=False)
-    descuento_particular_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    lista_precios_id: Mapped[int] = mapped_column(
+        ForeignKey("lista_precios.lista_id"), nullable=False
+    )
+    descuento_particular_pct: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal(0)
+    )
 
     lista_precios: Mapped[ListaPrecios] = relationship()
 
@@ -88,7 +93,9 @@ class Proveedor(Base):
     razon_social: Mapped[str] = mapped_column(String(200), nullable=False)
     contacto: Mapped[str | None] = mapped_column(String(200), nullable=True)
     telefono: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    margen_predeterminado: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    margen_predeterminado: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal(0)
+    )
     condiciones: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -103,13 +110,17 @@ class Catalogo(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     codigo_interno: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     codigo_barras: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    proveedor_id: Mapped[int] = mapped_column(ForeignKey("proveedores.proveedor_id"), nullable=False)
+    proveedor_id: Mapped[int] = mapped_column(
+        ForeignKey("proveedores.proveedor_id"), nullable=False
+    )
     nombre_oficial: Mapped[str] = mapped_column(String(300), nullable=False)
     costo_proveedor: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    margen_aplicado_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    margen_aplicado_pct: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal(0)
+    )
     precio_lista_base: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     stock_disponible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    sinonimos: Mapped[List[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    sinonimos: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=True)
 
     proveedor: Mapped[Proveedor] = relationship()
@@ -121,11 +132,13 @@ class ProveedorSkuMapping(Base):
     __tablename__ = "proveedor_sku_mapping"
 
     mapping_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    proveedor_id: Mapped[int] = mapped_column(ForeignKey("proveedores.proveedor_id"), nullable=False)
+    proveedor_id: Mapped[int] = mapped_column(
+        ForeignKey("proveedores.proveedor_id"), nullable=False
+    )
     codigo_proveedor: Mapped[str] = mapped_column(String(64), nullable=False)
     descripcion_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     sku_interno: Mapped[str] = mapped_column(String(64), nullable=False)
-    confianza: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    confianza: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal(0))
 
 
 class StockReservation(Base):
@@ -138,10 +151,16 @@ class StockReservation(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("clientes.customer_id"), nullable=False)
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.order_id"), nullable=True)
     cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     ttl_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     estado: Mapped[ReservationEstado] = mapped_column(
-        Enum(ReservationEstado, name="reservation_estado", values_callable=lambda e: [m.value for m in e]),
+        Enum(
+            ReservationEstado,
+            name="reservation_estado",
+            values_callable=lambda e: [m.value for m in e],
+        ),
         nullable=False,
         default=ReservationEstado.ACTIVE,
     )
@@ -160,11 +179,13 @@ class Order(Base):
         default=OrderEstado.PENDING_APPROVAL,
     )
     needs_requote: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    items: Mapped[List["OrderItem"]] = relationship(back_populates="order")
+    items: Mapped[list[OrderItem]] = relationship(back_populates="order")
 
 
 class OrderItem(Base):
@@ -178,6 +199,6 @@ class OrderItem(Base):
     cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
     base_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     final_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    adjustment: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0"))
+    adjustment: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal(0))
 
     order: Mapped[Order] = relationship(back_populates="items")

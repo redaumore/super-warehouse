@@ -26,7 +26,11 @@ class TelegramChannel(Channel):
         # a bot token or network at import time.
         from telegram import Bot
 
-        self._bot = Bot(token=self.settings.telegram_bot_token) if self.settings.telegram_bot_token else None
+        self._bot = (
+            Bot(token=self.settings.telegram_bot_token)
+            if self.settings.telegram_bot_token
+            else None
+        )
 
     async def parse_inbound(self, payload: dict) -> InboundMessage:
         """Normalize a Telegram `update` payload into an `InboundMessage`."""
