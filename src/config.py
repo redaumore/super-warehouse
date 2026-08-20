@@ -1,0 +1,67 @@
+"""Application configuration.
+
+Reads settings from environment / `.env` via pydantic-settings. The values here
+are consumed across the app (DB URL, webhook secrets, reservation TTL, and the
+embedding/search thresholds used by Phase 2+).
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Runtime settings for the ferretería MVP."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # Database
+    postgres_user: str = "ferreteria"
+    postgres_password: str = "ferreteria"
+    postgres_db: str = "ferreteria"
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    database_url: str | None = None
+
+    # Webhook security
+    webhook_secret: str = "change-me"
+
+    # Reservation soft-lock TTL (minutes)
+    reservation_ttl_minutes: int = 30
+
+    # WhatsApp Cloud API
+    whatsapp_token: str = ""
+    whatsapp_phone_id: str = ""
+    whatsapp_verify_token: str = ""
+
+    # Telegram demo channel
+    telegram_bot_token: str = ""
+
+    # OpenAI
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_dims: int = 1536
+
+    # Feature flags (per-Fase stop points)
+    fase1_enabled: bool = True
+    fase2_enabled: bool = True
+    fase3_enabled: bool = True
+    fase4_enabled: bool = True
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Effective SQLAlchemy database URL (explicit override wins)."""
+        if self.database_url:
+            return self.database_url
+        return (
+            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Return a cached Settings instance (avoids re-parsing env on each call)."""
+    return Settings()
