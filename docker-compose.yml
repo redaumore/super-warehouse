@@ -1,0 +1,23 @@
+# PostgreSQL 16 + pgvector for the super-warehouse MVP.
+# Dev database with an explicit, reproducible image tag and healthcheck.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: super-warehouse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ferreteria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ferreteria}
+      POSTGRES_DB: ${POSTGRES_DB:-ferreteria}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ferreteria} -d ${POSTGRES_DB:-ferreteria}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
