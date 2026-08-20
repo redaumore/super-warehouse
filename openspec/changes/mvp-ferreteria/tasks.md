@@ -20,13 +20,13 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Foundation
 
-- [ ] 1.1 `pyproject.toml`, `docker-compose.yml` (Postgres+pgvector), `.env.example`, `Makefile`.
-- [ ] 1.2 `src/db/models.py`: all design entities; `vector(1536)` on catalogo.
-- [ ] 1.3 `src/db/session.py` + Alembic init + first migration.
-- [ ] 1.4 `src/channels/base.py` ABC + `src/channels/telegram.py` adapter.
-- [ ] 1.5 `src/config.py` Settings (keys, TTL=30, thresholds).
-- [ ] 1.6 `src/api/webhook.py` skeleton+signature verify+ACK <5s.
-- [ ] 1.7 `tests/conftest.py` Postgres+pgvector fixture; RED: models+migration.
+- [x] 1.1 `pyproject.toml`, `docker-compose.yml` (Postgres+pgvector), `.env.example`, `Makefile`.
+- [x] 1.2 `src/db/models.py`: all design entities; `vector(1536)` on catalogo.
+- [x] 1.3 `src/db/session.py` + Alembic init + first migration.
+- [x] 1.4 `src/channels/base.py` ABC + `src/channels/telegram.py` adapter.
+- [x] 1.5 `src/config.py` Settings (keys, TTL=30, thresholds).
+- [x] 1.6 `src/api/webhook.py` skeleton+signature verify+ACK <5s.
+- [x] 1.7 `tests/conftest.py` Postgres+pgvector fixture; RED: models+migration.
 
 ## Phase 2: Core
 
