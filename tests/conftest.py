@@ -11,7 +11,7 @@ design's tables and the `vector(1536)` column.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from src.config import get_settings
@@ -26,6 +26,11 @@ def db_engine():
     engine = create_engine(get_settings().sqlalchemy_database_url, pool_pre_ping=True)
     # Drop + recreate so each test run starts clean.
     Base.metadata.drop_all(engine)
+    # pgvector's `vector` type requires the extension, which `create_all` does
+    # not install. Create it idempotently so the suite is self-contained: CI
+    # starts from an empty DB and never runs Alembic.
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)
