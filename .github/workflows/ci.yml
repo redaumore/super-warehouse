@@ -14,8 +14,8 @@ jobs:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: ferreteria
-          POSTGRES_PASSWORD: ferreteria
           POSTGRES_DB: ferreteria
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -43,5 +43,5 @@ jobs:
 
       - name: Test
         env:
-          DATABASE_URL: postgresql+psycopg://ferreteria:ferreteria@localhost:5432/ferreteria
+          DATABASE_URL: postgresql+psycopg://ferreteria@localhost:5432/ferreteria
         run: pytest

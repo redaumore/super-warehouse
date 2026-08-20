@@ -17,9 +17,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Database
+    # Database. The password is deliberately not defaulted to a real value:
+    # it comes from .env / POSTGRES_PASSWORD so no credential is committed.
     postgres_user: str = "ferreteria"
-    postgres_password: str = "ferreteria"
+    postgres_password: str = ""
     postgres_db: str = "ferreteria"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
