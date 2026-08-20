@@ -1,0 +1,7 @@
+# Pre-commit hooks: block secrets from ever being committed.
+# Install with `pre-commit install` (run once per clone).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
