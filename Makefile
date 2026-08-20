@@ -1,8 +1,14 @@
-.PHONY: install db-up db-down db-logs migrate migrate-new test test-integration run lint format
+.PHONY: install db-up db-down db-logs migrate migrate-new test run lint format typecheck
 
-# Python / deps
-install:
-	poetry install --with dev
+PY := .venv/bin/python
+
+# Python / deps (idempotent: creates .venv + editable install only when missing)
+.venv/bin/python:
+	python3 -m venv .venv
+	$(PY) -m pip install --upgrade pip
+	$(PY) -m pip install -e ".[dev]"
+
+install: .venv/bin/python
 
 # Docker Postgres+pgvector
 db-up:
@@ -14,20 +20,22 @@ db-logs:
 
 # Alembic migrations
 migrate:
-	poetry run alembic upgrade head
+	$(PY) -m alembic upgrade head
 migrate-new:
-	poetry run alembic revision --autogenerate -m "$(m)"
+	$(PY) -m alembic revision --autogenerate -m "$(m)"
 
-# Tests (unit + integration). Integration tests require `make db-up`.
+# Tests (unit + integration). DB tests require `make db-up`.
 test:
-	poetry run pytest -x
+	$(PY) -m pytest
 
 # Runtime harness: boot the API for a manual ACK check.
 run:
-	poetry run uvicorn src.api.webhook:app --reload
+	$(PY) -m uvicorn src.api.webhook:app --reload
 
 # Quality
 lint:
-	poetry run ruff check src tests
+	$(PY) -m ruff check src tests
 format:
-	poetry run ruff format src tests
+	$(PY) -m ruff format src tests
+typecheck:
+	$(PY) -m mypy src

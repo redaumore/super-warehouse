@@ -2,9 +2,8 @@
 name = "super-warehouse"
 version = "0.1.0"
 description = "Ferretería (hardware store) multi-agent MVP: WhatsApp/Telegram intake, pricing, order lifecycle, backoffice."
-readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -23,6 +22,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.8",
 ]
 
 [build-system]
@@ -30,10 +31,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
-
-[tool.setuptools]
-package-dir = { "" = "src" }
+where = ["."]
+include = ["src", "src.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
