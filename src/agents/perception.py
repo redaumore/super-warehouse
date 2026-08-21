@@ -86,7 +86,7 @@ def transcribe_voice(transcriber: Transcriber, audio_path: str) -> Transcription
     """
     try:
         result = transcriber.transcribe(audio_path)
-    except Exception as exc:  # noqa: BLE001 - provider failures become domain errors
+    except Exception as exc:
         raise TranscriptionError(f"audio could not be transcribed: {exc}") from exc
     if not result.text.strip():
         raise TranscriptionError("audio produced no transcript")
@@ -101,7 +101,7 @@ def analyze_image(
     """Analyze an image, raising ``VisionError`` when nothing usable comes back."""
     try:
         result = analyzer.analyze(image_url, prompt or DEFAULT_VISION_PROMPT)
-    except Exception as exc:  # noqa: BLE001 - provider failures become domain errors
+    except Exception as exc:
         raise VisionError(f"image could not be analyzed: {exc}") from exc
     if not result.text.strip():
         raise VisionError("image analysis produced no description")

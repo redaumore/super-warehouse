@@ -13,9 +13,9 @@ which keeps the agent testable without a database.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Iterable
 
 from src.pricing.engine import compute_final
 
@@ -44,7 +44,7 @@ class QuoteLine:
     cantidad: int
     base_price: Decimal
     final_price: Decimal
-    adjustment: Decimal = Decimal("0")  # absolute discount amount applied
+    adjustment: Decimal = Decimal(0)  # absolute discount amount applied
     description: str | None = None
 
     @property
@@ -74,8 +74,8 @@ class Quote:
 
 def quote_order(
     items: Iterable[ItemInput],
-    list_discount: Decimal | float | int | None,
-    particular_discount: Decimal | float | int | None,
+    list_discount: Decimal | float | None,
+    particular_discount: Decimal | float | None,
 ) -> Quote:
     """Price every line with the customer's discounts and build the quote.
 
@@ -95,7 +95,7 @@ def quote_order(
     return Quote(lines=lines)
 
 
-def adjust_line(quote: Quote, sku: str, extra_discount_pct: Decimal | float | int) -> Quote:
+def adjust_line(quote: Quote, sku: str, extra_discount_pct: Decimal | float) -> Quote:
     """Return a new quote with one line re-priced by an extra discount.
 
     ``extra_discount_pct`` is applied multiplicatively to that line's final
