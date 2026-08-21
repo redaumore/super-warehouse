@@ -21,6 +21,7 @@ from src.agents.dispatch import (
     Decision,
     DecisionAction,
     LineAdjustment,
+    UnknownAdjustmentTargetError,
     UnknownDecisionError,
     apply_decision,
     format_quote_message,
@@ -269,3 +270,25 @@ def test_apply_approve_on_expired_reservation_requires_requote(order_ctx):
 def test_apply_unknown_decision_raises(order_ctx):
     with pytest.raises(UnknownDecisionError):
         apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.UNKNOWN))
+
+
+def test_apply_adjustment_no_matching_quote_line_raises(order_ctx):
+    """An adjustment naming a product outside the quote cannot be applied."""
+    decision = Decision(
+        action=DecisionAction.APPROVE,
+        adjustments=(LineAdjustment(sku="pintura", extra_discount_pct=Decimal("0.05")),),
+    )
+    with pytest.raises(UnknownAdjustmentTargetError):
+        apply_decision(order_ctx["session"], order_ctx["order"], decision, quote=_quote())
+    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
+
+
+def test_apply_adjustment_sku_not_in_order_raises(order_ctx):
+    """Without a quote the target is a SKU; an unknown SKU is refused."""
+    decision = Decision(
+        action=DecisionAction.APPROVE,
+        adjustments=(LineAdjustment(sku="ZZZ-999", extra_discount_pct=Decimal("0.05")),),
+    )
+    with pytest.raises(UnknownAdjustmentTargetError):
+        apply_decision(order_ctx["session"], order_ctx["order"], decision)
+    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL

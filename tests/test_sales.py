@@ -15,7 +15,6 @@ from src.agents.sales import (
     AdjustmentTargetError,
     ItemInput,
     Quote,
-    QuoteLine,
     adjust_line,
     apply_adjustments,
     quote_order,
@@ -46,7 +45,7 @@ def test_quote_applies_compound_discounts():
 def test_quote_without_discounts_prices_at_base():
     quote = quote_order((_CLAVOS,), None, None)
     assert quote.lines[0].final_price == Decimal("100.00")
-    assert quote.lines[0].adjustment == Decimal("0")
+    assert quote.lines[0].adjustment == Decimal(0)
 
 
 def test_quote_total_accumulates_line_totals():
@@ -67,7 +66,7 @@ def test_adjust_line_applies_extra_discount_to_one_line_only():
     assert quote.lines[0].final_price == Decimal("95.00")  # 100 × 0.95
     assert quote.lines[0].adjustment == Decimal("5.00")
     assert quote.lines[1].final_price == Decimal("50.00")  # untouched
-    assert quote.lines[1].adjustment == Decimal("0")
+    assert quote.lines[1].adjustment == Decimal(0)
 
 
 def test_adjust_line_unknown_sku_raises():
@@ -100,3 +99,8 @@ def test_quote_line_for_unknown_sku_raises():
     quote = _two_line_quote()
     with pytest.raises(KeyError):
         quote.line_for("NOPE-9")
+
+
+def test_quote_line_for_known_sku_returns_line():
+    quote = _two_line_quote()
+    assert quote.line_for("CLV-001").final_price == Decimal("100.00")
