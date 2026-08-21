@@ -30,11 +30,11 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Core
 
-- [ ] 2.1 `src/pricing/engine.py` pure `compute_base`/`compute_final`; RED: 1000×0.80×0.90=720.
+- [x] 2.1 `src/pricing/engine.py` pure `compute_base`/`compute_final`; RED: 1000×0.80×0.90=720.
 - [ ] 2.2 `src/agents/perception.py` Whisper STT + GPT-4o Vision.
-- [ ] 2.3 `src/agents/customer.py` phone normalize (`phonenumbers`); flag unknown.
-- [ ] 2.4 `src/agents/disambiguation.py` pgvector+`rapidfuzz`; auto-map or menu.
-- [ ] 2.5 `src/agents/inventory.py` soft-lock; `avail = stock − Σ active unexpired`.
+- [x] 2.3 `src/agents/customer.py` phone normalize (`phonenumbers`); flag unknown.
+- [x] 2.4 `src/agents/disambiguation.py` pgvector+`rapidfuzz`; auto-map or menu.
+- [x] 2.5 `src/agents/inventory.py` soft-lock; `avail = stock − Σ active unexpired`.
 - [ ] 2.6 `src/agents/sales.py` quote + per-line adjustments.
 - [ ] 2.7 `src/agents/dispatch.py` owner notify + approve/reject.
 - [ ] 2.8 `src/orchestrator/{router,session}.py`; preserves context.
