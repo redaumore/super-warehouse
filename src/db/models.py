@@ -185,6 +185,10 @@ class Order(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Relationship (not just FK) so SQLAlchemy orders inserts: orders depend on
+    # clientes and must be inserted after them in the same flush.
+    customer: Mapped[Cliente] = relationship()
+
     items: Mapped[list[OrderItem]] = relationship(back_populates="order")
 
 
