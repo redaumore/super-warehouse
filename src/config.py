@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_dims: int = 1536
 
+    # Hybrid catalog search thresholds (confidence in [0, 1]).
+    # A single candidate at/above the auto-map threshold maps without prompting;
+    # candidates at/above the ambiguity floor populate the disambiguation menu.
+    search_auto_map_threshold: float = 0.85
+    search_ambiguity_floor: float = 0.65
+
     # Feature flags (per-Fase stop points)
     fase1_enabled: bool = True
     fase2_enabled: bool = True
