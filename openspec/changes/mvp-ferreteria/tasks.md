@@ -31,16 +31,16 @@ Chain strategy: stacked-to-main
 ## Phase 2: Core
 
 - [x] 2.1 `src/pricing/engine.py` pure `compute_base`/`compute_final`; RED: 1000×0.80×0.90=720.
-- [ ] 2.2 `src/agents/perception.py` Whisper STT + GPT-4o Vision.
+- [x] 2.2 `src/agents/perception.py` Whisper STT + GPT-4o Vision.
 - [x] 2.3 `src/agents/customer.py` phone normalize (`phonenumbers`); flag unknown.
 - [x] 2.4 `src/agents/disambiguation.py` pgvector+`rapidfuzz`; auto-map or menu.
 - [x] 2.5 `src/agents/inventory.py` soft-lock; `avail = stock − Σ active unexpired`.
-- [ ] 2.6 `src/agents/sales.py` quote + per-line adjustments.
-- [ ] 2.7 `src/agents/dispatch.py` owner notify + approve/reject.
-- [ ] 2.8 `src/orchestrator/{router,session}.py`; preserves context.
-- [ ] 2.9 `src/order_lifecycle/state.py` enum+`needs_requote`; release on reject.
-- [ ] 2.10 `src/scheduler/sweeper.py` APScheduler releases EXPIRED + sets `needs_requote`.
-- [ ] 2.11 RED: TTL release; reject release; expired cannot approve.
+- [x] 2.6 `src/agents/sales.py` quote + per-line adjustments.
+- [x] 2.7 `src/agents/dispatch.py` owner notify + approve/reject.
+- [x] 2.8 `src/orchestrator/{router,session}.py`; preserves context.
+- [x] 2.9 `src/order_lifecycle/state.py` enum+`needs_requote`; release on reject.
+- [x] 2.10 `src/scheduler/sweeper.py` APScheduler releases EXPIRED + sets `needs_requote`.
+- [x] 2.11 RED: TTL release; reject release; expired cannot approve.
 
 ## Phase 3: Integration
 
@@ -58,8 +58,8 @@ Chain strategy: stacked-to-main
 
 - [ ] 4.1 Unit `test_pricing`: base, 0-margin, both/only-list, multiplicative.
 - [ ] 4.2 Unit `test_phone`: format variants normalize.
-- [ ] 4.3 Unit `test_state_machine`: transitions + `needs_requote`.
-- [ ] 4.4 Integration `test_inventory`: RED—expiry release, reject release, blocked.
+- [x] 4.3 Unit `test_state_machine`: transitions + `needs_requote`. *(delivered in PR3 with task 2.9 — `tests/test_order_lifecycle.py`)*
+- [x] 4.4 Integration `test_inventory`: RED—expiry release, reject release, blocked. *(delivered in PR3 with tasks 2.9–2.11 — `tests/test_order_lifecycle.py`, `tests/test_sweeper.py`)*
 - [ ] 4.5 Integration `test_search`: informal+misspelling resolve.
 - [ ] 4.6 Integration `test_intake`: ACK <5s; heavy work async.
 - [ ] 4.7 E2E `test_e2e_order`+`test_e2e_ingestion`: full flows.
