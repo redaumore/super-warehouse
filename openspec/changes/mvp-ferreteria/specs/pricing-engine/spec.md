@@ -14,7 +14,7 @@ The system MUST compute the base price as `Base = cost × (1 + margin%)`, where 
 
 - GIVEN an item with cost 925.92 and margin 35%
 - WHEN the base price is computed
-- THEN the base price is `925.92 × (1 + 0.35) = 1250.00`
+- THEN the base price is `925.92 × (1 + 0.35) = 1249.99` (HALF_UP to cents)
 
 #### Scenario: Zero margin yields cost
 
