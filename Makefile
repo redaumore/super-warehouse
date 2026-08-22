@@ -1,4 +1,4 @@
-.PHONY: install db-up db-down db-logs migrate migrate-new test run lint format typecheck test-docs check-test-docs
+.PHONY: install db-up db-down db-logs migrate migrate-new test run backoffice lint format typecheck test-docs check-test-docs
 
 PY := .venv/bin/python
 
@@ -31,6 +31,10 @@ test:
 # Runtime harness: boot the API for a manual ACK check.
 run:
 	$(PY) -m uvicorn src.api.webhook:app --reload
+
+# Backoffice UI (Gradio, four tabs).
+backoffice:
+	$(PY) -m src.backoffice.app
 
 # Quality
 lint:

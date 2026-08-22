@@ -22,6 +22,7 @@ TTL correctness is enforced at read time by the inventory agent; the sweeper
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -37,7 +38,7 @@ class RequiresRequoteError(Exception):
     """The order has TTL-expired reservations; it must be re-quoted before approval."""
 
 
-def _reservation_expired_expr():
+def _reservation_expired_expr() -> Any:
     """SQL expression: reservation timestamp + ttl_minutes (the expiry moment)."""
     return StockReservation.timestamp + func.make_interval(
         0, 0, 0, 0, 0, StockReservation.ttl_minutes

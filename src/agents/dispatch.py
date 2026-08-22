@@ -17,6 +17,7 @@ never touch the network.
 
 from __future__ import annotations
 
+import enum
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -64,7 +65,7 @@ class LineAdjustment:
     extra_discount_pct: Decimal
 
 
-class DecisionAction(str):
+class DecisionAction(str, enum.Enum):
     """Owner decision outcome: approve, reject, or unresolved."""
 
     APPROVE = "APPROVE"

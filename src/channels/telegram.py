@@ -8,6 +8,7 @@ Used as the low-friction demo channel while WhatsApp is the production primary
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from src.channels.base import Channel, InboundMessage
 from src.config import get_settings
@@ -32,7 +33,7 @@ class TelegramChannel(Channel):
             else None
         )
 
-    async def parse_inbound(self, payload: dict) -> InboundMessage:
+    async def parse_inbound(self, payload: dict[str, Any]) -> InboundMessage:
         """Normalize a Telegram `update` payload into an `InboundMessage`."""
         message = payload.get("message") or {}
         chat = message.get("chat") or {}
@@ -40,7 +41,7 @@ class TelegramChannel(Channel):
         text = message.get("text")
         return InboundMessage(channel=self.name, sender_id=sender_id, text=text, raw=payload)
 
-    def verify_request(self, payload: dict, signature: str | None) -> bool:
+    def verify_request(self, payload: dict[str, Any], signature: str | None) -> bool:
         """Telegram webhooks are authenticated by the bot token itself.
 
         For the MVP demo we accept any payload (the endpoint is only exposed

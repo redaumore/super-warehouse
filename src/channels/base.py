@@ -11,6 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
@@ -23,7 +24,7 @@ class InboundMessage:
     media_url: str | None = None
     media_type: str | None = None  # e.g. "voice", "image", "document"
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    raw: dict = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 class Channel(ABC):
@@ -32,11 +33,11 @@ class Channel(ABC):
     name: str
 
     @abstractmethod
-    async def parse_inbound(self, payload: dict) -> InboundMessage:
+    async def parse_inbound(self, payload: dict[str, Any]) -> InboundMessage:
         """Normalize a raw channel webhook payload into an `InboundMessage`."""
 
     @abstractmethod
-    def verify_request(self, payload: dict, signature: str | None) -> bool:
+    def verify_request(self, payload: dict[str, Any], signature: str | None) -> bool:
         """Return True when the inbound request is authentic (signature / token)."""
 
     @abstractmethod

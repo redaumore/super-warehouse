@@ -5,7 +5,7 @@ from src.integrations.openai import (
     OpenAITranscriber,
     OpenAIVisionAnalyzer,
 )
-from src.integrations.sheets import SheetsWriteStatus, SheetsWriter
+from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 
 __all__ = [
     "OpenAIEmbedder",

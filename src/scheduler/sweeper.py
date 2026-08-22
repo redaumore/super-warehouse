@@ -17,8 +17,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import-untyped]
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -27,7 +28,7 @@ from src.db.models import Order, ReservationEstado, StockReservation
 logger = logging.getLogger(__name__)
 
 
-def _expires_at_expr():
+def _expires_at_expr() -> Any:
     """SQL expression: the moment a reservation expires (timestamp + TTL)."""
     return StockReservation.timestamp + func.make_interval(
         0, 0, 0, 0, 0, StockReservation.ttl_minutes

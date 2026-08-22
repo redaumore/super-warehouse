@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 117, agrupados en 13 dominios.
+**Total de escenarios:** 198, agrupados en 24 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,15 +12,26 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 10
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 17
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
+- [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
+- [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 5
+- [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 7
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 5
+- [Registro en Google Sheets](#registro-en-google-sheets) — 5
+- [Códigos de barras](#códigos-de-barras) — 6
+- [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 15
+- [Feature flags por fase](#feature-flags-por-fase) — 7
+- [E2E: pedido completo](#e2e-pedido-completo) — 4
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 3
 
 ## Motor de precios
 
@@ -83,6 +94,16 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un ajuste que nombra un producto fuera de la cotización no se puede aplicar. _(`test_apply_adjustment_no_matching_quote_line_raises`)_
 - Sin cotización, un SKU desconocido en el ajuste se rechaza. _(`test_apply_adjustment_sku_not_in_order_raises`)_
 
+## Registro de aprobaciones
+
+- El total del pedido suma precio final por cantidad, redondeado a centavos. _(`test_order_total_sums_final_price_times_quantity`)_
+- Una línea ajustada aporta su precio final rebajado al total. _(`test_order_total_with_adjusted_line`)_
+- El resumen de ítems lista cantidad por SKU separado por punto y coma. _(`test_build_items_summary_lists_each_line`)_
+- Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
+- Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
+- Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
+- La cuarentena de Sheets no bloquea: se confirma y el estado lo reporta. _(`test_sheets_quarantine_never_blocks_approval`)_
+
 ## Orquestador y enrutamiento
 
 - Una nota de voz se enruta a Percepción (transcripción). _(`test_voice_note_routes_to_perception_stt`)_
@@ -133,6 +154,18 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un fallo del proveedor de visión lanza VisionError. _(`test_analyze_image_provider_error_raises_vision_error`)_
 - Una imagen sin descripción lanza VisionError. _(`test_analyze_image_empty_description_raises`)_
 
+## Integración con OpenAI
+
+- El avg_logprob de Whisper se mapea a una confianza en [0, 1]. _(`test_segment_confidence_maps_logprob_to_unit_range`)_
+- Un audio limpio transcribe con texto y confianza alta sin fragmentos. _(`test_transcribe_clean_audio_returns_text_and_high_confidence`)_
+- Un audio ruidoso marca los fragmentos de baja confianza, nunca los descarta. _(`test_transcribe_noisy_audio_flags_low_confidence_fragments`)_
+- Sin segmentos disponibles la confianza es plena (1.0). _(`test_transcribe_without_segments_has_full_confidence`)_
+- Un error del proveedor se propaga como TranscriptionError por percepción. _(`test_transcribe_propagates_provider_errors_as_transcription_error`)_
+- Una imagen analizada devuelve el texto con confianza plena al finalizar normal. _(`test_analyze_image_returns_text_with_stop_finish`)_
+- Un cierre anómalo (length) baja la confianza del análisis. _(`test_analyze_image_suspect_finish_lowers_confidence`)_
+- Un fallo del proveedor de visión se propaga como VisionError por percepción. _(`test_analyze_image_raises_vision_error_on_provider_failure`)_
+- El embedder conserva el orden de entrada y pasa modelo y dimensiones. _(`test_embed_preserves_input_order_and_passes_model_dimensions`)_
+
 ## Búsqueda en catálogo
 
 - Un nombre informal se mapea automáticamente al producto correcto. _(`test_informal_name_auto_maps_to_right_product`)_
@@ -161,6 +194,20 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El adaptador de Telegram normaliza un update crudo en un InboundMessage. _(`test_telegram_parse_inbound`)_
 - El canal demo de Telegram acepta webhooks autenticados por bot token. _(`test_telegram_verify_request_accepts_demo_payload`)_
 
+## Canal WhatsApp Cloud API
+
+- Un mensaje de texto de WhatsApp se normaliza con remitente y cuerpo. _(`test_parse_text_message_normalizes_sender_and_body`)_
+- Una nota de voz se marca como media_type voice con su media_id. _(`test_parse_voice_message_flags_media_kind`)_
+- Una foto se marca como media_type image con su media_id. _(`test_parse_image_message_flags_media_kind`)_
+- Un payload sin mensajes normaliza un InboundMessage vacío. _(`test_parse_empty_payload_yields_empty_sender`)_
+- El token de suscripción del webhook autentica la verificación hub. _(`test_verify_request_checks_subscription_verify_token`)_
+- Un payload de mensaje confía en la firma HMAC ya validada por el endpoint. _(`test_verify_request_message_payload_defers_to_endpoint_hmac`)_
+- Enviar texto postea al endpoint de mensajes con el bearer token. _(`test_send_text_posts_to_graph_messages_endpoint`)_
+- Sin token ni phone id configurados, enviar texto es un no-op. _(`test_send_text_without_config_is_noop`)_
+- Un error HTTP al enviar se traduce en WhatsAppError. _(`test_send_text_http_error_raises_whatsapp_error`)_
+- Descargar media resuelve el id a URL y devuelve los bytes. _(`test_fetch_media_resolves_id_to_bytes`)_
+- Sin token configurado, descargar media falla sin tocar la red. _(`test_fetch_media_without_token_raises_before_network`)_
+
 ## Webhook de entrada
 
 - El endpoint de salud responde 200. _(`test_healthz`)_
@@ -168,6 +215,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El webhook confirma (ACK) muy por debajo del SLA de 5 segundos. _(`test_ack_returns_quickly`)_
 - Un payload sin firma válida se rechaza con 401. _(`test_unauthenticated_payload_rejected`)_
 - Un payload con firma incorrecta se rechaza con 401. _(`test_bad_signature_rejected`)_
+
+## Intake y trabajo en background
+
+- El ACK responde en menos de 5 segundos aunque el trabajo pesado duerma. _(`test_ack_returns_under_five_seconds_with_slow_handler`)_
+- El trabajo pesado se ejecuta en background, después del ACK. _(`test_heavy_work_runs_after_ack_is_sent`)_
+- El handler de fondo recibe el mensaje entrante ya normalizado. _(`test_handler_receives_normalized_inbound_message`)_
 
 ## Modelo de datos y migraciones
 
@@ -190,3 +243,75 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un número registrado — aun reescrito en otro formato — resuelve como KNOWN. _(`test_known_phone_matches_registered_customer`)_
 - Un número válido pero no registrado se marca UNKNOWN, nunca se adivina. _(`test_unknown_phone_is_flagged_for_onboarding`)_
 - Un número no interpretable se marca INVALID sin forma normalizada. _(`test_invalid_phone_is_flagged_not_guessed`)_
+
+## Registro en Google Sheets
+
+- Una fila válida se agrega a la hoja y el pedido queda sincronizado. _(`test_append_success_registers_row_and_marks_synced`)_
+- Si la hoja falla, la fila se aísla en cuarentena sin lanzar excepción. _(`test_append_failure_quarantines_row_and_never_raises`)_
+- Si la cuarentena también falla, la fila queda registrada en memoria. _(`test_append_failure_with_unreachable_quarantine_keeps_memory_log`)_
+- Sin credenciales configuradas, la fila se cuarentena y no se lanza nada. _(`test_missing_credentials_quarantines_instead_of_raising`)_
+- El registro sincronizado refleja solo los appends exitosos. _(`test_sheets_synced_reflects_only_successful_appends`)_
+
+## Códigos de barras
+
+- Una imagen con códigos devuelve datos y simbología de cada código. _(`test_decode_image_returns_values_and_symbologies`)_
+- Una imagen sin códigos decodifica a una lista vacía. _(`test_decode_image_without_codes_returns_empty_list`)_
+- Una imagen ilegible falla con un error claro de decodificación. _(`test_decode_failure_raises_clear_error`)_
+- Un código único mapea a un solo SKU del catálogo. _(`test_single_barcode_maps_to_one_sku`)_
+- Un código compartido por dos SKU se marca DUPLICATE sin elegir por nadie. _(`test_duplicate_barcode_flags_candidates_for_owner`)_
+- Un código sin match se reporta como UNKNOWN para resolución manual. _(`test_unknown_barcode_is_reported`)_
+
+## OCR de documentos de proveedor
+
+- El texto de un remito se parsea en filas con cantidad y costo. _(`test_parse_line_items_extracts_quantity_and_cost_rows`)_
+- Las líneas no interpretables quedan señaladas, nunca se descartan. _(`test_parse_line_items_keeps_unparsed_lines_flagged`)_
+- Un texto vacío no produce filas ni líneas pendientes. _(`test_parse_line_items_empty_text_has_no_items`)_
+- Extraer un documento legible devuelve las filas parseadas. _(`test_extract_document_returns_parsed_items`)_
+- Un documento ilegible se rechaza con un error claro, sin escribir nada. _(`test_extract_document_rejects_illegible_with_clear_error`)_
+- Un fallo del proveedor de visión se propaga como VisionError. _(`test_extract_document_vision_failure_propagates`)_
+- Una lista de precios se parsea en código, descripción y costo. _(`test_parse_price_list_extracts_code_description_cost`)_
+- Una imagen local se codifica como data URL con su MIME. _(`test_image_to_data_url_embeds_file_bytes`)_
+- La lista de precios mapea SKU existentes y sugiere nuevos. _(`test_ingest_price_list_maps_and_suggests`)_
+- Re-ingestar la misma fila actualiza el mapeo sin duplicarlo. _(`test_ingest_price_list_updates_existing_mapping_without_duplicates`)_
+- Una descripción normalizada mapea al SKU sin coincidencia de código. _(`test_ingest_price_list_matches_by_normalized_name`)_
+
+## Backoffice (catálogo, clientes, monitor, ingesta)
+
+- Construir la app genera cuatro pestañas con los títulos esperados. _(`test_build_app_creates_four_tabs_with_expected_labels`)_
+- La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
+- La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
+- Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
+- La extracción delega en el analizador de visión y parsea las filas. _(`test_extract_document_items_uses_vision_analyzer`)_
+- Un documento ilegible se rechaza con un error claro. _(`test_extract_document_items_rejects_illegible`)_
+- La grilla de catálogo devuelve todos los campos por producto. _(`test_catalog_list_products_returns_expected_fields`)_
+- Editar stock y precio se refleja en la grilla. _(`test_catalog_update_stock_and_price`)_
+- Cambiar el margen recalcula el precio de lista con el motor de precios. _(`test_catalog_update_margin_recomputes_base_price`)_
+- Registrar un cliente normaliza el teléfono al formato canónico. _(`test_clients_create_normalizes_phone`)_
+- Un teléfono inválido impide registrar el cliente. _(`test_clients_create_rejects_invalid_phone`)_
+- Editar un cliente cambia su descuento particular. _(`test_clients_update_changes_discount`)_
+- Confirmar filas con SKU existente aumenta el stock y el costo. _(`test_confirm_items_updates_existing_product_stock`)_
+- Una fila sin SKU existente crea un producto nuevo con margen del proveedor. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
+- El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
+
+## Feature flags por fase
+
+- Por defecto todas las fases están habilitadas. _(`test_all_fases_enabled_by_default`)_
+- El flag de una fase deshabilitada se refleja en fase_enabled. _(`test_fase_enabled_reflects_flag`)_
+- Deshabilitar una fase hace que require_fase lance FeatureDisabledError. _(`test_require_fase_raises_when_disabled`)_
+- Con la fase habilitada, require_fase no lanza nada. _(`test_require_fase_passes_when_enabled`)_
+- Una fase inexistente se rechaza con ValueError. _(`test_unknown_fase_raises_value_error`)_
+- El backoffice no se construye cuando la fase 4 está deshabilitada. _(`test_backoffice_build_refuses_when_fase4_disabled`)_
+- Con la fase 2 apagada el webhook responde ACK sin despachar trabajo. _(`test_webhook_acks_without_dispatch_when_fase2_disabled`)_
+
+## E2E: pedido completo
+
+- Un pedido de texto llega, cotiza al dueño y al aprobar descuenta stock. _(`test_e2e_text_order_flows_to_owner_approval_and_stock_deduction`)_
+- Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre. _(`test_e2e_owner_reject_releases_reservation`)_
+- Una nota de voz de WhatsApp se normaliza marcando media_type voice. _(`test_e2e_whatsapp_voice_payload_flags_media`)_
+- Aunque el envío de confirmación falle, el flujo de aprobación no se corta. _(`test_e2e_http_error_on_confirm_still_completes_flow`)_
+
+## E2E: ingesta de documentos
+
+- Un remito subido se previsualiza y al confirmar actualiza el inventario. _(`test_e2e_remito_upload_previews_and_confirms_inventory`)_
+- Correcciones del dueño en la grilla reemplazan la extracción cruda. _(`test_e2e_owner_corrections_override_raw_extraction`)_
+- Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_

@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ class ConversationState:
     awaiting_decision: bool = False
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def with_updates(self, **changes) -> ConversationState:
+    def with_updates(self, **changes: Any) -> ConversationState:
         """Return a copy with the given fields replaced and the clock touched."""
         changes["updated_at"] = datetime.now(UTC)
         return replace(self, **changes)
