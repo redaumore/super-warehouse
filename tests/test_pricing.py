@@ -31,6 +31,7 @@ from src.pricing.engine import compute_base, compute_final
     ],
 )
 def test_compute_base(cost, margin, expected):
+    """El precio base = costo × (1 + margen), redondeado HALF_UP."""
     assert compute_base(cost, margin) == expected
 
 
@@ -47,17 +48,24 @@ def test_compute_base(cost, margin, expected):
     ],
 )
 def test_compute_final(base, list_discount, particular_discount, expected):
+    """El precio final = base × (1 − descuento lista) × (1 − descuento particular)."""
     assert compute_final(base, list_discount, particular_discount) == expected
 
 
 def test_discounts_compound_multiplicatively_not_additively():
-    """20% + 10% compound to 720, NOT 700 (never summed)."""
+    """Los descuentos componen multiplicativamente, nunca se suman.
+
+    20% + 10% compound to 720, NOT 700 (never summed).
+    """
     assert compute_final(1000, Decimal("0.20"), Decimal("0.10")) == Decimal("720.00")
     assert compute_final(1000, Decimal("0.20"), Decimal("0.10")) != Decimal("700.00")
 
 
 def test_final_matches_spec_formula_list_then_particular():
-    """Final = Base × (1 − list_discount) × (1 − particular_discount)."""
+    """El precio final sigue la fórmula de la spec: lista y luego particular.
+
+    Final = Base × (1 − list_discount) × (1 − particular_discount).
+    """
     base, list_discount, particular_discount = (
         Decimal("1250.00"),
         Decimal("0.10"),
@@ -70,10 +78,16 @@ def test_final_matches_spec_formula_list_then_particular():
 
 
 def test_base_price_rounds_half_up_to_cent():
-    """12.345 rounds HALF_UP to 12.35 (not 12.34, and never up to 12.35+)."""
+    """El precio base redondea HALF_UP al centavo.
+
+    12.345 rounds HALF_UP to 12.35 (not 12.34, and never up to 12.35+).
+    """
     assert compute_base(Decimal("12.345"), None) == Decimal("12.35")
 
 
 def test_final_price_rounds_half_up_to_cent():
-    """12.345 × 0.99 compounds to 12.22 (HALF_UP), not 12.21."""
+    """El precio final redondea HALF_UP al centavo.
+
+    12.345 × 0.99 compounds to 12.22 (HALF_UP), not 12.21.
+    """
     assert compute_final(Decimal("12.345"), Decimal("0.01"), None) == Decimal("12.22")

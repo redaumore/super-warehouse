@@ -1,7 +1,16 @@
-# Pre-commit hooks: block secrets from ever being committed.
+# Pre-commit hooks: block secrets and keep generated docs in sync.
 # Install with `pre-commit install` (run once per clone).
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
       - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: test-scenario-docs
+        name: Escenarios testeados al día
+        entry: python3 scripts/gen_test_scenarios.py --check
+        language: system
+        files: '^(tests/.*\.py|scripts/gen_test_scenarios\.py)$'
+        pass_filenames: false

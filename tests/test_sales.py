@@ -36,20 +36,27 @@ def _two_line_quote() -> Quote:
 
 
 def test_quote_applies_compound_discounts():
-    """Final = base × (1 − list) × (1 − particular); 100 × 0.8 × 0.9 = 72, never 70."""
+    """La cotización aplica descuentos compuestos (nunca sumados).
+
+    Final = base × (1 − list) × (1 − particular); 100 × 0.8 × 0.9 = 72, never 70.
+    """
     quote = quote_order((_CLAVOS,), Decimal("0.20"), Decimal("0.10"))
     assert quote.lines[0].final_price == Decimal("72.00")
     assert quote.lines[0].final_price != Decimal("70.00")
 
 
 def test_quote_without_discounts_prices_at_base():
+    """Sin descuentos, la cotización usa el precio base."""
     quote = quote_order((_CLAVOS,), None, None)
     assert quote.lines[0].final_price == Decimal("100.00")
     assert quote.lines[0].adjustment == Decimal(0)
 
 
 def test_quote_total_accumulates_line_totals():
-    """10 × 100 + 5 × 50 = 1250; quantity multiplies the unit price."""
+    """El total acumula los subtotales por línea (cantidad × precio).
+
+    10 × 100 + 5 × 50 = 1250; quantity multiplies the unit price.
+    """
     quote = _two_line_quote()
     assert quote.lines[0].line_total == Decimal("1000.00")
     assert quote.lines[1].line_total == Decimal("250.00")
@@ -57,11 +64,13 @@ def test_quote_total_accumulates_line_totals():
 
 
 def test_quote_rounds_half_up_to_cents():
+    """La cotización redondea HALF_UP al centavo."""
     quote = quote_order((ItemInput(sku="X", cantidad=1, base_price=Decimal("12.345")),), None, None)
     assert quote.lines[0].final_price == Decimal("12.35")
 
 
 def test_adjust_line_applies_extra_discount_to_one_line_only():
+    """Un ajuste aplica descuento extra solo a la línea indicada."""
     quote = adjust_line(_two_line_quote(), "CLV-001", Decimal("0.05"))
     assert quote.lines[0].final_price == Decimal("95.00")  # 100 × 0.95
     assert quote.lines[0].adjustment == Decimal("5.00")
@@ -70,11 +79,13 @@ def test_adjust_line_applies_extra_discount_to_one_line_only():
 
 
 def test_adjust_line_unknown_sku_raises():
+    """Ajustar un SKU desconocido lanza error."""
     with pytest.raises(KeyError, match="not in quote"):
         adjust_line(_two_line_quote(), "NOPE-9", Decimal("0.05"))
 
 
 def test_adjust_line_keeps_original_quote_immutable():
+    """Ajustar no muta la cotización original (es inmutable)."""
     original = _two_line_quote()
     adjusted = adjust_line(original, "CLV-001", Decimal("0.05"))
     assert original.lines[0].final_price == Decimal("100.00")
@@ -82,6 +93,7 @@ def test_adjust_line_keeps_original_quote_immutable():
 
 
 def test_apply_adjustments_multi_line():
+    """Se pueden aplicar varios ajustes por línea a la vez."""
     quote = apply_adjustments(
         _two_line_quote(),
         [("CLV-001", Decimal("0.10")), ("TRN-002", Decimal("0.05"))],
@@ -91,16 +103,19 @@ def test_apply_adjustments_multi_line():
 
 
 def test_apply_adjustments_unknown_target_raises():
+    """Un ajuste a un destino desconocido lanza error."""
     with pytest.raises(AdjustmentTargetError, match="not in quote"):
         apply_adjustments(_two_line_quote(), [("NOPE-9", Decimal("0.05"))])
 
 
 def test_quote_line_for_unknown_sku_raises():
+    """Pedir la línea de un SKU desconocido lanza error."""
     quote = _two_line_quote()
     with pytest.raises(KeyError):
         quote.line_for("NOPE-9")
 
 
 def test_quote_line_for_known_sku_returns_line():
+    """Pedir la línea de un SKU conocido la devuelve."""
     quote = _two_line_quote()
     assert quote.line_for("CLV-001").final_price == Decimal("100.00")

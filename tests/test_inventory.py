@@ -108,21 +108,25 @@ def _reserve(session, cantidad, *, estado=ReservationEstado.ACTIVE, timestamp=No
 
 
 def test_available_equals_stock_without_reservations(stock):
+    """Sin reservas, el stock disponible es todo el stock en mano."""
     assert available_stock(stock, "CLV-001") == 10
 
 
 def test_active_reservation_reduces_availability(stock):
+    """Una reserva activa reduce la disponibilidad."""
     _reserve(stock, 3)
     assert available_stock(stock, "CLV-001") == 7
 
 
 def test_multiple_active_reservations_accumulate(stock):
+    """Varias reservas activas se acumulan al descontar disponibilidad."""
     _reserve(stock, 3)
     _reserve(stock, 2)
     assert available_stock(stock, "CLV-001") == 5
 
 
 def test_non_active_reservations_do_not_lock_stock(stock):
+    """Las reservas no activas (convertidas, liberadas, expiradas) no bloquean stock."""
     _reserve(stock, 3, estado=ReservationEstado.CONVERTED)
     _reserve(stock, 2, estado=ReservationEstado.RELEASED)
     _reserve(stock, 1, estado=ReservationEstado.EXPIRED)
@@ -130,24 +134,30 @@ def test_non_active_reservations_do_not_lock_stock(stock):
 
 
 def test_expired_ttl_reservation_does_not_lock_stock(stock):
-    """An ACTIVE reservation past its TTL is excluded at read time."""
+    """Una reserva ACTIVE vencida por TTL se excluye al leer la disponibilidad.
+
+    An ACTIVE reservation past its TTL is excluded at read time.
+    """
     expired = datetime.now(UTC) - timedelta(minutes=31)
     _reserve(stock, 4, timestamp=expired, ttl=30)
     assert available_stock(stock, "CLV-001") == 10
 
 
 def test_unexpired_reservation_still_locks_stock(stock):
+    """Una reserva vigente todavía bloquea stock."""
     fresh = datetime.now(UTC) - timedelta(minutes=5)
     _reserve(stock, 4, timestamp=fresh, ttl=30)
     assert available_stock(stock, "CLV-001") == 6
 
 
 def test_unknown_sku_raises(stock):
+    """Consultar un SKU desconocido lanza error."""
     with pytest.raises(KeyError, match="CLV-XXX"):
         available_stock(stock, "CLV-XXX")
 
 
 def test_reserve_creates_active_reservation_and_locks(stock):
+    """Reservar crea una reserva activa con el TTL configurado y bloquea stock."""
     reservation = reserve_stock(stock, "CLV-001", customer_id=1, cantidad=3)
     assert reservation.estado is ReservationEstado.ACTIVE
     assert reservation.ttl_minutes == get_settings().reservation_ttl_minutes
@@ -155,6 +165,7 @@ def test_reserve_creates_active_reservation_and_locks(stock):
 
 
 def test_reserve_beyond_available_stock_is_refused(stock):
+    """Reservar más de lo disponible se rechaza sin bloquear de más."""
     _reserve(stock, 8)
     with pytest.raises(InsufficientStockError):
         reserve_stock(stock, "CLV-001", customer_id=1, cantidad=5)
@@ -162,5 +173,6 @@ def test_reserve_beyond_available_stock_is_refused(stock):
 
 
 def test_reserve_rejects_non_positive_quantity(stock):
+    """Reservar una cantidad no positiva se rechaza."""
     with pytest.raises(ValueError, match="positive"):
         reserve_stock(stock, "CLV-001", customer_id=1, cantidad=0)

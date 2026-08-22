@@ -26,16 +26,21 @@ def _signature(body: bytes) -> str:
 
 
 def test_healthz(client):
+    """El endpoint de salud responde 200."""
     assert client.get("/healthz").status_code == 200
 
 
 def test_unknown_channel_returns_404(client):
+    """Un canal desconocido devuelve 404."""
     r = client.post("/webhook/unknown", json={})
     assert r.status_code == 404
 
 
 def test_ack_returns_quickly(client):
-    """ACK is returned well under the 5-second SLA (happy path)."""
+    """El webhook confirma (ACK) muy por debajo del SLA de 5 segundos.
+
+    ACK is returned well under the 5-second SLA (happy path).
+    """
     body = b'{"message": {"chat": {"id": 1}, "text": "hola"}}'
     start = time.perf_counter()
     r = client.post(
@@ -48,14 +53,20 @@ def test_ack_returns_quickly(client):
 
 
 def test_unauthenticated_payload_rejected(client):
-    """A payload without a valid signature is rejected with 401."""
+    """Un payload sin firma válida se rechaza con 401.
+
+    A payload without a valid signature is rejected with 401.
+    """
     body = b'{"message": {"chat": {"id": 1}}}'
     r = client.post("/webhook/telegram", content=body)
     assert r.status_code == 401
 
 
 def test_bad_signature_rejected(client):
-    """A payload with a wrong signature is rejected with 401."""
+    """Un payload con firma incorrecta se rechaza con 401.
+
+    A payload with a wrong signature is rejected with 401.
+    """
     body = b'{"message": {"chat": {"id": 1}}}'
     bad = "sha256=" + "0" * 64
     r = client.post("/webhook/telegram", content=body, headers={"x-hub-signature-256": bad})

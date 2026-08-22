@@ -53,7 +53,10 @@ class FakeVisionAnalyzer:
 
 
 def test_transcribe_clean_audio_returns_text():
-    """Spec: clean audio transcribed → usable transcript, nothing flagged."""
+    """Audio limpio se transcribe a texto utilizable sin fragmentos marcados.
+
+    Spec: clean audio transcribed → usable transcript, nothing flagged.
+    """
     provider = FakeTranscriber(
         result=TranscriptionResult(text="necesito 10 clavos de 2 pulgadas", confidence=0.97)
     )
@@ -65,7 +68,10 @@ def test_transcribe_clean_audio_returns_text():
 
 
 def test_transcribe_noisy_audio_flags_fragments_not_dropped():
-    """Spec: noisy audio → best-effort transcript with fragments flagged."""
+    """Audio ruidoso se transcribe igual y marca los fragmentos de baja confianza.
+
+    Spec: noisy audio → best-effort transcript with fragments flagged.
+    """
     provider = FakeTranscriber(
         result=TranscriptionResult(
             text="quiero un taladro y algo de cinta",
@@ -79,24 +85,32 @@ def test_transcribe_noisy_audio_flags_fragments_not_dropped():
 
 
 def test_transcribe_provider_error_raises_transcription_error():
-    """Spec: transcription fails outright → TranscriptionError, not a guess."""
+    """Un fallo del proveedor de transcripción lanza TranscriptionError.
+
+    Spec: transcription fails outright → TranscriptionError, not a guess.
+    """
     provider = FakeTranscriber(error=RuntimeError("silent audio"))
     with pytest.raises(TranscriptionError, match="could not be transcribed"):
         transcribe_voice(provider, "/tmp/vacia.ogg")
 
 
 def test_transcribe_empty_transcript_raises():
-    """An empty transcript is an outright failure, never a silent success."""
+    """Una transcripción vacía es un fallo, no un éxito silencioso.
+
+    An empty transcript is an outright failure, never a silent success.
+    """
     provider = FakeTranscriber(result=TranscriptionResult(text="   ", confidence=0.9))
     with pytest.raises(TranscriptionError, match="no transcript"):
         transcribe_voice(provider, "/tmp/silencio.ogg")
 
 
 def test_transcription_error_is_a_perception_error():
+    """TranscriptionError es un subtipo de PerceptionError."""
     assert issubclass(TranscriptionError, PerceptionError)
 
 
 def test_analyze_image_returns_vision_text():
+    """Analizar una imagen devuelve el texto descriptivo con su confianza."""
     provider = FakeVisionAnalyzer(
         result=VisionResult(text="remito con 3 items: clavos 2\", tornillos M6", confidence=0.9)
     )
@@ -109,18 +123,21 @@ def test_analyze_image_returns_vision_text():
 
 
 def test_analyze_image_custom_prompt_forwarded():
+    """Un prompt personalizado se reenvía al proveedor de visión."""
     provider = FakeVisionAnalyzer(result=VisionResult(text="un taladro", confidence=0.8))
     analyze_image(provider, "https://cdn/media/barcode.jpg", prompt="read the barcode number")
     assert provider.called_with[1] == "read the barcode number"
 
 
 def test_analyze_image_provider_error_raises_vision_error():
+    """Un fallo del proveedor de visión lanza VisionError."""
     provider = FakeVisionAnalyzer(error=RuntimeError("invalid image"))
     with pytest.raises(VisionError, match="could not be analyzed"):
         analyze_image(provider, "https://cdn/media/broken.jpg")
 
 
 def test_analyze_image_empty_description_raises():
+    """Una imagen sin descripción lanza VisionError."""
     provider = FakeVisionAnalyzer(result=VisionResult(text="", confidence=0.9))
     with pytest.raises(VisionError, match="no description"):
         analyze_image(provider, "https://cdn/media/empty.jpg")

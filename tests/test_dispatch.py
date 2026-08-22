@@ -70,6 +70,7 @@ def _quote() -> object:
 
 
 def test_notify_owner_sends_quote_via_notifier():
+    """Se notifica al dueño la cotización a través del notificador."""
     notifier = FakeNotifier()
     notify_owner(notifier, "+5491100000000", _quote(), order_id=7, customer_name="Don Juan")
     assert len(notifier.sent) == 1
@@ -80,6 +81,7 @@ def test_notify_owner_sends_quote_via_notifier():
 
 
 def test_format_quote_message_mentions_lines_and_total():
+    """El mensaje de cotización menciona las líneas y el total."""
     body = format_quote_message(_quote(), order_id=7)
     assert "1250.00" in body  # 10 × 100 + 5 × 50
     assert "Clavos Paris 2 Pulgadas" in body
@@ -100,11 +102,15 @@ def test_format_quote_message_mentions_lines_and_total():
     ],
 )
 def test_parse_decision_actions(text, action):
+    """El texto del dueño se interpreta como aprobar, rechazar o desconocido."""
     assert parse_decision(text).action is action
 
 
 def test_parse_decision_with_adjustment():
-    """Spec: 'aprobá pero hacé un 5% de descuento extra en clavos' → approve + 5%."""
+    """Aprobar con descuento extra por línea se interpreta como aprobación + ajuste.
+
+    Spec: 'aprobá pero hacé un 5% de descuento extra en clavos' → approve + 5%.
+    """
     decision = parse_decision("aprobá pero hacé un 5% de descuento extra en clavos")
     assert decision.action is DecisionAction.APPROVE
     assert decision.adjustments == (
@@ -113,12 +119,14 @@ def test_parse_decision_with_adjustment():
 
 
 def test_parse_decision_accepts_decimal_percent():
+    """Se aceptan porcentajes decimales en el ajuste."""
     decision = parse_decision("aprobá, 2,5% de descuento en tornillos")
     assert decision.action is DecisionAction.APPROVE
     assert decision.adjustments[0].extra_discount_pct == Decimal("0.025")
 
 
 def test_parse_decision_reject_ignores_adjustment_mention():
+    """Un rechazo ignora cualquier mención de ajuste."""
     decision = parse_decision("no, rechazá, no me sirve")
     assert decision.action is DecisionAction.REJECT
     assert decision.adjustments == ()
@@ -205,7 +213,10 @@ def order_ctx(db_session):
 
 
 def test_apply_approve_with_adjustment_reprises_line(order_ctx):
-    """Spec: approval with '5% extra en clavos' re-prices the affected item."""
+    """Aprobar con ajuste reprecifica la línea afectada.
+
+    Spec: approval with '5% extra en clavos' re-prices the affected item.
+    """
     decision = Decision(
         action=DecisionAction.APPROVE,
         adjustments=(LineAdjustment(sku="clavos", extra_discount_pct=Decimal("0.05")),),
@@ -220,7 +231,10 @@ def test_apply_approve_with_adjustment_reprises_line(order_ctx):
 
 
 def test_apply_plain_approve_keeps_prices(order_ctx):
-    """Spec: plain approval keeps the previously quoted prices unchanged."""
+    """Aprobar sin cambios conserva los precios cotizados.
+
+    Spec: plain approval keeps the previously quoted prices unchanged.
+    """
     apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.APPROVE))
     assert order_ctx["order"].estado is OrderEstado.APPROVED
     item = order_ctx["session"].scalar(
@@ -231,7 +245,10 @@ def test_apply_plain_approve_keeps_prices(order_ctx):
 
 
 def test_apply_reject_releases_reservations(order_ctx):
-    """Spec: rejection releases reservations — stock available to others again."""
+    """Rechazar libera las reservas y el stock vuelve a estar disponible.
+
+    Spec: rejection releases reservations — stock available to others again.
+    """
     reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
@@ -252,6 +269,7 @@ def test_apply_reject_releases_reservations(order_ctx):
 
 
 def test_apply_approve_on_expired_reservation_requires_requote(order_ctx):
+    """Aprobar sobre una reserva vencida exige recotizar."""
     reservation = reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
@@ -268,12 +286,16 @@ def test_apply_approve_on_expired_reservation_requires_requote(order_ctx):
 
 
 def test_apply_unknown_decision_raises(order_ctx):
+    """Aplicar una decisión desconocida lanza error."""
     with pytest.raises(UnknownDecisionError):
         apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.UNKNOWN))
 
 
 def test_apply_adjustment_no_matching_quote_line_raises(order_ctx):
-    """An adjustment naming a product outside the quote cannot be applied."""
+    """Un ajuste que nombra un producto fuera de la cotización no se puede aplicar.
+
+    An adjustment naming a product outside the quote cannot be applied.
+    """
     decision = Decision(
         action=DecisionAction.APPROVE,
         adjustments=(LineAdjustment(sku="pintura", extra_discount_pct=Decimal("0.05")),),
@@ -284,7 +306,10 @@ def test_apply_adjustment_no_matching_quote_line_raises(order_ctx):
 
 
 def test_apply_adjustment_sku_not_in_order_raises(order_ctx):
-    """Without a quote the target is a SKU; an unknown SKU is refused."""
+    """Sin cotización, un SKU desconocido en el ajuste se rechaza.
+
+    Without a quote the target is a SKU; an unknown SKU is refused.
+    """
     decision = Decision(
         action=DecisionAction.APPROVE,
         adjustments=(LineAdjustment(sku="ZZZ-999", extra_discount_pct=Decimal("0.05")),),

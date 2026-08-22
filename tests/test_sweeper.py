@@ -91,6 +91,7 @@ class _ScalarResult:
 
 
 def test_sweep_tick_commits_on_success():
+    """El tick del sweeper hace commit al terminar con éxito."""
     session = _FakeSession()
     _tick(lambda: session)
     assert session.committed is True
@@ -98,6 +99,7 @@ def test_sweep_tick_commits_on_success():
 
 
 def test_sweep_tick_rolls_back_and_keeps_scheduler_alive_on_failure():
+    """Ante un fallo, el tick hace rollback y el scheduler sigue vivo."""
     session = _FakeSession(fail=True)
     _tick(lambda: session)  # must not raise — the scheduler keeps running
     assert session.rolled_back is True
@@ -105,6 +107,7 @@ def test_sweep_tick_rolls_back_and_keeps_scheduler_alive_on_failure():
 
 
 def test_build_sweeper_registers_interval_job():
+    """El scheduler registra el job de intervalo del sweeper."""
     scheduler = build_sweeper(lambda: _FakeSession(), interval_minutes=2)
     try:
         job = scheduler.get_job("reservation-ttl-sweep")
@@ -188,7 +191,9 @@ def _reservation(ctx, cantidad, *, minutes_ago: int):
 
 
 def test_sweep_expires_past_ttl_and_flags_order(order_ctx):
-    """RED (2.11): TTL expiry releases the reservation and stock is available.
+    """El sweeper expira reservas vencidas por TTL y marca el pedido.
+
+    RED (2.11): TTL expiry releases the reservation and stock is available.
 
     Availability excludes the expired reservation at READ time already (the
     design's read-time TTL correctness); the sweeper makes the release durable
@@ -209,6 +214,7 @@ def test_sweep_expires_past_ttl_and_flags_order(order_ctx):
 
 
 def test_sweep_leaves_fresh_reservations_active(order_ctx):
+    """El sweeper deja activas las reservas vigentes."""
     _reservation(order_ctx, 4, minutes_ago=5)
     assert sweep_expired(order_ctx["session"]) == 0
     reservation = order_ctx["session"].scalar(
@@ -219,6 +225,7 @@ def test_sweep_leaves_fresh_reservations_active(order_ctx):
 
 
 def test_sweep_expires_only_past_ttl_among_mixed(order_ctx):
+    """Entre reservas mixtas, el sweeper expira solo las vencidas."""
     _reservation(order_ctx, 4, minutes_ago=31)
     _reservation(order_ctx, 2, minutes_ago=5)
     assert sweep_expired(order_ctx["session"]) == 1

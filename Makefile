@@ -1,4 +1,4 @@
-.PHONY: install db-up db-down db-logs migrate migrate-new test run lint format typecheck
+.PHONY: install db-up db-down db-logs migrate migrate-new test run lint format typecheck test-docs check-test-docs
 
 PY := .venv/bin/python
 
@@ -35,6 +35,14 @@ run:
 # Quality
 lint:
 	$(PY) -m ruff check src tests
+
+# Living test documentation: regenerate docs/escenarios-testeados.md from docstrings.
+test-docs:
+	$(PY) scripts/gen_test_scenarios.py
+
+# CI/drift guard: fails if the committed doc is out of sync with the tests.
+check-test-docs:
+	$(PY) scripts/gen_test_scenarios.py --check
 format:
 	$(PY) -m ruff format src tests
 typecheck:

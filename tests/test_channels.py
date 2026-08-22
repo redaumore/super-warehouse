@@ -23,7 +23,10 @@ class DummyChannel(Channel):
 
 @pytest.mark.asyncio
 async def test_channel_abc_contract_is_implemented():
-    """A channel implements the full shared contract."""
+    """Un canal implementa el contrato completo de la abstracción Channel.
+
+    A channel implements the full shared contract.
+    """
     c = DummyChannel()
     assert isinstance(c, Channel)
     msg = await c.parse_inbound({"sender": "1", "text": "hola"})
@@ -34,7 +37,10 @@ async def test_channel_abc_contract_is_implemented():
 
 
 def test_channel_verify_request():
-    """The verify hook returns a boolean."""
+    """El hook de verificación de firma devuelve un booleano.
+
+    The verify hook returns a boolean.
+    """
     c = DummyChannel()
     assert c.verify_request({"secret": "ok"}, None) is True
     assert c.verify_request({"secret": "no"}, None) is False
@@ -42,7 +48,10 @@ def test_channel_verify_request():
 
 @pytest.mark.asyncio
 async def test_telegram_parse_inbound():
-    """Telegram adapter normalizes a raw update into an InboundMessage."""
+    """El adaptador de Telegram normaliza un update crudo en un InboundMessage.
+
+    Telegram adapter normalizes a raw update into an InboundMessage.
+    """
     c = TelegramChannel()
     payload = {"message": {"chat": {"id": 12345}, "text": "clavos 2 pulgadas"}}
     msg = await c.parse_inbound(payload)
@@ -52,5 +61,8 @@ async def test_telegram_parse_inbound():
 
 
 def test_telegram_verify_request_accepts_demo_payload():
-    """Telegram demo channel accepts webhooks (authenticated by bot token)."""
+    """El canal demo de Telegram acepta webhooks autenticados por bot token.
+
+    Telegram demo channel accepts webhooks (authenticated by bot token).
+    """
     assert TelegramChannel().verify_request({}, None) is True

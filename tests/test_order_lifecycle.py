@@ -102,6 +102,7 @@ def _pending_order(order_id: int = 1, *, needs_requote: bool = False) -> Order:
 
 
 def test_approve_pending_order_moves_to_approved():
+    """Aprobar un pedido pendiente lo mueve a Aprobado."""
     session = _FakeSession()
     order = _pending_order()
     approve_order(session, order)
@@ -111,7 +112,10 @@ def test_approve_pending_order_moves_to_approved():
 
 
 def test_approve_flagged_order_raises_requote():
-    """needs_requote flag blocks silent approval even without stale rows."""
+    """El flag needs_requote bloquea la aprobación silenciosa.
+
+    needs_requote flag blocks silent approval even without stale rows.
+    """
     session = _FakeSession()
     order = _pending_order(needs_requote=True)
     with pytest.raises(RequiresRequoteError):
@@ -120,7 +124,10 @@ def test_approve_flagged_order_raises_requote():
 
 
 def test_approve_order_with_stale_reservation_raises_requote():
-    """Expired order cannot be approved silently: stale ACTIVE reservation → raise."""
+    """Un pedido con reserva vencida no se aprueba en silencio: exige recotizar.
+
+    Expired order cannot be approved silently: stale ACTIVE reservation → raise.
+    """
     session = _FakeSession(stale_reservation=True)
     order = _pending_order()
     with pytest.raises(RequiresRequoteError):
@@ -130,6 +137,7 @@ def test_approve_order_with_stale_reservation_raises_requote():
 
 
 def test_approve_non_pending_order_is_invalid():
+    """Aprobar un pedido que no está pendiente es una transición inválida."""
     approved = _pending_order()
     approved.estado = OrderEstado.APPROVED
     with pytest.raises(InvalidTransitionError, match="cannot approve"):
@@ -142,6 +150,7 @@ def test_approve_non_pending_order_is_invalid():
 
 
 def test_reject_pending_order_moves_to_rejected_and_releases():
+    """Rechazar un pedido pendiente lo mueve a Rechazado y libera reservas."""
     session = _FakeSession()
     order = _pending_order()
     reject_order(session, order)
@@ -151,6 +160,7 @@ def test_reject_pending_order_moves_to_rejected_and_releases():
 
 
 def test_reject_non_pending_order_is_invalid():
+    """Rechazar un pedido que no está pendiente es inválido."""
     approved = _pending_order()
     approved.estado = OrderEstado.APPROVED
     with pytest.raises(InvalidTransitionError, match="cannot reject"):
@@ -158,6 +168,7 @@ def test_reject_non_pending_order_is_invalid():
 
 
 def test_mark_dispatched_only_from_approved():
+    """Despachar solo es válido desde el estado Aprobado."""
     session = _FakeSession()
     approved = _pending_order()
     approved.estado = OrderEstado.APPROVED
@@ -170,21 +181,25 @@ def test_mark_dispatched_only_from_approved():
 
 
 def test_requires_requote_true_when_flagged():
+    """El flag needs_requote hace que requiera recotizar."""
     order = _pending_order(needs_requote=True)
     assert requires_requote(_FakeSession(), order) is True
 
 
 def test_requires_requote_true_when_stale_reservation():
+    """Una reserva vencida hace que requiera recotizar."""
     order = _pending_order()
     assert requires_requote(_FakeSession(stale_reservation=True), order) is True
 
 
 def test_requires_requote_false_when_clean():
+    """Sin flag ni reservas vencidas, no requiere recotizar."""
     order = _pending_order()
     assert requires_requote(_FakeSession(), order) is False
 
 
 def test_expire_reservations_flags_order_when_rows_expired():
+    """Expirar reservas vencidas marca el pedido para recotizar."""
     stale = StockReservation(
         reservation_id=1,
         sku="CLV-001",
@@ -203,6 +218,7 @@ def test_expire_reservations_flags_order_when_rows_expired():
 
 
 def test_expire_reservations_noop_when_nothing_expired():
+    """Sin reservas vencidas, expirar no hace nada."""
     session = _FakeSession(stale_rows=[])
     order = _pending_order()
     assert expire_reservations(session, order) == 0
@@ -276,7 +292,10 @@ def _reserve_ctx(ctx, cantidad, *, minutes_ago: int | None = None):
 
 
 def test_reject_releases_reservations_and_restores_stock(order_ctx):
-    """RED (2.11): reject release — stock becomes available to other customers."""
+    """Rechazar libera las reservas y restaura el stock disponible.
+
+    RED (2.11): reject release — stock becomes available to other customers.
+    """
     _reserve_ctx(order_ctx, 4)
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 6
     reject_order(order_ctx["session"], order_ctx["order"])
@@ -291,7 +310,10 @@ def test_reject_releases_reservations_and_restores_stock(order_ctx):
 
 
 def test_expired_order_cannot_be_approved(order_ctx):
-    """RED (2.11): expired order cannot be approved silently — re-quote required."""
+    """Un pedido con reserva vencida no se puede aprobar: exige recotizar.
+
+    RED (2.11): expired order cannot be approved silently — re-quote required.
+    """
     _reserve_ctx(order_ctx, 4, minutes_ago=31)
     with pytest.raises(RequiresRequoteError):
         approve_order(order_ctx["session"], order_ctx["order"])
@@ -301,7 +323,10 @@ def test_expired_order_cannot_be_approved(order_ctx):
 
 
 def test_fresh_reservation_can_be_approved(order_ctx):
-    """A non-expired reservation does not block approval."""
+    """Una reserva vigente no bloquea la aprobación.
+
+    A non-expired reservation does not block approval.
+    """
     _reserve_ctx(order_ctx, 4, minutes_ago=5)
     approve_order(order_ctx["session"], order_ctx["order"])
     assert order_ctx["order"].estado is OrderEstado.APPROVED

@@ -48,12 +48,16 @@ pytestmark = pytest.mark.skipif(not _postgres_up(), reason="Postgres not running
 
 @pytest.mark.parametrize("variant", PHONE_VARIANTS)
 def test_phone_format_variants_normalize_to_same_number(variant):
-    """All spacing / country-code variants reconcile to one canonical E.164."""
+    """Todos los formatos de un mismo número argentino normalizan al mismo E.164 canónico.
+
+    All spacing / country-code variants reconcile to one canonical E.164.
+    """
     assert normalize_phone(variant) == _CANONICAL
 
 
 @pytest.mark.parametrize("raw", ["", "abc", "5555", "12"])
 def test_unparseable_phone_normalizes_to_none(raw):
+    """Un teléfono no interpretable normaliza a None."""
     assert normalize_phone(raw) is None
 
 
@@ -87,7 +91,10 @@ def registered_client(db_session):
 
 
 def test_known_phone_matches_registered_customer(registered_client):
-    """A registered number — even re-typed in another format — resolves KNOWN."""
+    """Un número registrado — aun reescrito en otro formato — resuelve como KNOWN.
+
+    A registered number — even re-typed in another format — resolves KNOWN.
+    """
     result = lookup_phone(registered_client, "11 5555 1234")
     assert result.status is PhoneStatus.KNOWN
     assert result.normalized == _CANONICAL
@@ -96,7 +103,10 @@ def test_known_phone_matches_registered_customer(registered_client):
 
 
 def test_unknown_phone_is_flagged_for_onboarding(registered_client):
-    """A parseable but unregistered number is flagged UNKNOWN, never guessed."""
+    """Un número válido pero no registrado se marca UNKNOWN, nunca se adivina.
+
+    A parseable but unregistered number is flagged UNKNOWN, never guessed.
+    """
     result = lookup_phone(registered_client, "+54 9 11 3333-4444")
     assert result.status is PhoneStatus.UNKNOWN
     assert result.normalized == "+5491133334444"
@@ -104,7 +114,10 @@ def test_unknown_phone_is_flagged_for_onboarding(registered_client):
 
 
 def test_invalid_phone_is_flagged_not_guessed(registered_client):
-    """An unparseable number is flagged INVALID with no normalized form."""
+    """Un número no interpretable se marca INVALID sin forma normalizada.
+
+    An unparseable number is flagged INVALID with no normalized form.
+    """
     result = lookup_phone(registered_client, "no-es-un-telefono")
     assert result.status is PhoneStatus.INVALID
     assert result.normalized is None
