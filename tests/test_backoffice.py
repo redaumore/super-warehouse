@@ -11,12 +11,19 @@ from __future__ import annotations
 
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.backoffice.app import build_app
+from src.backoffice.app import (
+    _catalog_grid,
+    _ingest_confirm,
+    _ingest_preview,
+    _register_client,
+    build_app,
+)
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
 from src.backoffice.clients import (
     InvalidClientDataError,
@@ -164,9 +171,14 @@ def shop_ctx(db_session):
         )
     )
     db_session.flush()
-    # The fixture inserts explicit id=1, which does not advance the catalog
-    # sequence; bump it so subsequent auto-id inserts do not collide.
-    db_session.execute(text("SELECT setval('catalogo_id_seq', 1, true)"))
+    # The fixture inserts explicit ids, which does not advance the sequences;
+    # bump them so subsequent auto-id inserts do not collide.
+    db_session.execute(
+        text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)")
+    )
+    db_session.execute(
+        text("SELECT setval(pg_get_serial_sequence('clientes', 'customer_id'), 1, true)")
+    )
     return {"session": db_session}
 
 
@@ -279,3 +291,59 @@ def test_monitor_lists_orders_with_state_and_sheets_status(shop_ctx):
     assert rows[0]["estado"] == "PENDING_APPROVAL"
     assert rows[0]["sheets_synced"] is False
     assert rows[0]["active_reservations"] == 0
+
+
+# ------------------------------------------------ app handler functions (DB)
+# NOTE: the app handlers open their own SessionLocal, which only sees COMMITTED
+# rows — so these tests commit the fixture seed before exercising the handler.
+
+
+def test_app_catalog_grid_renders_seeded_products(shop_ctx):
+    """La grilla del catálogo renderiza los productos sembrados."""
+    shop_ctx["session"].commit()
+    rows = _catalog_grid()
+    assert any(row[0] == "CLV-001" for row in rows)
+    assert any(row[6] == 10 for row in rows)  # stock column
+
+
+def test_app_register_client_returns_success_message(shop_ctx):
+    """Registrar un cliente desde la UI devuelve un mensaje de éxito."""
+    shop_ctx["session"].commit()
+    message = _register_client("Nueva Ferretería", "11 6666 7777", 1, 0.0)
+    assert message == "Cliente registrado"
+
+
+def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
+    """Un teléfono inválido desde la UI devuelve el error en pantalla."""
+    shop_ctx["session"].commit()
+    message = _register_client("Pepe", "no-es-telefono", 1, 0.0)
+    assert message.startswith("Error:")
+
+
+def test_app_ingest_confirm_reports_counts(shop_ctx):
+    """Confirmar la ingesta desde la UI reporta actualizados y creados."""
+    shop_ctx["session"].commit()
+    message = _ingest_confirm([["CLV-001", "Clavos Paris 2 Pulgadas", 3, "95.00"]], 1)
+    assert message == "Ingresado: 1 actualizados, 0 creados."
+
+
+def test_app_ingest_confirm_creates_new_product(shop_ctx):
+    """Confirmar una fila nueva desde la UI la crea en el catálogo."""
+    shop_ctx["session"].commit()
+    message = _ingest_confirm([["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]], 1)
+    assert message == "Ingresado: 0 actualizados, 1 creados."
+
+
+def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
+    """La vista previa de ingesta devuelve la grilla y un mensaje de estado."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+    analyzer = SimpleNamespace(analyze=lambda url, prompt: SimpleNamespace(
+        text="10 x Clavos Paris 2 Pulgadas", confidence=1.0
+    ))
+    with patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="):
+        grid, message = _ingest_preview(analyzer, image)  # type: ignore[arg-type]
+    assert len(grid) == 1
+    assert grid[0][1] == "Clavos Paris 2 Pulgadas"
+    assert "1 filas extraídas" in message

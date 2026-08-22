@@ -80,7 +80,7 @@ def supplier(db_session):
         )
     )
     db_session.flush()
-    db_session.execute(text("SELECT setval('catalogo_id_seq', 1, true)"))
+    db_session.execute(text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)"))
     return {"session": db_session}
 
 
