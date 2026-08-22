@@ -24,11 +24,27 @@ from pyzbar.pyzbar import decode  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import Catalogo
+from src.db.models import Catalogo, StockAdjustment
 
 
 class BarcodeDecodeError(Exception):
     """The barcode image could not be decoded (blurred, corrupted, missing zbar)."""
+
+
+class BarcodeAdjustmentErrorKind(str, enum.Enum):
+    """Precise cause of a failed stock adjustment (assertable in tests)."""
+
+    DUPLICATE = "DUPLICATE"
+    UNKNOWN = "UNKNOWN"
+    NEGATIVE = "NEGATIVE"
+
+
+class BarcodeAdjustmentError(Exception):
+    """A stock adjustment could not be applied; ``kind`` carries the cause."""
+
+    def __init__(self, kind: BarcodeAdjustmentErrorKind, message: str) -> None:
+        super().__init__(message)
+        self.kind = kind
 
 
 @dataclass(frozen=True)
@@ -83,3 +99,48 @@ def lookup_barcode(session: Session, data: str) -> BarcodeLookup:
     if len(candidates) == 1:
         return BarcodeLookup(kind=BarcodeLookupKind.SINGLE, candidates=candidates)
     return BarcodeLookup(kind=BarcodeLookupKind.DUPLICATE, candidates=candidates)
+
+
+def adjust_stock_by_barcode(
+    session: Session,
+    data: str,
+    delta: int,
+    reason: str,
+    actor: str,
+) -> StockAdjustment:
+    """Adjust stock by barcode, recording an audited ``StockAdjustment`` row.
+
+    ``delta`` is positive for increases and negative for decreases. Duplicate
+    barcodes and unknown barcodes raise (never silently pick); a result below
+    zero raises. The caller owns the transaction — we only ``flush`` so the row
+    gets an id.
+    """
+    lookup = lookup_barcode(session, data)
+    if lookup.kind is BarcodeLookupKind.DUPLICATE:
+        raise BarcodeAdjustmentError(
+            BarcodeAdjustmentErrorKind.DUPLICATE,
+            f"barcode {data!r} maps to {len(lookup.candidates)} SKUs; choose one before adjusting",
+        )
+    if lookup.kind is BarcodeLookupKind.UNKNOWN:
+        raise BarcodeAdjustmentError(
+            BarcodeAdjustmentErrorKind.UNKNOWN,
+            f"barcode {data!r} is not recognized",
+        )
+    item = lookup.candidates[0]
+    new_stock = item.stock_disponible + delta
+    if new_stock < 0:
+        raise BarcodeAdjustmentError(
+            BarcodeAdjustmentErrorKind.NEGATIVE,
+            f"cannot adjust {item.codigo_interno} below zero (stock "
+            f"{item.stock_disponible}, delta {delta})",
+        )
+    item.stock_disponible = new_stock
+    adjustment = StockAdjustment(
+        sku=item.codigo_interno,
+        delta=delta,
+        reason=reason,
+        actor=actor,
+    )
+    session.add(adjustment)
+    session.flush()
+    return adjustment

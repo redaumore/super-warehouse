@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 204, agrupados en 24 dominios.
+**Total de escenarios:** 209, agrupados en 24 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -26,7 +26,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 7
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 5
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
-- [Códigos de barras](#códigos-de-barras) — 6
+- [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 21
 - [Feature flags por fase](#feature-flags-por-fase) — 7
@@ -260,6 +260,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un código único mapea a un solo SKU del catálogo. _(`test_single_barcode_maps_to_one_sku`)_
 - Un código compartido por dos SKU se marca DUPLICATE sin elegir por nadie. _(`test_duplicate_barcode_flags_candidates_for_owner`)_
 - Un código sin match se reporta como UNKNOWN para resolución manual. _(`test_unknown_barcode_is_reported`)_
+- Un ajuste positivo por código de barras aumenta el stock y registra el motivo y el actor. _(`test_adjust_stock_increase_records_audit_trail`)_
+- Un ajuste negativo por código de barras reduce el stock y registra el motivo y el actor. _(`test_adjust_stock_decrease_records_audit_trail`)_
+- Un código de barras duplicado no ajusta stock y exige desambiguar al dueño. _(`test_adjust_stock_duplicate_barcode_raises`)_
+- Un código de barras desconocido no ajusta stock y reporta el motivo. _(`test_adjust_stock_unknown_barcode_raises`)_
+- Un ajuste que deja el stock negativo falla y conserva el stock sin cambios. _(`test_adjust_stock_below_zero_raises_and_keeps_stock`)_
 
 ## OCR de documentos de proveedor
 

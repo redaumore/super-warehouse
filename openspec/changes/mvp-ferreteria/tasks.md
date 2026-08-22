@@ -51,7 +51,7 @@ Chain strategy: stacked-to-main
 - [x] 3.5 `src/backoffice/app.py` Gradio Blocks (4 tabs).
 - [x] 3.6 `src/backoffice/ingestion.py` upload→Vision→preview→confirm.
 - [x] 3.7 `src/backoffice/{catalog,clients,monitor}.py` editors.
-- [x] 3.8 `src/barcode/decoder.py` pyzbar; duplicate flagged.
+- [x] 3.8 `src/barcode/decoder.py` pyzbar; duplicate flagged. *(PR4 remediation: added `adjust_stock_by_barcode()` + `StockAdjustment` model + migration `b2f353dfc3d2` + `BarcodeAdjustmentError`, resolving verify W1 — 5 tests in `tests/test_barcode.py`)*
 - [x] 3.9 `src/supplier/ocr.py` remito/invoice + price-list; reject illegible.
 
 ## Phase 4: Testing

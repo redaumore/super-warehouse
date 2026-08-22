@@ -166,6 +166,25 @@ class StockReservation(Base):
     )
 
 
+class StockAdjustment(Base):
+    """Audited stock change by barcode with a reason and actor.
+
+    `delta` is positive for increases and negative for decreases; every row is
+    the audit trail the barcode-stock-ops spec requires.
+    """
+
+    __tablename__ = "stock_adjustments"
+
+    adjustment_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    actor: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Order(Base):
     """Order with the fixed four-state machine plus a needs_requote flag."""
 

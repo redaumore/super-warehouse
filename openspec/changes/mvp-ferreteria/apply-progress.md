@@ -130,6 +130,13 @@ Final full run: `pytest --cov=src --cov-fail-under=85` → **229 passed, coverag
 
 None — PR4 is the final slice. All Phase 1–5 tasks are `[x]`. Next: verify (`sdd-verify`), then archive (`sdd-archive`).
 
+## PR4 Remediation: W1 (barcode audited stock adjustments)
+
+Verify flagged W1 (barcode-stock-ops "Record audited stock adjustments" had no implementation). Remediated:
+- `StockAdjustment` model (`stock_adjustments`) + Alembic migration `b2f353dfc3d2` (creates only `stock_adjustments`).
+- `adjust_stock_by_barcode()` + `BarcodeAdjustmentError`/`BarcodeAdjustmentErrorKind` in `src/barcode/decoder.py`.
+- 5 tests in `tests/test_barcode.py` (increase, decrease, duplicate, unknown, negative). Full suite 234 passed; lint + mypy strict clean; test-docs 209 scenarios.
+
 ## Status
 
 **15/15 assigned tasks complete (3.1–3.9, 4.1, 4.2, 4.5–4.8, 5.1–5.4). 229 tests passing at final full run (was 142 after PR3; +87 across PR4 work units). Coverage 96.47% ≥ 85; pricing 100%. ruff + mypy strict + test-docs all clean. Ready for verify.**
