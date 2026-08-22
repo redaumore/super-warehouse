@@ -19,6 +19,11 @@ dependencies = [
     "phonenumbers>=8.13",
     "rapidfuzz>=3.6",
     "apscheduler>=3.10,<4",
+    "openai>=1.30",
+    "gspread>=6.0",
+    "gradio>=4.0",
+    "pyzbar>=0.1.9",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]

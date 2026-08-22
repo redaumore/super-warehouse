@@ -19,6 +19,7 @@ from fastapi import FastAPI, Request, Response
 
 from src.channels.base import Channel, InboundMessage
 from src.channels.telegram import TelegramChannel
+from src.channels.whatsapp import WhatsAppChannel
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ app = FastAPI(title="super-warehouse intake", version="0.1.0")
 # Registered channel adapters keyed by channel name.
 CHANNELS: dict[str, Channel] = {
     "telegram": TelegramChannel(),
+    "whatsapp": WhatsAppChannel(),
 }
 
 # Seam for the orchestrator to consume a normalized inbound message (Phase 3).
