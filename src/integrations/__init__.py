@@ -5,5 +5,12 @@ from src.integrations.openai import (
     OpenAITranscriber,
     OpenAIVisionAnalyzer,
 )
+from src.integrations.sheets import SheetsWriteStatus, SheetsWriter
 
-__all__ = ["OpenAIEmbedder", "OpenAITranscriber", "OpenAIVisionAnalyzer"]
+__all__ = [
+    "OpenAIEmbedder",
+    "OpenAITranscriber",
+    "OpenAIVisionAnalyzer",
+    "SheetsWriteStatus",
+    "SheetsWriter",
+]

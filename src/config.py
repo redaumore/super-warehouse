@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_dims: int = 1536
 
+    # Google Sheets (append-only order registration)
+    google_sheets_credentials_file: str = ""
+    google_sheets_spreadsheet_key: str = ""
+
     # Hybrid catalog search thresholds (confidence in [0, 1]).
     # A single candidate at/above the auto-map threshold maps without prompting;
     # candidates at/above the ambiguity floor populate the disambiguation menu.
