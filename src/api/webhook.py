@@ -15,7 +15,7 @@ import hmac
 import logging
 from collections.abc import Callable
 
-from fastapi import FastAPI, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Request, Response
 
 from src.channels.base import Channel, InboundMessage
 from src.channels.telegram import TelegramChannel
@@ -61,7 +61,9 @@ async def healthz() -> dict[str, str]:
 
 
 @app.post("/webhook/{channel}")
-async def webhook(channel: str, request: Request) -> Response:
+async def webhook(
+    channel: str, request: Request, background_tasks: BackgroundTasks
+) -> Response:
     """Intake endpoint: verify, ACK <5 s, dispatch heavy work in the background."""
     adapter = CHANNELS.get(channel)
     if adapter is None:
@@ -84,9 +86,10 @@ async def webhook(channel: str, request: Request) -> Response:
 
     message = await adapter.parse_inbound(payload)
 
-    # ACK immediately — the client must not wait on heavy work.
-    # Heavy work is dispatched to the background (orchestrator seam, Phase 3).
+    # ACK immediately — the client must not wait on heavy work. The orchestrator
+    # handler runs as a background task AFTER the response is sent, so the ACK
+    # stays well under the 5 s SLA regardless of transcription/search/pricing.
     if ORCHESTRATOR_HANDLER is not None:
-        ORCHESTRATOR_HANDLER(message)
+        background_tasks.add_task(ORCHESTRATOR_HANDLER, message)
 
     return Response(status_code=200, content="ACK")
