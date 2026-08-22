@@ -1,10 +1,10 @@
-# Apply Progress: mvp-ferreteria — PR3 (Phase 2 remaining)
+# Apply Progress: mvp-ferreteria — PR4 (final slice: Integrations + tests + docs)
 
 **Change**: mvp-ferreteria
-**PR**: `feat/mvp-ferreteria-pr3` (single local merge, accepted `size:exception` — delivery strategy resolved, no chained PRs)
+**PR**: `feat/mvp-ferreteria-pr4` (final slice — single local merge, maintainer-approved `size:exception`; NOT pushed/PR'd)
 **Mode**: Standard (strict_tdd: false, pytest runner present)
 **Persistence**: hybrid (this file + Engram `sdd/mvp-ferreteria/apply-progress`)
-**Batch**: PR3 — tasks 2.2, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11 + Phase 4 test tasks 4.3, 4.4
+**Batch**: PR4 — tasks 3.1–3.9, 4.1, 4.2, 4.5, 4.6, 4.7, 4.8, 5.1–5.4
 
 ## Completed Tasks (cumulative)
 
@@ -17,78 +17,119 @@
 - [x] 2.4 disambiguation agent (pgvector + rapidfuzz hybrid search)
 - [x] 2.5 inventory agent (soft-lock, `avail = stock − Σ active unexpired`)
 
-### PR3 (this batch)
-- [x] **2.2** `src/agents/perception.py` — mockable `Transcriber`/`VisionAnalyzer` provider interfaces; `transcribe_voice` (clean → usable, noisy → flagged fragments, failure → `TranscriptionError`), `analyze_image` (`VisionError` on failure). Real OpenAI client deferred to 3.2.
-- [x] **2.6** `src/agents/sales.py` — `quote_order` (compound discounts via pricing engine), `adjust_line`/`apply_adjustments` (per-line extra discount, `adjustment` = absolute discount amount), `Quote`/`QuoteLine` totals.
-- [x] **2.7** `src/agents/dispatch.py` — `Notifier` protocol, `notify_owner` (quote → owner), `parse_decision` (aprobá/rechazá + per-line % adjustments, percent → fraction), `apply_decision` (approve with re-priced order_items / reject releasing reservations; UNKNOWN → `UnknownDecisionError`).
-- [x] **2.8** `src/orchestrator/{router,session}.py` — `route_message` (voice/image → Perception; awaiting decision → Dispatch; in-progress → Sales/Disambiguation; fresh → Customer), `ConversationStore` (per-sender context + 30-min TTL), `Orchestrator` (load → route → agent → persist; resumes order after owner wait).
-- [x] **2.9** `src/order_lifecycle/state.py` — transitions over `OrderEstado`: `approve_order` (refuses stale via `RequiresRequoteError`, flags `needs_requote`), `reject_order` (releases ACTIVE reservations → RELEASED), `mark_dispatched`, `expire_reservations`, `requires_requote`. Added `Order.customer` relationship so SQLAlchemy orders inserts correctly.
-- [x] **2.10** `src/scheduler/sweeper.py` — APScheduler `BackgroundScheduler` job (`reservation-ttl-sweep`); `sweep_expired` marks past-TTL ACTIVE → EXPIRED + sets order `needs_requote`; `_tick` per-tick transaction (commit/rollback). Dep `apscheduler>=3.10,<4` added to pyproject.
-- [x] **2.11** RED tests — TTL expiry release (`tests/test_sweeper.py`), reject release (`tests/test_order_lifecycle.py`), expired order cannot be approved (`tests/test_order_lifecycle.py`).
+### PR3 (previous batch — persisted for continuity)
+- [x] 2.2 perception protocols, 2.6 sales quote/adjustments, 2.7 dispatch notify/decide, 2.8 orchestrator router+session, 2.9 order state machine (+`Order.customer` relationship), 2.10 APScheduler sweeper, 2.11 RED tests (TTL release, reject release, stale approve refused).
+- [x] 4.3 test_state_machine, 4.4 test_inventory RED (unit + Postgres integration).
 
-### Phase 4 test tasks delivered in PR3
-- [x] **4.3** `test_state_machine`: unit transitions + `needs_requote` — `tests/test_order_lifecycle.py` (fake-session unit tests).
-- [x] **4.4** `test_inventory` RED: expiry release, reject release, blocked approval — `tests/test_order_lifecycle.py` + `tests/test_sweeper.py` (Postgres integration, skipif-guarded).
+### PR4 (this batch)
+- [x] **3.1** `src/channels/whatsapp.py` — Cloud API adapter on the shared `Channel` ABC: payload normalization (text/voice/image/document with media_id), verify-token auth (hub.*) + endpoint-HMAC deferral, Graph API `send_text` + `fetch_media` (id→url→bytes). Registered in `webhook.CHANNELS`. Tests: `tests/test_whatsapp.py` (11, mocked httpx).
+- [x] **3.2** `src/integrations/openai.py` — `OpenAITranscriber` (whisper verbose_json: segment logprobs → confidence [0,1], low-confidence fragments flagged), `OpenAIVisionAnalyzer` (gpt-4o; confidence from finish_reason), `OpenAIEmbedder` (fixed dims, input order preserved). Client lazy-built on first use (`OpenAINotConfiguredError` otherwise — openai 3.x raises at construction). Tests: `tests/test_openai.py` (9, mocked SDK).
+- [x] **3.3** `src/integrations/sheets.py` — append-only `SheetsWriter`; any failure quarantines (quarantine sheet, else in-memory log) and NEVER raises into the order flow; `sheets_synced(order_id)` for the monitor. `GOOGLE_SHEETS_*` settings + `.env.example`. Tests: `tests/test_sheets.py` (5, mocked gspread; gspread 6.x typed `ValueInputOption` enum).
+- [x] **3.4** `src/orchestrator/approval.py` — `approve_and_register` (lifecycle approve — refuses stale via `RequiresRequoteError` — then register) and `register_approved_order` (registration half for adjustment-approvals: ACTIVE→CONVERTED, Sheets row, stock deduction per reservation, owner confirmation mentioning quarantine when Sheets failed). Exported from orchestrator package. Tests: `tests/test_approval.py` (3 unit + 4 Postgres).
+- [x] **3.5** `src/backoffice/app.py` — Gradio Blocks, 4 tabs (Catalog, Clients, Orders/Monitor, Ingestion); handlers over `SessionLocal`; `launch()` guarded; `make backoffice` target added. Tests: `tests/test_backoffice.py` structure tests (tab labels/components, no server).
+- [x] **3.6** `src/backoffice/ingestion.py` — upload → Vision analyze (via supplier OCR) → editable preview grid (`to_grid_rows`) → `confirm_items` (existing SKU: +stock +cost +base recompute; unknown: create product with supplier margin via pricing engine). Tests: extraction/preview/confirm (unit + Postgres).
+- [x] **3.7** `src/backoffice/{catalog,clients,monitor}.py` — catalog grid + stock/price/margin edits (margin recomputes base via pricing engine); clients list/create (phone normalization)/update; monitor (state, soft-lock counts, Sheets sync). Tests in `tests/test_backoffice.py` (Postgres).
+- [x] **3.8** `src/barcode/decoder.py` — pyzbar `decode_image` (PIL), `lookup_barcode` → SINGLE / DUPLICATE (flagged for owner, never guessed) / UNKNOWN; `BarcodeDecodeError` on unreadable. Host needs `brew install zbar`. Tests: `tests/test_barcode.py` (3 unit + 3 Postgres).
+- [x] **3.9** `src/supplier/ocr.py` — `extract_document` (VisionAnalyzer + deterministic line parser), `IllegibleDocumentError` on unusable extraction (never writes), partial lines flagged (`unparsed_lines`), price-list parse + `ingest_price_list_rows` (map existing SKU by code/name, suggest new; mappings upserted, never duplicated). Tests: `tests/test_ocr.py` (6 unit + 5 Postgres).
+- [x] **4.1** `test_pricing` VERIFY — delivered in PR2; confirmed base (925.92×1.35), 0-margin, only-list, only-particular, both (720), multiplicative-vs-additive, HALF_UP cases; 100% coverage. Marked [x], no new case needed.
+- [x] **4.2** `test_phone` VERIFY — delivered in PR2; 6 format variants → one canonical E.164 + INVALID/UNKNOWN/KNOWN. Marked [x].
+- [x] **4.5** `test_search` VERIFY — delivered in PR2 with 2.4; informal names, misspellings, synonyms, vector channel all resolve. Marked [x].
+- [x] **4.6** `tests/test_intake.py` — webhook now dispatches via FastAPI `BackgroundTasks`; a recording ASGI transport proves the ACK response is sent BEFORE the heavy handler starts; ACK <5 s even with a slow handler.
+- [x] **4.7** `tests/test_e2e_order.py` + `tests/test_e2e_ingestion.py` — full WhatsApp intake→quote→approve→convert→Sheets→stock→confirm flow (outbound sends mocked at httpx; async/sync notifier bridge); reject releases; confirm-send failure doesn't abort registration; remito preview→confirm→inventory + owner grid corrections + barcode stock query. 7 tests, Postgres.
+- [x] **4.8** Coverage gate — `--cov=src --cov-fail-under=85` → **96.47% total, 229 passed**; `src/pricing` stays **100%**. backoffice/app raised 70%→85% with real handler tests (no vacuous tests added).
+- [x] **5.1** `README.md` — quickstart, env setup table, mock flags, commands, checklist.
+- [x] **5.2** `src/features.py` — `FASE1..4_ENABLED` gating: `fase_enabled`/`require_fase`/`FeatureDisabledError`; webhook ACKs without dispatching when fase 2 off; backoffice refuses to build when fase 4 off. Tests: `tests/test_features.py` (8).
+- [x] **5.3** `docs/architecture.md` — data flow, six agents table, state machine, pricing, backoffice, flags.
+- [x] **5.4** `docs/runbook.md` + quality: **mypy strict clean (0 errors)** — fixed 16 pre-existing errors (channel ABC payload typing, sweeper/state expression annotations, `DecisionAction` → str enum); ruff clean; deps pinned (`openai>=1.30`, `gspread>=6.0`, `gradio>=4.0`, `pyzbar>=0.1.9`, `pillow>=10.0`); test-docs generator extended to 24 domains → 204 scenarios; `make check-test-docs` green.
 
-## Files Changed (PR3)
+## Files Changed (PR4)
 
 | File | Action | What Was Done |
 |------|--------|---------------|
-| `src/agents/perception.py` | Created | Mockable STT/vision provider interfaces + failure semantics |
-| `src/agents/sales.py` | Created | Quote + per-line adjustments on the pure pricing engine |
-| `src/agents/dispatch.py` | Created | Owner notify + approve/reject decision handling |
-| `src/agents/__init__.py` | Modified | Docstring updated (agents now delivered) |
-| `src/orchestrator/__init__.py` | Created | Package exports |
-| `src/orchestrator/session.py` | Created | ConversationState + TTL ConversationStore |
-| `src/orchestrator/router.py` | Created | route_message + Orchestrator coordinator |
-| `src/order_lifecycle/__init__.py` | Created | Package exports |
-| `src/order_lifecycle/state.py` | Created | State transitions, needs_requote, reject release |
-| `src/scheduler/__init__.py` | Created | Package exports |
-| `src/scheduler/sweeper.py` | Created | APScheduler TTL sweeper |
-| `src/db/models.py` | Modified | Added `Order.customer` relationship (FK-ordered inserts) |
-| `pyproject.toml` | Modified | Added `apscheduler>=3.10,<4` |
-| `tests/test_perception.py` | Created | 9 unit tests (fake providers) |
-| `tests/test_sales.py` | Created | 11 unit tests |
-| `tests/test_dispatch.py` | Created | 9 unit + 12 integration tests |
-| `tests/test_order_lifecycle.py` | Created | 12 unit + 3 integration tests (RED) |
-| `tests/test_orchestrator.py` | Created | 17 unit tests |
-| `tests/test_sweeper.py` | Created | 3 unit + 3 integration tests (RED) |
-| `openspec/changes/mvp-ferreteria/tasks.md` | Modified | Marked 2.2, 2.6–2.11, 4.3, 4.4 `[x]` |
-| `openspec/changes/mvp-ferreteria/apply-progress.md` | Created | This record |
+| `src/channels/whatsapp.py` | Created | WhatsApp Cloud API adapter (verify + media download) |
+| `src/channels/__init__.py` | Modified | Exports WhatsAppChannel |
+| `src/integrations/openai.py` | Created | Whisper/Vision/embedding clients (lazy SDK client) |
+| `src/integrations/sheets.py` | Created | Append-only Sheets writer with quarantine |
+| `src/integrations/__init__.py` | Created | Package exports |
+| `src/orchestrator/approval.py` | Created | Approve→convert→Sheets→stock→confirm |
+| `src/orchestrator/__init__.py` | Modified | Approval exports |
+| `src/backoffice/` | Created | app (4 tabs), catalog, clients, monitor, ingestion |
+| `src/barcode/decoder.py` | Created | pyzbar decode + duplicate flagging |
+| `src/supplier/ocr.py` | Created | Remito/invoice OCR + price-list ingestion |
+| `src/features.py` | Created | Per-Fase feature flags |
+| `src/api/webhook.py` | Modified | BackgroundTasks dispatch + WhatsApp channel + fase-2 gate |
+| `src/config.py` | Modified | `GOOGLE_SHEETS_*` settings |
+| `src/channels/base.py` | Modified | `dict[str, Any]` typing (mypy strict) |
+| `src/channels/telegram.py` | Modified | `dict[str, Any]` typing (mypy strict) |
+| `src/agents/dispatch.py` | Modified | `DecisionAction` → str-enum (mypy strict) |
+| `src/orchestrator/session.py` | Modified | `with_updates(**changes: Any)` (mypy strict) |
+| `src/order_lifecycle/state.py` | Modified | `_reservation_expired_expr() -> Any` (mypy strict) |
+| `src/scheduler/sweeper.py` | Modified | apscheduler import ignore + `-> Any` (mypy strict) |
+| `pyproject.toml` | Modified | +openai, gspread, gradio, pyzbar, pillow (`>=` bounds) |
+| `.env.example` | Modified | GOOGLE_SHEETS_* + flag comments |
+| `Makefile` | Modified | `make backoffice` target |
+| `README.md` | Created | Quickstart + env + mock flags |
+| `docs/architecture.md` | Created | Data flow + six agents |
+| `docs/runbook.md` | Created | Ops + failure modes |
+| `docs/escenarios-testeados.md` | Regenerated | 204 scenarios (24 domains) |
+| `scripts/gen_test_scenarios.py` | Modified | New test modules registered in DOMAINS |
+| `tests/test_whatsapp.py` | Created | 11 unit (mocked httpx) |
+| `tests/test_openai.py` | Created | 9 unit (mocked SDK) |
+| `tests/test_sheets.py` | Created | 5 unit (mocked gspread) |
+| `tests/test_approval.py` | Created | 3 unit + 4 Postgres |
+| `tests/test_backoffice.py` | Created | 21 (structure + module + app handlers) |
+| `tests/test_barcode.py` | Created | 3 unit + 3 Postgres |
+| `tests/test_ocr.py` | Created | 6 unit + 5 Postgres |
+| `tests/test_intake.py` | Created | 3 (async ordering, mocked transport) |
+| `tests/test_features.py` | Created | 8 unit + webhook gating |
+| `tests/test_e2e_order.py` | Created | 4 E2E (WhatsApp mock, Postgres) |
+| `tests/test_e2e_ingestion.py` | Created | 3 E2E (Postgres) |
+| `openspec/changes/mvp-ferreteria/tasks.md` | Modified | 3.1–3.9, 4.1, 4.2, 4.5–4.8, 5.1–5.4 marked [x] |
 
-## Work Unit Evidence
+## Work Unit Evidence (PR4)
 
 | Work unit | Focused test command + result | Runtime harness | Rollback boundary |
 |---|---|---|---|
-| 2.2 perception | `pytest tests/test_perception.py -q` → 9 passed | N/A — provider boundary mocked by design; real OpenAI is 3.2 | Delete `src/agents/perception.py` + `tests/test_perception.py` |
-| 2.6 sales | `pytest tests/test_sales.py -q` → 11 passed | N/A — pure computation, no runtime boundary | Delete `src/agents/sales.py` + `tests/test_sales.py` |
-| 2.9 state machine | `pytest tests/test_order_lifecycle.py -q` → 15 passed (12 unit + 3 Postgres) | Postgres integration: reject→stock back to 10; approve on expired→`RequiresRequoteError` | Delete `src/order_lifecycle/` + revert `src/db/models.py` relationship |
-| 2.7 dispatch | `pytest tests/test_dispatch.py -q` → 21 passed (9 unit + 12 Postgres) | Postgres: approve w/ 5% adjustment → item 100→95.00, adjustment 5.00; reject → reservations RELEASED | Delete `src/agents/dispatch.py` + `tests/test_dispatch.py` |
-| 2.8 orchestrator | `pytest tests/test_orchestrator.py -q` → 17 passed | N/A — in-memory store; webhook wiring is Phase 3 (3.4) | Delete `src/orchestrator/` + `tests/test_orchestrator.py` |
-| 2.10 sweeper | `pytest tests/test_sweeper.py -q` → 6 passed (3 unit + 3 Postgres) | APScheduler job registered; `_tick` commit/rollback verified with fake factory | Delete `src/scheduler/` + revert `pyproject.toml` dep |
-| 2.11 RED tests | Full: `pytest -q` → 139 passed (was 63 at PR3 start; +76) | Postgres integration: TTL expiry → EXPIRED + needs_requote + stock 10; reject release; stale approve refused | Same as 2.9/2.10 boundaries |
+| 3.1 whatsapp | `pytest tests/test_whatsapp.py -q` → 11 passed | E2E order flow posts owner quote via mocked Graph API; `fetch_media` id→url→bytes mocked | Delete `src/channels/whatsapp.py`, revert webhook CHANNELS + tests |
+| 3.2 openai | `pytest tests/test_openai.py -q` → 9 passed | N/A — SDK mocked; lazy client verified: no key → clear error at call time, not import | Delete `src/integrations/openai.py` + tests |
+| 3.3 sheets | `pytest tests/test_sheets.py -q` → 5 passed | Approval E2E: unconfigured Sheets → row quarantined, flow completes | Delete `src/integrations/sheets.py`, revert config fields + tests |
+| 3.4 approval | `pytest tests/test_approval.py -q` → 7 passed | Postgres: approve converts reservation, stock 10→6, confirm sent; stale → `RequiresRequoteError` with zero side effects | Delete `src/orchestrator/approval.py` + tests |
+| 3.5–3.7 backoffice | `pytest tests/test_backoffice.py -q` → 21 passed | `build_app()` constructs 4 tabs without server; margin edit recomputes base (100×0.50→150.00); client phone normalizes | Delete `src/backoffice/` + tests |
+| 3.8 barcode | `pytest tests/test_barcode.py -q` → 6 passed | Postgres: one barcode→SINGLE, two SKUs→DUPLICATE (never guessed), none→UNKNOWN | Delete `src/barcode/` + tests |
+| 3.9 ocr | `pytest tests/test_ocr.py -q` → 11 passed | Postgres: price list maps CLV-001→existing SKU, NEW-777 suggested; re-ingest upserts, no duplicates | Delete `src/supplier/` + tests |
+| 4.6 intake | `pytest tests/test_intake.py -q` → 3 passed | Recording ASGI transport: response_sent_at ≤ handler start (async proof); slow handler ACK <5 s | Revert webhook BackgroundTasks change + tests |
+| 4.7 E2E | `pytest tests/test_e2e_order.py tests/test_e2e_ingestion.py -q` → 7 passed | Postgres: full order→approve→convert→Sheets(quarantine)→stock 40→confirm; reject→RELEASED→50 | Delete both E2E test files |
+| 4.8 coverage | `pytest --cov=src --cov-fail-under=85` → 229 passed, 96.47%, pricing 100% | N/A — harness gate | N/A (test-only) |
+| 5.2 flags | `pytest tests/test_features.py -q` → 8 passed | webhook ACKs 200 with fase2 off and zero dispatch; backoffice refuses build with fase4 off | Revert `src/features.py`, webhook/backoffice gates + tests |
+| 5.4 quality | `make lint` clean · `make typecheck` → Success (0 errors) · `make check-test-docs` clean | N/A | N/A |
 
-Coverage (new modules): `--cov` over perception/sales/dispatch/order_lifecycle/orchestrator/scheduler → **365 stmts, 99%** (only missing line: a `logger.info` count>0 branch in `sweeper._tick`, proven by integration test). perception/sales/dispatch/order_lifecycle/orchestrator at 100%.
+Final full run: `pytest --cov=src --cov-fail-under=85` → **229 passed, coverage 96.47%** (TOTAL 1446 stmts, 62 missing). `src/pricing` 100%.
 
 ## Deviations from Design
 
-1. **`Order.customer` relationship added to `src/db/models.py`** — the design's data model had no relationship; without it SQLAlchemy cannot order inserts (clientes before orders) in one flush, breaking order creation. Schema unchanged; ORM metadata only. Flagged to verify.
-2. **`DecisionAction` percent semantics** — dispatch parses "5%" into fraction `0.05` because the pricing engine consumes fractions; the `order_items.adjustment` column stores the absolute amount given.
-3. **Router awaiting-decision rule** — every reply while `awaiting_decision` routes to Dispatch (not only parseable decisions), so the owner is asked to clarify instead of the reply falling into disambiguation.
-4. **Sweeper TTL check at read time** — confirmed the design's "TTL correctness does NOT depend on the sweeper": availability excludes expired ACTIVE reservations immediately; the sweeper makes expiry durable (EXPIRED + needs_requote). RED test asserts both.
+1. **Webhook dispatch moved to FastAPI `BackgroundTasks`** — design said "BackgroundTasks + APScheduler"; PR1 skeleton dispatched synchronously. PR4 wires the actual background handoff so the ACK truly precedes heavy work (proven by recording transport).
+2. **Dispatch notifier is sync; WhatsApp send is async** — the `Notifier` protocol in `dispatch.py` stays sync (its tests cover it); the async channel is bridged at the pipeline edge (E2E uses an async-notifier adapter). No change to the dispatch API.
+3. **`register_approved_order` vs `approve_and_register`** — approvals that run per-line adjustments go through `apply_decision` first (which already calls `approve_order`), then the registration half; `approve_and_register` is the clean-approval convenience. Calling `approve_and_register` after `apply_decision` double-approves (`InvalidTransitionError`) — documented, not hidden.
+4. **OpenAI clients build lazily** — openai 3.x raises at `OpenAI()` construction without a key; the client is built on first use so importing the backoffice never needs credentials.
+5. **Price-list ingestion is Vision/text based** — no PDF/Excel parsing library was added (per dependency list); price lists are ingested from photos/text through the same Vision pipeline, with the mapping/upsert logic in `ingest_price_list_rows`. Native PDF/Excel parsing is an extension point.
+6. **Feature flags: `require_fase` is raise-or-proceed, not a predicate** — the webhook calls it in a try/except so the ACK contract holds at the boundary (stop at boundary = ACK without dispatch).
 
-## Issues Found
+## Issues Found (PR4)
 
-- `re` word boundaries (`\b`) do not match accented Spanish stems (`aprobá`, `rechazá`) — fixed by boundary-less stem alternation + `no(?!\w)`.
-- Backdated reservations in integration tests: `available_stock` already excludes them at read time (design intent), so "still locked" assertions were wrong; tests assert read-time exclusion + durable EXPIRED state separately.
+- **openai 3.x API drift**: transcription response format/typing changed (`segments`/`avg_logprob` still available via `verbose_json`, but mypy overload resolution needs `cast(Any)` on the `file` argument); `OpenAI()` raises without a key → lazy client holder.
+- **lru_cached settings leak across tests**: `get_settings()` is cached; monkeypatching env vars is order-dependent — new channels/analyzers accept injected `Settings` (deterministic tests).
+- **TestClient blocks on background tasks**: `client.post` waits for BackgroundTasks to finish — ordering must be proven with a recording ASGI transport, not elapsed-time.
+- **Fixture sequences**: explicit-id seeds don't advance Postgres sequences → auto-id inserts collide; fixtures bump via `pg_get_serial_sequence` (name-robust).
+- **App `SessionLocal` sees only committed rows**: fixture seeds are uncommitted; app-handler tests commit the seed first (documented in the test file).
+- **pyzbar needs the system zbar library** (`brew install zbar` on macOS) — import fails without it; documented in runbook.
+- **Sheet quarantine message is Spanish** (`"cuarentena"`) in the owner confirmation — intentional (owner-facing copy, per artifact-language rules Spanish was kept for the owner UX strings already established; all code/identifiers/docstrings are English).
+- Pre-existing note: `httpx/starlette TestClient` deprecation warning in test_webhook remains (harmless).
 - None blocking.
 
-## Remaining Tasks (PR4)
+## Remaining Tasks
 
-- Phase 3: 3.1 WhatsApp adapter, 3.2 `src/integrations/openai.py` (real Whisper/Vision/embed), 3.3 Sheets, 3.4 `src/orchestrator/approval.py` (APPROVE→convert→Sheets→stock→confirm), 3.5–3.9 Gradio backoffice, barcode decoder, supplier OCR.
-- Phase 4 remaining: 4.5 integration search, 4.6 intake ACK <5s async, 4.7 E2E order + ingestion, 4.8 coverage gate `--cov-fail-under=85` (pricing 100% already).
-- Phase 5: README, per-Fase flags, docs, ruff+mypy+pin deps.
+None — PR4 is the final slice. All Phase 1–5 tasks are `[x]`. Next: verify (`sdd-verify`), then archive (`sdd-archive`).
 
 ## Status
 
-7/7 assigned tasks complete (2.2, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11) + Phase 4 4.3/4.4. **139 tests passing** (up from 63). Ready for next batch (PR4).
+**15/15 assigned tasks complete (3.1–3.9, 4.1, 4.2, 4.5–4.8, 5.1–5.4). 229 tests passing at final full run (was 142 after PR3; +87 across PR4 work units). Coverage 96.47% ≥ 85; pricing 100%. ruff + mypy strict + test-docs all clean. Ready for verify.**

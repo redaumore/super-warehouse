@@ -44,30 +44,30 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Integration
 
-- [ ] 3.1 `src/channels/whatsapp.py` Cloud API adapter (verify + media).
-- [ ] 3.2 `src/integrations/openai.py` Whisper/Vision/embed; mockable.
-- [ ] 3.3 `src/integrations/sheets.py` gspread append; quarantine fail.
-- [ ] 3.4 `src/orchestrator/approval.py`: APPROVE→convert→Sheets→stock→confirm.
-- [ ] 3.5 `src/backoffice/app.py` Gradio Blocks (4 tabs).
-- [ ] 3.6 `src/backoffice/ingestion.py` upload→Vision→preview→confirm.
-- [ ] 3.7 `src/backoffice/{catalog,clients,monitor}.py` editors.
-- [ ] 3.8 `src/barcode/decoder.py` pyzbar; duplicate flagged.
-- [ ] 3.9 `src/supplier/ocr.py` remito/invoice + price-list; reject illegible.
+- [x] 3.1 `src/channels/whatsapp.py` Cloud API adapter (verify + media).
+- [x] 3.2 `src/integrations/openai.py` Whisper/Vision/embed; mockable.
+- [x] 3.3 `src/integrations/sheets.py` gspread append; quarantine fail.
+- [x] 3.4 `src/orchestrator/approval.py`: APPROVE→convert→Sheets→stock→confirm.
+- [x] 3.5 `src/backoffice/app.py` Gradio Blocks (4 tabs).
+- [x] 3.6 `src/backoffice/ingestion.py` upload→Vision→preview→confirm.
+- [x] 3.7 `src/backoffice/{catalog,clients,monitor}.py` editors.
+- [x] 3.8 `src/barcode/decoder.py` pyzbar; duplicate flagged.
+- [x] 3.9 `src/supplier/ocr.py` remito/invoice + price-list; reject illegible.
 
 ## Phase 4: Testing
 
-- [ ] 4.1 Unit `test_pricing`: base, 0-margin, both/only-list, multiplicative.
-- [ ] 4.2 Unit `test_phone`: format variants normalize.
+- [x] 4.1 Unit `test_pricing`: base, 0-margin, both/only-list, multiplicative. *(verified — delivered in PR2, `tests/test_pricing.py` 100% coverage: base×1.35, 0-margin, only-list, only-particular, both compound to 720, multiplicative-vs-additive, HALF_UP)*
+- [x] 4.2 Unit `test_phone`: format variants normalize. *(verified — delivered in PR2, `tests/test_phone.py`: 6 format variants → one canonical E.164, INVALID/UNKNOWN/KNOWN)*
 - [x] 4.3 Unit `test_state_machine`: transitions + `needs_requote`. *(delivered in PR3 with task 2.9 — `tests/test_order_lifecycle.py`)*
 - [x] 4.4 Integration `test_inventory`: RED—expiry release, reject release, blocked. *(delivered in PR3 with tasks 2.9–2.11 — `tests/test_order_lifecycle.py`, `tests/test_sweeper.py`)*
-- [ ] 4.5 Integration `test_search`: informal+misspelling resolve.
-- [ ] 4.6 Integration `test_intake`: ACK <5s; heavy work async.
-- [ ] 4.7 E2E `test_e2e_order`+`test_e2e_ingestion`: full flows.
-- [ ] 4.8 Coverage `--cov=src --cov-fail-under=85`; pricing 100%.
+- [x] 4.5 Integration `test_search`: informal+misspelling resolve. *(delivered in PR2 with task 2.4 — `tests/test_search.py`: informal name, misspelling, synonym, unnormalized input, ranking, menu, not-found, vector auto-map + ambiguity)*
+- [x] 4.6 Integration `test_intake`: ACK <5s; heavy work async. *(PR4 — `tests/test_intake.py` + BackgroundTasks wiring in `src/api/webhook.py`)*
+- [x] 4.7 E2E `test_e2e_order`+`test_e2e_ingestion`: full flows. *(PR4 — WhatsApp mock, real Postgres)*
+- [x] 4.8 Coverage `--cov=src --cov-fail-under=85`; pricing 100%. *(PR4 — 96% total, `src/pricing` 100%)*
 
 ## Phase 5: Cleanup
 
-- [ ] 5.1 `README.md` quickstart+env+mock flags.
-- [ ] 5.2 Per-Fase flags `FASE1..4_ENABLED`; stop at boundary.
-- [ ] 5.3 `docs/architecture.md` data-flow + agents.
-- [ ] 5.4 `docs/runbook.md`; ruff+mypy pass; pin deps.
+- [x] 5.1 `README.md` quickstart+env+mock flags.
+- [x] 5.2 Per-Fase flags `FASE1..4_ENABLED`; stop at boundary. *(PR4 — `src/features.py` + gating + `tests/test_features.py`)*
+- [x] 5.3 `docs/architecture.md` data-flow + agents.
+- [x] 5.4 `docs/runbook.md`; ruff+mypy pass; pin deps. *(PR4 — mypy strict clean, ruff clean, deps pinned with `>=` bounds)*
