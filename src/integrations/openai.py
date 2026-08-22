@@ -30,6 +30,33 @@ def _segment_confidence(avg_logprob: float) -> float:
     return max(0.0, min(1.0, 1.0 + avg_logprob))
 
 
+class OpenAINotConfiguredError(Exception):
+    """The OpenAI API key is missing; construct the client with one."""
+
+
+class _ClientHolder:
+    """Lazily builds the SDK client on first use (never at import/construction).
+
+    openai 3.x raises at ``OpenAI()`` when no key is set, so deferring the
+    construction keeps app import and UI build safe without credentials; the
+    clear error surfaces only when a real call is attempted.
+    """
+
+    def __init__(self, client: OpenAI | None, api_key: str) -> None:
+        self._client = client
+        self._api_key = api_key
+
+    @property
+    def client(self) -> OpenAI:
+        if self._client is None:
+            if not self._api_key:
+                raise OpenAINotConfiguredError(
+                    "openai api key not configured (set OPENAI_API_KEY)"
+                )
+            self._client = OpenAI(api_key=self._api_key)
+        return self._client
+
+
 class OpenAITranscriber:
     """Whisper speech-to-text client implementing the ``Transcriber`` protocol."""
 
@@ -42,13 +69,13 @@ class OpenAITranscriber:
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self._client = client or OpenAI(api_key=self.settings.openai_api_key or None)
+        self._holder = _ClientHolder(client, self.settings.openai_api_key)
         self.model = model
         self.low_confidence_logprob = low_confidence_logprob
 
     def transcribe(self, audio_path: str) -> TranscriptionResult:
         """Transcribe the audio file, flagging low-confidence fragments."""
-        response = self._client.audio.transcriptions.create(
+        response = self._holder.client.audio.transcriptions.create(
             model=self.model,
             # The SDK overloads `file` with PathLike/IO unions; a plain path
             # string is accepted at runtime but needs the Any cast to match.
@@ -80,12 +107,12 @@ class OpenAIVisionAnalyzer:
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self._client = client or OpenAI(api_key=self.settings.openai_api_key or None)
+        self._holder = _ClientHolder(client, self.settings.openai_api_key)
         self.model = model
 
     def analyze(self, image_url: str, prompt: str) -> VisionResult:
         """Analyze the image at ``image_url`` guided by ``prompt``."""
-        completion = self._client.chat.completions.create(
+        completion = self._holder.client.chat.completions.create(
             model=self.model,
             messages=[
                 {
@@ -117,13 +144,13 @@ class OpenAIEmbedder:
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self._client = client or OpenAI(api_key=self.settings.openai_api_key or None)
+        self._holder = _ClientHolder(client, self.settings.openai_api_key)
         self.model = model or self.settings.openai_embedding_model
         self.dimensions = dimensions or self.settings.openai_embedding_dims
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         """Embed every text, preserving input order."""
-        response = self._client.embeddings.create(
+        response = self._holder.client.embeddings.create(
             model=self.model,
             input=list(texts),
             dimensions=self.dimensions,
