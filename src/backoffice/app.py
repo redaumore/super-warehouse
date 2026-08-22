@@ -19,7 +19,7 @@ from src.backoffice.catalog import list_products, update_margin, update_price, u
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.ingestion import confirm_items, to_grid_rows
 from src.backoffice.monitor import list_orders
-from src.config import get_settings
+from src.config import Settings, get_settings
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIVisionAnalyzer
 from src.integrations.sheets import SheetsWriter
@@ -121,13 +121,20 @@ def _price_list_choices() -> list[dict[str, object]]:
         return list_price_lists(session)
 
 
-def build_app() -> gr.Blocks:
-    """Construct the four-tab Blocks tree (no server is started)."""
-    settings = get_settings()
+def build_app(settings: Settings | None = None) -> gr.Blocks:
+    """Construct the four-tab Blocks tree (no server is started).
+
+    Fase 4 gates the backoffice: when disabled the app refuses to build
+    (``FeatureDisabledError``) — a clean stop at the boundary.
+    """
+    from src.features import require_fase
+
+    cfg = settings or get_settings()
+    require_fase(4, cfg)
     with gr.Blocks(title="Ferretería — Backoffice") as demo:
         gr.Markdown(
             f"# Backoffice Ferretería\n"
-            f"Fase 4 habilitada: {settings.fase4_enabled}. "
+            f"Fase 4 habilitada: {cfg.fase4_enabled}. "
             "Los datos van a la base local (Postgres + pgvector)."
         )
         with gr.Tab("Catalog"):

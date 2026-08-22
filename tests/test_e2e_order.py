@@ -21,11 +21,11 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.agents.customer import lookup_phone
-from src.agents.dispatch import Decision, DecisionAction, apply_decision, format_quote_message
 from src.agents.disambiguation import resolve_item
+from src.agents.dispatch import Decision, DecisionAction, apply_decision, format_quote_message
 from src.agents.inventory import available_stock, reserve_stock
 from src.agents.sales import ItemInput, quote_order
-from src.channels.whatsapp import WhatsAppChannel
+from src.channels.whatsapp import WhatsAppChannel, WhatsAppError
 from src.config import Settings, get_settings
 from src.db.models import (
     Catalogo,
@@ -319,7 +319,7 @@ async def test_e2e_http_error_on_confirm_still_completes_flow(shop):
             notifier=notifier,
             owner_phone=OWNER_PHONE,
         )
-        with pytest.raises(Exception):
+        with pytest.raises(WhatsAppError):
             await notifier.drain()
     # Registration side effects already committed to the session before the send.
     assert order.estado is OrderEstado.APPROVED

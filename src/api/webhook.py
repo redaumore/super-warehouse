@@ -21,6 +21,7 @@ from src.channels.base import Channel, InboundMessage
 from src.channels.telegram import TelegramChannel
 from src.channels.whatsapp import WhatsAppChannel
 from src.config import get_settings
+from src.features import FeatureDisabledError, require_fase
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,14 @@ async def webhook(
     # ACK immediately — the client must not wait on heavy work. The orchestrator
     # handler runs as a background task AFTER the response is sent, so the ACK
     # stays well under the 5 s SLA regardless of transcription/search/pricing.
+    # Fase 2 (the agent pipeline) is a safe stop point: when disabled, the
+    # intake still ACKs but does not dispatch heavy work.
     if ORCHESTRATOR_HANDLER is not None:
-        background_tasks.add_task(ORCHESTRATOR_HANDLER, message)
+        try:
+            require_fase(2, settings)
+        except FeatureDisabledError:
+            logger.warning("fase 2 disabled: intake ACKs without dispatching work")
+        else:
+            background_tasks.add_task(ORCHESTRATOR_HANDLER, message)
 
     return Response(status_code=200, content="ACK")
