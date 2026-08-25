@@ -37,7 +37,9 @@ class Channel(ABC):
         """Normalize a raw channel webhook payload into an `InboundMessage`."""
 
     @abstractmethod
-    def verify_request(self, payload: dict[str, Any], signature: str | None) -> bool:
+    def verify_request(
+        self, payload: dict[str, Any], signature: str | None, secret_token: str | None = None
+    ) -> bool:
         """Return True when the inbound request is authentic (signature / token)."""
 
     @abstractmethod

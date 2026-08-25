@@ -39,6 +39,9 @@ class Settings(BaseSettings):
 
     # Telegram demo channel
     telegram_bot_token: str = ""
+    # Secret token Telegram echoes in the X-Telegram-Bot-Api-Secret-Token header
+    # (set at setWebhook time). Empty = demo mode (accept any webhook).
+    telegram_secret_token: str = ""
 
     # OpenAI
     openai_api_key: str = ""

@@ -7,6 +7,7 @@ Used as the low-friction demo channel while WhatsApp is the production primary
 
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Any
 
@@ -41,13 +42,21 @@ class TelegramChannel(Channel):
         text = message.get("text")
         return InboundMessage(channel=self.name, sender_id=sender_id, text=text, raw=payload)
 
-    def verify_request(self, payload: dict[str, Any], signature: str | None) -> bool:
-        """Telegram webhooks are authenticated by the bot token itself.
+    def verify_request(
+        self, payload: dict[str, Any], signature: str | None, secret_token: str | None = None
+    ) -> bool:
+        """Authenticate a Telegram webhook via the secret token.
 
-        For the MVP demo we accept any payload (the endpoint is only exposed
-        during the demo). Production would pin an allowed update source.
+        The token is set at ``setWebhook`` time and Telegram echoes it in the
+        ``X-Telegram-Bot-Api-Secret-Token`` header. When no secret token is
+        configured we stay in demo mode and accept any payload (the endpoint is
+        only exposed during the demo).
         """
-        return True
+        if not self.settings.telegram_secret_token:
+            return True
+        return secret_token is not None and hmac.compare_digest(
+            secret_token, self.settings.telegram_secret_token
+        )
 
     async def send_text(self, sender_id: str, text: str) -> None:
         """Send a text reply via the Telegram bot (no-op when no token set)."""

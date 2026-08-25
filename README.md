@@ -25,6 +25,7 @@ Google Sheets · Gradio.
 | `RESERVATION_TTL_MINUTES` | Soft-lock expiry window | `30` |
 | `WHATSAPP_TOKEN/PHONE_ID/VERIFY_TOKEN` | WhatsApp Cloud API | empty (no-op send) |
 | `TELEGRAM_BOT_TOKEN` | Demo channel | empty (no-op send) |
+| `TELEGRAM_SECRET_TOKEN` | Telegram webhook auth (set at `setWebhook`) | empty (accept any webhook) |
 | `OPENAI_API_KEY` | Whisper / GPT-4o Vision / embeddings | empty (client builds lazily) |
 | `OPENAI_EMBEDDING_MODEL/DIMS` | Embedding model and dimension | `text-embedding-3-small` / `1536` |
 | `GOOGLE_SHEETS_CREDENTIALS_FILE/SPREADSHEET_KEY` | gspread service account + sheet | empty (rows quarantine) |

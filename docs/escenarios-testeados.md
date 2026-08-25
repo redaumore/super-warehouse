@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 209, agrupados en 24 dominios.
+**Total de escenarios:** 210, agrupados en 24 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -21,7 +21,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
-- [Webhook de entrada](#webhook-de-entrada) — 5
+- [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 7
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 5
@@ -213,8 +213,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El endpoint de salud responde 200. _(`test_healthz`)_
 - Un canal desconocido devuelve 404. _(`test_unknown_channel_returns_404`)_
 - El webhook confirma (ACK) muy por debajo del SLA de 5 segundos. _(`test_ack_returns_quickly`)_
-- Un payload sin firma válida se rechaza con 401. _(`test_unauthenticated_payload_rejected`)_
-- Un payload con firma incorrecta se rechaza con 401. _(`test_bad_signature_rejected`)_
+- Un payload de WhatsApp sin firma válida se rechaza con 401. _(`test_unauthenticated_payload_rejected`)_
+- Un payload de WhatsApp con firma incorrecta se rechaza con 401. _(`test_bad_signature_rejected`)_
+- Con token secreto configurado, Telegram exige el header de autenticación. _(`test_telegram_webhook_requires_secret_token_when_configured`)_
 
 ## Intake y trabajo en background
 

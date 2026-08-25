@@ -100,7 +100,9 @@ class WhatsAppChannel(Channel):
             raw=raw,
         )
 
-    def verify_request(self, payload: dict[str, Any], signature: str | None) -> bool:
+    def verify_request(
+        self, payload: dict[str, Any], signature: str | None, secret_token: str | None = None
+    ) -> bool:
         """Verify a WhatsApp webhook request.
 
         Subscription-verification payloads (``hub.verify_token``) are checked

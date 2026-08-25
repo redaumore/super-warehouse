@@ -72,16 +72,19 @@ async def webhook(
 
     raw_body: bytes = await request.body()
     signature = request.headers.get("x-hub-signature-256")
+    secret_token = request.headers.get("x-telegram-bot-api-secret-token")
 
-    # Authenticity gate: the HMAC signature over the raw body is authoritative.
-    # A channel may additionally enforce its own check (e.g. a verify token),
-    # but a missing/invalid signature is always rejected.
-    if not _signature_is_valid(raw_body, signature):
+    # Authenticity gate. WhatsApp signs its payloads with an HMAC over the raw
+    # body (X-Hub-Signature-256); Telegram authenticates webhooks with a secret
+    # token (set at setWebhook time and echoed in a header) instead. A channel
+    # may additionally enforce its own check, but a request that fails the
+    # channel-specific gate is always rejected.
+    if channel != "telegram" and not _signature_is_valid(raw_body, signature):
         logger.warning("Rejected unauthenticated webhook on channel=%s", channel)
         return Response(status_code=401, content="invalid signature")
 
     payload = await request.json()
-    if not adapter.verify_request(payload, signature):
+    if not adapter.verify_request(payload, signature, secret_token):
         logger.warning("Rejected webhook failed channel verification on channel=%s", channel)
         return Response(status_code=401, content="invalid signature")
 

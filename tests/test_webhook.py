@@ -53,21 +53,48 @@ def test_ack_returns_quickly(client):
 
 
 def test_unauthenticated_payload_rejected(client):
-    """Un payload sin firma válida se rechaza con 401.
+    """Un payload de WhatsApp sin firma válida se rechaza con 401.
 
-    A payload without a valid signature is rejected with 401.
+    A WhatsApp payload without a valid HMAC signature is rejected with 401.
     """
     body = b'{"message": {"chat": {"id": 1}}}'
-    r = client.post("/webhook/telegram", content=body)
+    r = client.post("/webhook/whatsapp", content=body)
     assert r.status_code == 401
 
 
 def test_bad_signature_rejected(client):
-    """Un payload con firma incorrecta se rechaza con 401.
+    """Un payload de WhatsApp con firma incorrecta se rechaza con 401.
 
-    A payload with a wrong signature is rejected with 401.
+    A WhatsApp payload with a wrong HMAC signature is rejected with 401.
     """
     body = b'{"message": {"chat": {"id": 1}}}'
     bad = "sha256=" + "0" * 64
-    r = client.post("/webhook/telegram", content=body, headers={"x-hub-signature-256": bad})
+    r = client.post("/webhook/whatsapp", content=body, headers={"x-hub-signature-256": bad})
     assert r.status_code == 401
+
+
+def test_telegram_webhook_requires_secret_token_when_configured(client, monkeypatch):
+    """Con token secreto configurado, Telegram exige el header de autenticación.
+
+    With a secret token configured, the Telegram webhook rejects requests that
+    omit it or send the wrong value, and accepts a matching header.
+    """
+    monkeypatch.setattr(settings, "telegram_secret_token", "top-secret")
+    body = b'{"message": {"chat": {"id": 1}, "text": "hola"}}'
+    # Missing header → rejected.
+    assert client.post("/webhook/telegram", content=body).status_code == 401
+    # Wrong header → rejected.
+    wrong = client.post(
+        "/webhook/telegram",
+        content=body,
+        headers={"x-telegram-bot-api-secret-token": "wrong"},
+    )
+    assert wrong.status_code == 401
+    # Matching header → accepted.
+    ok = client.post(
+        "/webhook/telegram",
+        content=body,
+        headers={"x-telegram-bot-api-secret-token": "top-secret"},
+    )
+    assert ok.status_code == 200
+    assert ok.text == "ACK"
