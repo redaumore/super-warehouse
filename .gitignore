@@ -33,3 +33,6 @@ htmlcov/
 
 # Engram / local caches
 .atl/.skill-registry.cache.json
+
+# Google service-account credentials (never commit)
+credentials/
