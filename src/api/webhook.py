@@ -4,8 +4,8 @@ Accepts inbound order messages from active channels, verifies authenticity,
 ACKs immediately (well under the 5 s SLA) and hands heavy processing to the
 background so the webhook is never blocked by transcription/search/pricing.
 
-Phase 1 delivers the skeleton + signature verification + ephemeral ACK. The
-orchestrator dispatch hook is the seam where Phase 3 wires real background work.
+The orchestrator dispatch hook is wired to the walking-skeleton pipeline by
+default; the fase-2 gate below decides whether it actually dispatches.
 """
 
 from __future__ import annotations
@@ -13,15 +13,15 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import BackgroundTasks, FastAPI, Request, Response
 
-from src.channels.base import Channel, InboundMessage
-from src.channels.telegram import TelegramChannel
-from src.channels.whatsapp import WhatsAppChannel
+from src.channels import CHANNELS
+from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.features import FeatureDisabledError, require_fase
+from src.pipeline import handle_inbound as pipeline_handler
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +29,10 @@ settings = get_settings()
 
 app = FastAPI(title="super-warehouse intake", version="0.1.0")
 
-# Registered channel adapters keyed by channel name.
-CHANNELS: dict[str, Channel] = {
-    "telegram": TelegramChannel(),
-    "whatsapp": WhatsAppChannel(),
-}
-
-# Seam for the orchestrator to consume a normalized inbound message (Phase 3).
-ORCHESTRATOR_HANDLER: Callable[[InboundMessage], None] | None = None
+# Seam for the orchestrator to consume a normalized inbound message. Wired to
+# the walking-skeleton pipeline by default; the loop script may swap it for a
+# demo handler. The fase-2 gate below decides whether it actually runs.
+ORCHESTRATOR_HANDLER: Callable[[InboundMessage], Awaitable[None] | None] | None = pipeline_handler
 
 
 def _signature_is_valid(payload_body: bytes, signature: str | None) -> bool:
@@ -62,9 +58,7 @@ async def healthz() -> dict[str, str]:
 
 
 @app.post("/webhook/{channel}")
-async def webhook(
-    channel: str, request: Request, background_tasks: BackgroundTasks
-) -> Response:
+async def webhook(channel: str, request: Request, background_tasks: BackgroundTasks) -> Response:
     """Intake endpoint: verify, ACK <5 s, dispatch heavy work in the background."""
     adapter = CHANNELS.get(channel)
     if adapter is None:

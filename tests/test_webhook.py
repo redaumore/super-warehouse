@@ -14,6 +14,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.webhook import app, settings
+from src.channels.telegram import TelegramChannel
+
+
+@pytest.fixture(autouse=True)
+def _no_telegram_network(monkeypatch):
+    """Keep webhook ACK tests offline: the walking-skeleton reply must not post.
+
+    The intake now wires the pipeline handler by default, so a 200 response on
+    the Telegram endpoint dispatches a background reply. No-op the send so the
+    ACK latency assertion stays deterministic and no network call leaks out.
+    """
+
+    async def _noop(self, sender_id, text):
+        return None
+
+    monkeypatch.setattr(TelegramChannel, "send_text", _noop)
 
 
 @pytest.fixture

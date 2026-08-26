@@ -34,6 +34,7 @@ DOMAINS: dict[str, str] = {
     "test_dispatch": "Despacho y aprobación del dueño",
     "test_approval": "Registro de aprobaciones",
     "test_orchestrator": "Orquestador y enrutamiento",
+    "test_pipeline": "Pipeline de orquestación (walking skeleton)",
     "test_order_lifecycle": "Ciclo de vida del pedido",
     "test_perception": "Percepción (voz e imagen)",
     "test_openai": "Integración con OpenAI",

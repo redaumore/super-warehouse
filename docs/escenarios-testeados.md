@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 210, agrupados en 24 dominios.
+**Total de escenarios:** 215, agrupados en 25 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -14,6 +14,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 17
+- [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 5
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -123,6 +124,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El orquestador enruta y persiste el contexto. _(`test_orchestrator_routes_and_persists_context`)_
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
+
+## Pipeline de orquestación (walking skeleton)
+
+- El orquestador de la pipeline enlaza los seis agentes. _(`test_build_orchestrator_registers_all_six_agents`)_
+- Un mensaje entrante se enruta, persiste contexto y responde por el canal. _(`test_handle_inbound_routes_persists_and_replies`)_
+- Un segundo mensaje del mismo remitente continúa el pedido (contexto persistido). _(`test_second_message_resumes_context`)_
+- Una nota de voz se enruta a Percepción con una respuesta específica. _(`test_voice_routes_to_perception_reply`)_
+- Un canal sin adaptador no rompe la pipeline: descarta la respuesta. _(`test_unknown_channel_drops_reply_without_crash`)_
 
 ## Ciclo de vida del pedido
 
