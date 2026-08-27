@@ -1,0 +1,4069 @@
+{
+  "metadata": {
+    "source_file": "FN Catalogo.pdf",
+    "total_products_enriched": 177,
+    "provider": "openai",
+    "model_enrichment": "gpt-4o-mini"
+  },
+  "products": [
+    {
+      "codigo": "100001",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 9/13 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 9/13 mm es ideal para asegurar y fijar componentes en diversas aplicaciones industriales. Su fleje de 13 mm de ancho garantiza una sujeción firme y duradera.",
+      "atributos": {
+        "apertura": "9/13 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100001",
+          "Articulo": "00",
+          "Apertura": "9/13 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100002",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 9/20 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 9/20 mm es perfecta para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho proporciona una excelente resistencia y durabilidad.",
+      "atributos": {
+        "apertura": "9/20 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100002",
+          "Articulo": "0",
+          "Apertura": "9/20 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100003",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 12/26 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 12/26 mm es ideal para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho asegura una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "12/26 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100003",
+          "Articulo": "1",
+          "Apertura": "12/26 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100004",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 13/29 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 13/29 mm es una solución efectiva para la fijación de componentes en diversas aplicaciones. Su fleje de 13 mm de ancho proporciona una sujeción segura y duradera.",
+      "atributos": {
+        "apertura": "13/29 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100004",
+          "Articulo": "2",
+          "Apertura": "13/29 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100005 3",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 14/36 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 14/36 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "14/36 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100005 3",
+          "Articulo": "14/36",
+          "Apertura": "mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100006",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 21/42 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 21/42 mm es perfecta para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho proporciona una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "21/42 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100006",
+          "Articulo": "4",
+          "Apertura": "21/42 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100007 5",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 26/49 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 26/49 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "26/49 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100007 5",
+          "Articulo": "",
+          "Apertura": "26/49 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100008",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 32/55 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 32/55 mm es perfecta para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho proporciona una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "32/55 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100008",
+          "Articulo": "6",
+          "Apertura": "32/55 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100009",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 40/63 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 40/63 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "40/63 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100009",
+          "Articulo": "7",
+          "Apertura": "40/63 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100010",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 45/68 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 45/68 mm es perfecta para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho proporciona una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "45/68 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100010",
+          "Articulo": "8",
+          "Apertura": "45/68 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100016",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 53/77 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 53/77 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "53/77 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100016",
+          "Articulo": "9",
+          "Apertura": "53/77 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100017",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 59/81 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 59/81 mm es perfecta para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho proporciona una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "59/81 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100017",
+          "Articulo": "10",
+          "Apertura": "59/81 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100018",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 65/88 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 65/88 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "65/88 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100018",
+          "Articulo": "11",
+          "Apertura": "65/88 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100019",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 72/94 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 72/94 mm es perfecta para asegurar conexiones en entornos industriales. Su fleje de 13 mm de ancho proporciona una sujeción efectiva y confiable.",
+      "atributos": {
+        "apertura": "72/94 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100019",
+          "Articulo": "12",
+          "Apertura": "72/94 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100020",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 78/101 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 78/101 mm es ideal para aplicaciones que requieren una sujeción robusta. Su fleje de 13 mm de ancho asegura una fijación firme y confiable.",
+      "atributos": {
+        "apertura": "78/101 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100020",
+          "Articulo": "13",
+          "Apertura": "78/101 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100021",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 13 mm 88/111 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con fleje de 13 mm de ancho y apertura de 88/111 mm es ideal para asegurar mangueras y tubos en diversas aplicaciones industriales.",
+      "atributos": {
+        "apertura": "88/111 mm",
+        "ancho_fleje": "13 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100021",
+          "Articulo": "14",
+          "Apertura": "88/111 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100022",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 13 mm 98/119 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con fleje de 13 mm de ancho y apertura de 98/119 mm es perfecta para aplicaciones que requieren un ajuste seguro y confiable.",
+      "atributos": {
+        "apertura": "98/119 mm",
+        "ancho_fleje": "13 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100022",
+          "Articulo": "15",
+          "Apertura": "98/119 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100025",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 13 mm 144/167 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con fleje de 13 mm de ancho y apertura de 144/167 mm es ideal para asegurar conexiones en sistemas de tuberías y mangueras.",
+      "atributos": {
+        "apertura": "144/167 mm",
+        "ancho_fleje": "13 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100025",
+          "Articulo": "20",
+          "Apertura": "144/167 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100011",
+      "nombre_comercial": "Abrazadera Mini a Tornillo Tipo Europea de Acero 10 mm 8/10 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Mini a Tornillo Tipo Europea de Acero con fleje de 10 mm de ancho y apertura de 8/10 mm es perfecta para aplicaciones de menor tamaño y ajuste preciso.",
+      "atributos": {
+        "apertura": "8/10 mm",
+        "ancho_fleje": "10 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100011",
+          "Articulo": "A - 3/8\"",
+          "Apertura": "8/10 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100012",
+      "nombre_comercial": "Abrazadera Mini a Tornillo Tipo Europea de Acero 10 mm 9/12 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Mini a Tornillo Tipo Europea de Acero con fleje de 10 mm de ancho y apertura de 9/12 mm es ideal para asegurar conexiones en espacios reducidos.",
+      "atributos": {
+        "apertura": "9/12 mm",
+        "ancho_fleje": "10 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100012",
+          "Articulo": "B - 1/2\"",
+          "Apertura": "9/12 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100013",
+      "nombre_comercial": "Abrazadera Mini a Tornillo Tipo Europea de Acero 10 mm 11/14 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Mini a Tornillo Tipo Europea de Acero con fleje de 10 mm de ancho y apertura de 11/14 mm es perfecta para aplicaciones que requieren un ajuste seguro en espacios limitados.",
+      "atributos": {
+        "apertura": "11/14 mm",
+        "ancho_fleje": "10 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100013",
+          "Articulo": "C - 5/8\"",
+          "Apertura": "11/14 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Abrazadera para Manguera de Gas de Acero 10 mm N/A",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera para Manguera de Gas de Acero con fleje de 10 mm de ancho es ideal para asegurar mangueras en aplicaciones de gas, garantizando un sellado seguro.",
+      "atributos": {
+        "apertura": "N/A",
+        "ancho_fleje": "10 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Articulo",
+          "2": "Apertura",
+          "3": "U/Vta",
+          "4": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "100014",
+      "nombre_comercial": "Abrazadera para Manguera de Gas de Acero 10 mm 12/17 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera para Manguera de Gas de Acero con fleje de 10 mm de ancho y apertura de 12/17 mm es perfecta para asegurar conexiones de mangueras de gas de manera efectiva.",
+      "atributos": {
+        "apertura": "12/17 mm",
+        "ancho_fleje": "10 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "100014",
+          "1": "Gas",
+          "2": "12/17 mm",
+          "3": "c/u",
+          "4": "10"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Abrazadera para Fuelle de Sanitario de Acero N/A",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera para Fuelle de Sanitario de Acero es ideal para asegurar fuelles en sistemas sanitarios, garantizando un ajuste seguro.",
+      "atributos": {
+        "apertura": "N/A",
+        "ancho_fleje": "N/A",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Articulo",
+          "2": "Apertura",
+          "3": "U/Vta",
+          "4": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "100026",
+      "nombre_comercial": "Abrazadera para Fuelle de Sanitario de Acero N/A 50/58 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera para Fuelle de Sanitario de Acero con apertura de 50/58 mm es perfecta para asegurar fuelles en aplicaciones sanitarias.",
+      "atributos": {
+        "apertura": "50/58 mm",
+        "ancho_fleje": "N/A",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "100026",
+          "1": "215",
+          "2": "50/58 mm",
+          "3": "c/u",
+          "4": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100027",
+      "nombre_comercial": "Abrazadera Angosta Americana a Cremallera de Acero 8 mm 6/16 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Angosta Americana a Cremallera de Acero con fleje de 8 mm de ancho y apertura de 6/16 mm es ideal para aplicaciones que requieren un ajuste preciso y seguro.",
+      "atributos": {
+        "apertura": "6/16 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100027",
+          "Articulo": "402",
+          "Apertura": "6/16 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100028",
+      "nombre_comercial": "Abrazadera Angosta Americana a Cremallera de Acero 8 mm 8/22 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Angosta Americana a Cremallera de Acero con fleje de 8 mm de ancho y apertura de 8/22 mm es perfecta para asegurar conexiones en espacios reducidos.",
+      "atributos": {
+        "apertura": "8/22 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100028",
+          "Articulo": "403",
+          "Apertura": "8/22 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "404 100029",
+      "nombre_comercial": "Abrazadera Angosta Americana a Cremallera de Acero 8 mm 13/25 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Angosta Americana a Cremallera de Acero con fleje de 8 mm de ancho y apertura de 13/25 mm es ideal para aplicaciones que requieren un ajuste seguro y confiable.",
+      "atributos": {
+        "apertura": "13/25 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "404 100029",
+          "Articulo": "",
+          "Apertura": "13/25 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100030",
+      "nombre_comercial": "Abrazadera Angosta Americana a Cremallera de Acero 8 mm 16/32 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Angosta Americana a Cremallera de Acero con fleje de 8 mm de ancho y apertura de 16/32 mm es perfecta para asegurar conexiones en sistemas de tuberías y mangueras.",
+      "atributos": {
+        "apertura": "16/32 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100030",
+          "Articulo": "405",
+          "Apertura": "16/32 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100031",
+      "nombre_comercial": "Abrazadera Angosta Americana a Cremallera de Acero 8 mm 16/38 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Angosta Americana a Cremallera de Acero con fleje de 8 mm de ancho y apertura de 16/38 mm es ideal para aplicaciones que requieren un ajuste seguro en espacios limitados.",
+      "atributos": {
+        "apertura": "16/38 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100031",
+          "Articulo": "16/38 406",
+          "Apertura": "mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100032",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 19/45 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 19/45 mm y fleje de 8 mm de ancho es ideal para asegurar y fijar tuberías y mangueras en diversas aplicaciones industriales y de construcción.",
+      "atributos": {
+        "apertura": "19/45 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100032",
+          "Articulo": "407",
+          "Apertura": "19/45 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100033",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 25/50 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 25/50 mm y fleje de 8 mm de ancho es perfecta para aplicaciones que requieren un ajuste seguro y confiable en tuberías y mangueras.",
+      "atributos": {
+        "apertura": "25/50 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100033",
+          "Articulo": "408",
+          "Apertura": "25/50 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100034",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 36/60 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 36/60 mm y fleje de 8 mm de ancho es ideal para asegurar conexiones en sistemas de tuberías y mangueras, garantizando un sellado efectivo.",
+      "atributos": {
+        "apertura": "36/60 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100034",
+          "Articulo": "409",
+          "Apertura": "36/60 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100035",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 45/70 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 45/70 mm y fleje de 8 mm de ancho es perfecta para aplicaciones industriales que requieren un ajuste firme y duradero.",
+      "atributos": {
+        "apertura": "45/70 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100035",
+          "Articulo": "410",
+          "Apertura": "45/70 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100036",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero 77/100 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera Americana a Cremallera de Acero con apertura de 77/100 mm y fleje de 8 mm de ancho es ideal para aplicaciones que requieren un sellado seguro en conexiones de gran diámetro.",
+      "atributos": {
+        "apertura": "77/100 mm",
+        "ancho_fleje": "8 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100036",
+          "Articulo": "413",
+          "Apertura": "77/100 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100015",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero Display Muestrario",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Display muestrario de Abrazaderas Americanas a Cremallera de Acero, ideal para exhibición y venta en puntos de venta, facilitando la elección del cliente.",
+      "atributos": {
+        "unidad_venta": "c/u"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100015",
+          "Articulo": "Display Muestrario",
+          "U/Vta": "c/u"
+        }
+      }
+    },
+    {
+      "codigo": "100023",
+      "nombre_comercial": "Abrazadera Americana a Cremallera de Acero Expendedor Alambre 236 Unid",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Expendedor de Alambre con 236 unidades de Abrazaderas Americanas a Cremallera de Acero, ideal para mantener un suministro constante y accesible en el lugar de trabajo.",
+      "atributos": {
+        "unidad_venta": "c/u"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100023",
+          "Articulo": "Expendedor Alambre 236 Unid",
+          "U/Vta": "c/u"
+        }
+      }
+    },
+    {
+      "codigo": "100101",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 25/30 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 25/30 mm y fleje de 22 mm de ancho es ideal para aplicaciones que requieren un ajuste fuerte y seguro en conexiones de tuberías.",
+      "atributos": {
+        "apertura": "25/30 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100101",
+          "Articulo": "S-101",
+          "Apertura": "25/30 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100102",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 28/34 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 28/34 mm y fleje de 22 mm de ancho es perfecta para asegurar conexiones en sistemas de tuberías con alta presión.",
+      "atributos": {
+        "apertura": "28/34 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100102",
+          "Articulo": "S-102",
+          "Apertura": "28/34 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100103",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 33/39 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 33/39 mm y fleje de 22 mm de ancho es ideal para aplicaciones que requieren un sellado seguro y resistente.",
+      "atributos": {
+        "apertura": "33/39 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100103",
+          "Articulo": "S-103",
+          "Apertura": "33/39 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100104",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 37/46 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 37/46 mm y fleje de 22 mm de ancho es perfecta para aplicaciones industriales que requieren un ajuste firme y duradero.",
+      "atributos": {
+        "apertura": "37/46 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100104",
+          "Articulo": "S-104",
+          "Apertura": "37/46 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100105",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 44/43 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 44/43 mm y fleje de 22 mm de ancho es ideal para asegurar conexiones en sistemas de tuberías y mangueras, garantizando un sellado efectivo.",
+      "atributos": {
+        "apertura": "44/43 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100105",
+          "Articulo": "S-105",
+          "Apertura": "44/43 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100106",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 50/59 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 50/59 mm y fleje de 22 mm de ancho es ideal para aplicaciones que requieren un sellado seguro en conexiones de gran diámetro.",
+      "atributos": {
+        "apertura": "50/59 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100106",
+          "Articulo": "S-106",
+          "Apertura": "50/59 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100107",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 55/64 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 55/64 mm y fleje de 22 mm de ancho es perfecta para aplicaciones industriales que requieren un ajuste fuerte y seguro.",
+      "atributos": {
+        "apertura": "55/64 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100107",
+          "Articulo": "S-107",
+          "Apertura": "55/64 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100108",
+      "nombre_comercial": "Abrazadera a Tornillo Súper Presión de Acero 61/71 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "La Abrazadera a Tornillo Súper Presión de Acero con apertura de 61/71 mm y fleje de 22 mm de ancho es ideal para asegurar conexiones en sistemas de tuberías con alta presión.",
+      "atributos": {
+        "apertura": "61/71 mm",
+        "ancho_fleje": "22 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100108",
+          "Articulo": "S-108",
+          "Apertura": "61/71 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100109",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 68/78 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 68/78 mm, ideal para sujeciones seguras. Fabricada con fleje de 22 mm de ancho, esta abrazadera es perfecta para diversas aplicaciones industriales.",
+      "atributos": {
+        "apertura": "68/78 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100109",
+          "Articulo": "S-109",
+          "Apertura": "68/78 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100110",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 76/87 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 76/87 mm, diseñada para ofrecer una sujeción robusta. Con un fleje de 22 mm de ancho, es ideal para aplicaciones que requieren alta resistencia.",
+      "atributos": {
+        "apertura": "76/87 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100110",
+          "Articulo": "S-110",
+          "Apertura": "76/87 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100111",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 85/95 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 85/95 mm, perfecta para asegurar componentes en entornos industriales. Su fleje de 22 mm de ancho garantiza una sujeción firme y duradera.",
+      "atributos": {
+        "apertura": "85/95 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100111",
+          "Articulo": "S-111",
+          "Apertura": "85/95 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100112",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 93/103 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 93/103 mm, diseñada para proporcionar una sujeción efectiva en diversas aplicaciones. Con un fleje de 22 mm de ancho, es ideal para uso industrial.",
+      "atributos": {
+        "apertura": "93/103 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100112",
+          "Articulo": "S-112",
+          "Apertura": "93/103 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100113",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 100/111 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 100/111 mm, ideal para aplicaciones que requieren una sujeción fuerte y confiable. Su fleje de 22 mm de ancho asegura un rendimiento óptimo en condiciones exigentes.",
+      "atributos": {
+        "apertura": "100/111 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100113",
+          "Articulo": "S-113",
+          "Apertura": "100/111 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100114",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 108/119 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 108/119 mm, diseñada para ofrecer una sujeción robusta y duradera. Con un fleje de 22 mm de ancho, es perfecta para diversas aplicaciones industriales.",
+      "atributos": {
+        "apertura": "108/119 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100114",
+          "Articulo": "S-114",
+          "Apertura": "108/119 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100115",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 116/128 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 116/128 mm, ideal para asegurar componentes en entornos industriales. Su fleje de 22 mm de ancho garantiza una sujeción firme y duradera.",
+      "atributos": {
+        "apertura": "116/128 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100115",
+          "Articulo": "S-115",
+          "Apertura": "116/128 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100116",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 125/136 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 125/136 mm, diseñada para proporcionar una sujeción efectiva en diversas aplicaciones. Con un fleje de 22 mm de ancho, es ideal para uso industrial.",
+      "atributos": {
+        "apertura": "125/136 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100116",
+          "Articulo": "S-116",
+          "Apertura": "125/136 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100117",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 135/145 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 135/145 mm, ideal para aplicaciones que requieren una sujeción fuerte y confiable. Su fleje de 22 mm de ancho asegura un rendimiento óptimo en condiciones exigentes.",
+      "atributos": {
+        "apertura": "135/145 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100117",
+          "Articulo": "S-117",
+          "Apertura": "135/145 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100118",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 143/153 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 143/153 mm, diseñada para ofrecer una sujeción robusta y duradera. Con un fleje de 22 mm de ancho, es perfecta para diversas aplicaciones industriales.",
+      "atributos": {
+        "apertura": "143/153 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100118",
+          "Articulo": "S-118",
+          "Apertura": "143/153 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100119",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 151/161 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 151/161 mm, ideal para asegurar componentes en entornos industriales. Su fleje de 22 mm de ancho garantiza una sujeción firme y duradera.",
+      "atributos": {
+        "apertura": "151/161 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100119",
+          "Articulo": "S-119",
+          "Apertura": "151/161 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100120",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 159/169 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 159/169 mm, diseñada para proporcionar una sujeción efectiva en diversas aplicaciones. Con un fleje de 22 mm de ancho, es ideal para uso industrial.",
+      "atributos": {
+        "apertura": "159/169 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100120",
+          "Articulo": "S-120",
+          "Apertura": "159/169 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100121",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 167/177 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 167/177 mm, ideal para aplicaciones que requieren una sujeción fuerte y confiable. Su fleje de 22 mm de ancho asegura un rendimiento óptimo en condiciones exigentes.",
+      "atributos": {
+        "apertura": "167/177 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100121",
+          "Articulo": "S-121",
+          "Apertura": "167/177 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "100122",
+      "nombre_comercial": "Abrazadera a Tornillo de Acero 175/185 mm",
+      "categoria_padre": "Fijaciones y Sujeciones",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de Acero",
+      "marca": "CARBIZ",
+      "descripcion_completa": "Abrazadera a tornillo de acero con apertura de 175/185 mm, diseñada para ofrecer una sujeción robusta y duradera. Con un fleje de 22 mm de ancho, es perfecta para diversas aplicaciones industriales.",
+      "atributos": {
+        "apertura": "175/185 mm",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 4,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "100122",
+          "Articulo": "S-122",
+          "Apertura": "175/185 mm",
+          "U/Vta": "c/u",
+          "Paq x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC autoextinguible",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Sin Adhesivo",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible, diseñada para soportar temperaturas de trabajo de hasta 90°C. Ideal para aplicaciones eléctricas y de aislamiento, con una rigidez dieléctrica de ≥ 40 kV/mm.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "rigidez_dieletrica": "≥ 40 kV/mm"
+      },
+      "metadata_origen": {
+        "pagina": 5,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "PRUEBA DE CARACTERÍSTICA": "Rigidez dieléctrica",
+          "UNIDAD": "kV/mm",
+          "VALOR": "≥ 40"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC Autoextinguible 90°C",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas de PVC",
+      "subcategoria": "Cintas de PVC Autoextinguible",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible diseñada para soportar temperaturas de trabajo de hasta 90°C. Esta cinta presenta una excelente adhesión al dorso con un valor de ≥ 1,80 N/cm, lo que garantiza su eficacia en diversas aplicaciones.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "adhesion_dorso": "≥ 1,80 N/cm",
+        "resistencia_traccion": "≥ 150 N/cm/mm",
+        "elongacion": "≥ 125%",
+        "inflamabilidad": "Autoextinguible"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC Autoextinguible 90°C",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas de PVC",
+      "subcategoria": "Cintas de PVC Autoextinguible",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible diseñada para soportar temperaturas de trabajo de hasta 90°C. Esta cinta presenta una excelente adhesión al acero con un valor de ≥ 1,80 N/cm, ideal para aplicaciones industriales.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "adhesion_acero": "≥ 1,80 N/cm",
+        "resistencia_traccion": "≥ 150 N/cm/mm",
+        "elongacion": "≥ 125%",
+        "inflamabilidad": "Autoextinguible"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC Autoextinguible 90°C",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas de PVC",
+      "subcategoria": "Cintas de PVC Autoextinguible",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible diseñada para soportar temperaturas de trabajo de hasta 90°C. Esta cinta ofrece una resistencia a la tracción de ≥ 150 N/cm/mm, adecuada para diversas aplicaciones de sujeción.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "resistencia_traccion": "≥ 150 N/cm/mm",
+        "elongacion": "≥ 125%",
+        "inflamabilidad": "Autoextinguible"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC Autoextinguible 90°C",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas de PVC",
+      "subcategoria": "Cintas de PVC Autoextinguible",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible diseñada para soportar temperaturas de trabajo de hasta 90°C. Esta cinta presenta una elongación de ≥ 125%, lo que la hace flexible y resistente en diversas condiciones.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "elongacion": "≥ 125%",
+        "inflamabilidad": "Autoextinguible"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Adhesiva de PVC Autoextinguible 90°C",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas de PVC",
+      "subcategoria": "Cintas de PVC Autoextinguible",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta adhesiva de PVC autoextinguible diseñada para soportar temperaturas de trabajo de hasta 90°C. Esta cinta cumple con la norma de inflamabilidad autoextinguible, garantizando seguridad en su uso.",
+      "atributos": {
+        "temperatura_trabajo": "90°C",
+        "inflamabilidad": "Autoextinguible"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Multiuso 19mm x 2m",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Multiuso",
+      "subcategoria": "Cintas Multiuso",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multiuso de 19mm de ancho y 2 metros de largo, ideal para aplicaciones eléctricas y de telecomunicaciones. Esta cinta ofrece una rigidez dieléctrica de ≥ 40 kV/mm, asegurando un uso seguro en alta tensión.",
+      "atributos": {
+        "rigidez_dieléctrica": "≥ 40 kV/mm",
+        "temp_max_trabajo": "≤ 90°C",
+        "temp_emergencia": "≤ 130°C",
+        "resistencia_traccion": "≥ 1,7 MPa",
+        "elongacion": "≥ 1000%"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Multiuso 19mm x 2m",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Multiuso",
+      "subcategoria": "Cintas Multiuso",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multiuso de 19mm de ancho y 2 metros de largo, diseñada para aplicaciones en alta tensión y telecomunicaciones. Esta cinta soporta temperaturas de trabajo de hasta 90°C y tiene una resistencia a la tracción de ≥ 1,7 MPa.",
+      "atributos": {
+        "rigidez_dieléctrica": "> 14 kV/mm",
+        "temp_max_trabajo": "≤ 90°C",
+        "temp_emergencia": "≤ 130°C",
+        "resistencia_traccion": "≥ 1,7 MPa",
+        "elongacion": "≥ 1000%"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Multiuso 19mm x 2m",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Multiuso",
+      "subcategoria": "Cintas Multiuso",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multiuso de 19mm de ancho y 2 metros de largo, ideal para aplicaciones eléctricas. Esta cinta presenta una elongación de ≥ 1000%, lo que la hace altamente flexible y resistente.",
+      "atributos": {
+        "rigidez_dieléctrica": "> 14 kV/mm",
+        "temp_max_trabajo": "≤ 90°C",
+        "temp_emergencia": "≤ 130°C",
+        "resistencia_traccion": "≥ 1,7 MPa",
+        "elongacion": "≥ 1000%"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Multiuso 19mm x 2m",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Multiuso",
+      "subcategoria": "Cintas Multiuso",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multiuso de 19mm de ancho y 2 metros de largo, diseñada para soportar condiciones extremas. Esta cinta tiene una fusión de < 0,2, lo que la hace ideal para aplicaciones críticas.",
+      "atributos": {
+        "rigidez_dieléctrica": "> 14 kV/mm",
+        "temp_max_trabajo": "≤ 90°C",
+        "temp_emergencia": "≤ 130°C",
+        "resistencia_traccion": "≥ 1,7 MPa",
+        "fusion": "< 0,2"
+      }
+    },
+    {
+      "codigo": "115001",
+      "nombre_comercial": "Cinta Aisladora 15 PLUS Negra 5 Metros",
+      "categoria_padre": "Cintas Aisladoras",
+      "categoria": "Cintas Aisladoras",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora 15 PLUS de color negra, con una longitud de 5 metros, ideal para aplicaciones eléctricas. Esta cinta es altamente resistente y cumple con los estándares de seguridad.",
+      "atributos": {
+        "medida": "5 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "200"
+      }
+    },
+    {
+      "codigo": "115010",
+      "nombre_comercial": "Cinta Aisladora 15 PLUS Surtido 5 Metros",
+      "categoria_padre": "Cintas Aisladoras",
+      "categoria": "Cintas Aisladoras",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora 15 PLUS en surtido de colores, con una longitud de 5 metros, ideal para aplicaciones eléctricas. Esta cinta es altamente resistente y cumple con los estándares de seguridad.",
+      "atributos": {
+        "medida": "5 Metros",
+        "color": "Surtido",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "200"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Aisladora 15 PLUS Negra 10 Metros",
+      "categoria_padre": "Cintas Aisladoras",
+      "categoria": "Cintas Aisladoras",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora 15 PLUS de color negra, con una longitud de 10 metros, ideal para aplicaciones eléctricas. Esta cinta es altamente resistente y cumple con los estándares de seguridad.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "150"
+      }
+    },
+    {
+      "codigo": "115004",
+      "nombre_comercial": "Cinta Aisladora Blanca 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Blanca de 10 Metros, ideal para aislar y proteger conexiones eléctricas, fabricada por TACSA.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "150"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115004",
+          "1": "10 Metros Blanca",
+          "2": "c/u",
+          "3": "150"
+        }
+      }
+    },
+    {
+      "codigo": "115008",
+      "nombre_comercial": "Cinta Aisladora Verde 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Verde de 10 Metros, perfecta para aplicaciones eléctricas y de señalización, fabricada por TACSA.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Verde",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "150"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115008",
+          "1": "10 Metros Verde",
+          "2": "c/u",
+          "3": "150"
+        }
+      }
+    },
+    {
+      "codigo": "115009",
+      "nombre_comercial": "Cinta Aisladora Roja 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Roja de 10 Metros, diseñada para el aislamiento eléctrico y la identificación de circuitos, fabricada por TACSA.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Roja",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "150"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115009",
+          "1": "10 Metros Roja",
+          "2": "c/u",
+          "3": "150"
+        }
+      }
+    },
+    {
+      "codigo": "115011",
+      "nombre_comercial": "Cinta Aisladora Surtido 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Surtido de 10 Metros, incluye varios colores para diferentes aplicaciones, fabricada por TACSA.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Surtido",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "150"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115011",
+          "1": "10 Metros Surtido",
+          "2": "Caja",
+          "3": "150"
+        }
+      }
+    },
+    {
+      "codigo": "115005",
+      "nombre_comercial": "Cinta Aisladora Negra 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Negra de 20 Metros, ideal para el aislamiento de cables y conexiones eléctricas, fabricada por TACSA.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "100"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115005",
+          "1": "20 Metros Negra",
+          "2": "c/u",
+          "3": "100"
+        }
+      }
+    },
+    {
+      "codigo": "115006",
+      "nombre_comercial": "Cinta Aisladora Blanca 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Blanca de 20 Metros, perfecta para el aislamiento eléctrico y la protección de cables, fabricada por TACSA.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "100"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115006",
+          "1": "20 Metros Blanca",
+          "2": "c/u",
+          "3": "100"
+        }
+      }
+    },
+    {
+      "codigo": "115007",
+      "nombre_comercial": "Cinta Aisladora Roja 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Roja de 20 Metros, ideal para el aislamiento y la identificación de circuitos eléctricos, fabricada por TACSA.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Roja",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "100"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115007",
+          "1": "20 Metros Roja",
+          "2": "c/u",
+          "3": "100"
+        }
+      }
+    },
+    {
+      "codigo": "115047",
+      "nombre_comercial": "Cinta Aisladora Surtido 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Aisladora Surtido de 20 Metros, incluye varios colores para diferentes aplicaciones eléctricas, fabricada por TACSA.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Surtido",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "100"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "115047",
+          "1": "20 Metros Surtido",
+          "2": "Caja",
+          "3": "100"
+        }
+      }
+    },
+    {
+      "codigo": "115064",
+      "nombre_comercial": "Cinta De Teflón 1/2\" x 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 1/2\" x 10 Metros, ideal para sellar conexiones de tuberías, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "1/2\" x 10 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "25"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115064",
+          "Medida": "1/2\" x 10 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "25"
+        }
+      }
+    },
+    {
+      "codigo": "115065",
+      "nombre_comercial": "Cinta De Teflón 1/2\" x 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 1/2\" x 20 Metros, perfecta para sellar conexiones en sistemas de plomería, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "1/2\" x 20 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "25"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115065",
+          "Medida": "1/2\" x 20 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "25"
+        }
+      }
+    },
+    {
+      "codigo": "115066",
+      "nombre_comercial": "Cinta De Teflón 3/4\" x 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 3/4\" x 10 Metros, ideal para sellar conexiones de tuberías, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "3/4\" x 10 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "24"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115066",
+          "Medida": "3/4\" x 10 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "24"
+        }
+      }
+    },
+    {
+      "codigo": "115067",
+      "nombre_comercial": "Cinta De Teflón 3/4\" x 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 3/4\" x 20 Metros, perfecta para sellar conexiones en sistemas de plomería, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "3/4\" x 20 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "24"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115067",
+          "Medida": "3/4\" x 20 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "24"
+        }
+      }
+    },
+    {
+      "codigo": "115068",
+      "nombre_comercial": "Cinta De Teflón 1\" x 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 1\" x 10 Metros, ideal para sellar conexiones de tuberías, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "1\" x 10 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115068",
+          "Medida": "1\" x 10 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "115069",
+      "nombre_comercial": "Cinta De Teflón 1\" x 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas De Teflón",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta De Teflón de 1\" x 20 Metros, perfecta para sellar conexiones en sistemas de plomería, presentada en caja de 12 unidades, fabricada por TACSA.",
+      "atributos": {
+        "medida": "1\" x 20 Metros",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115069",
+          "Medida": "1\" x 20 Metros",
+          "U/Vta": "Caja",
+          "Caja x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "115040",
+      "nombre_comercial": "Cinta Para Embalar Transparente 40 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Para Embalar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta Para Embalar Transparente de 40 Metros, ideal para el sellado de cajas y embalajes, presentada en caja de 36 rollos, fabricada por TACSA.",
+      "atributos": {
+        "medida": "40 Metros",
+        "color": "Transparente",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115040",
+          "Medida": "40 Metros",
+          "Color": "Transparente",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115041",
+      "nombre_comercial": "Cinta Para Embalar Marrón 40 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas para Embalar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta para embalar de color marrón, con una longitud de 40 metros, presentada en caja de 36 rollos, ideal para el sellado y embalaje de productos.",
+      "atributos": {
+        "medida": "40 Metros",
+        "color": "Marrón",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "36"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115041",
+          "Medida": "40 Metros",
+          "Color": "Marrón",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115046",
+      "nombre_comercial": "Cinta Para Embalar Transparente 100 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas para Embalar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta para embalar de color transparente, con una longitud de 100 metros, presentada en caja de 36 rollos, perfecta para el sellado y embalaje de productos.",
+      "atributos": {
+        "medida": "100 Metros",
+        "color": "Transparente",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "36"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115046",
+          "Medida": "100 Metros",
+          "Color": "Transparente",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115015",
+      "nombre_comercial": "Cinta Aisladora Profesional Negra 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora profesional de color negra, con una longitud de 10 metros, presentada individualmente, ideal para trabajos eléctricos y de aislamiento.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "120"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115015",
+          "Medida": "10 Metros",
+          "Color": "Negra",
+          "U/Vta": "c/u",
+          "Caja x": "120"
+        }
+      }
+    },
+    {
+      "codigo": "115017",
+      "nombre_comercial": "Cinta Aisladora Profesional Blanca 10 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora profesional de color blanca, con una longitud de 10 metros, presentada individualmente, ideal para trabajos eléctricos y de aislamiento.",
+      "atributos": {
+        "medida": "10 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "120"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115017",
+          "Medida": "10 Metros",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "120"
+        }
+      }
+    },
+    {
+      "codigo": "115016",
+      "nombre_comercial": "Cinta Aisladora Profesional Negra 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora profesional de color negra, con una longitud de 20 metros, presentada individualmente, ideal para trabajos eléctricos y de aislamiento.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "90"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115016",
+          "Medida": "20 Metros",
+          "Color": "Negra",
+          "U/Vta": "c/u",
+          "Caja x": "90"
+        }
+      }
+    },
+    {
+      "codigo": "115018",
+      "nombre_comercial": "Cinta Aisladora Profesional Blanca 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora profesional de color blanca, con una longitud de 20 metros, presentada individualmente, ideal para trabajos eléctricos y de aislamiento.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "90"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115018",
+          "Medida": "20 Metros",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "90"
+        }
+      }
+    },
+    {
+      "codigo": "115030",
+      "nombre_comercial": "Cinta Aisladora Sin Adhesivo Negra 20 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Aisladoras",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta aisladora sin adhesivo de color negra, con una longitud de 20 metros, presentada individualmente, ideal para aplicaciones donde no se requiere adhesión.",
+      "atributos": {
+        "medida": "20 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115030",
+          "Medida": "20 Metros",
+          "Color": "Negra",
+          "U/Vta": "c/u",
+          "Caja x": "10"
+        }
+      }
+    },
+    {
+      "codigo": "115027",
+      "nombre_comercial": "Cinta Multipropósito Amarilla 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color amarilla, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Amarilla",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115027",
+          "Medida": "9 Metros",
+          "Color": "Amarilla",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115025",
+      "nombre_comercial": "Cinta Multipropósito Azul 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color azul, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Azul",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115025",
+          "Medida": "9 Metros",
+          "Color": "Azul",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115021",
+      "nombre_comercial": "Cinta Multipropósito Blanca 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color blanca, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115021",
+          "Medida": "9 Metros",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115022",
+      "nombre_comercial": "Cinta Multipropósito Gris 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color gris, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Gris",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115022",
+          "Medida": "9 Metros",
+          "Color": "Gris",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115020",
+      "nombre_comercial": "Cinta Multipropósito Negra 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color negra, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115020",
+          "Medida": "9 Metros",
+          "Color": "Negra",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115026",
+      "nombre_comercial": "Cinta Multipropósito Roja 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color roja, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Roja",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115026",
+          "Medida": "9 Metros",
+          "Color": "Roja",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115023",
+      "nombre_comercial": "Cinta Multipropósito Verde 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color verde, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Verde",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115023",
+          "Medida": "9 Metros",
+          "Color": "Verde",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115024",
+      "nombre_comercial": "Cinta Multipropósito Violeta 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Multipropósito",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta multipropósito de color violeta, con una longitud de 9 metros, presentada individualmente, ideal para diversas aplicaciones de fijación y sellado.",
+      "atributos": {
+        "medida": "9 Metros",
+        "color": "Violeta",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115024",
+          "Medida": "9 Metros",
+          "Color": "Violeta",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115048",
+      "nombre_comercial": "Cinta Enmascarar Blanca 12 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Enmascarar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta enmascarar blanca de 12 mm de ancho, ideal para trabajos de pintura y enmascarado. Presentación en rollo de 50 metros, con un total de 72 unidades por caja.",
+      "atributos": {
+        "medida": "12 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "72"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115048",
+          "Medida": "12 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "72"
+        }
+      }
+    },
+    {
+      "codigo": "115043",
+      "nombre_comercial": "Cinta Enmascarar Blanca 18 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Enmascarar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta enmascarar blanca de 18 mm de ancho, perfecta para trabajos de pintura y enmascarado. Viene en rollo de 50 metros, con 48 unidades por caja.",
+      "atributos": {
+        "medida": "18 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "48"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115043",
+          "Medida": "18 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "48"
+        }
+      }
+    },
+    {
+      "codigo": "115044",
+      "nombre_comercial": "Cinta Enmascarar Blanca 24 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Enmascarar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta enmascarar blanca de 24 mm de ancho, ideal para trabajos de pintura y enmascarado. Se presenta en rollo de 50 metros, con un total de 36 unidades por caja.",
+      "atributos": {
+        "medida": "24 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "36"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115044",
+          "Medida": "24 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "36"
+        }
+      }
+    },
+    {
+      "codigo": "115049",
+      "nombre_comercial": "Cinta Enmascarar Blanca 36 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Enmascarar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta enmascarar blanca de 36 mm de ancho, ideal para trabajos de pintura y enmascarado. Presentación en rollo de 50 metros, con 24 unidades por caja.",
+      "atributos": {
+        "medida": "36 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "24"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115049",
+          "Medida": "36 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "24"
+        }
+      }
+    },
+    {
+      "codigo": "115045",
+      "nombre_comercial": "Cinta Enmascarar Blanca 48 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Enmascarar",
+      "marca": "TACSA",
+      "descripcion_completa": "Cinta enmascarar blanca de 48 mm de ancho, ideal para trabajos de pintura y enmascarado. Se presenta en rollo de 50 metros, con un total de 18 unidades por caja.",
+      "atributos": {
+        "medida": "48 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "18"
+      },
+      "metadata_origen": {
+        "pagina": 6,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115045",
+          "Medida": "48 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "18"
+        }
+      }
+    },
+    {
+      "codigo": "115039",
+      "nombre_comercial": "Cinta Refrigeración Sin Adhesivo Blanca 70 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Refrigeración",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de refrigeración sin adhesivo de 70 mm de ancho, ideal para aplicaciones en sistemas de refrigeración. Presentación en rollo de 20 metros, con 45 unidades por caja.",
+      "atributos": {
+        "medida": "70 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "45"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115039",
+          "Medida": "70 mm",
+          "Color": "Blanca",
+          "U/Vta": "c/u",
+          "Caja x": "45"
+        }
+      }
+    },
+    {
+      "codigo": "115059",
+      "nombre_comercial": "Cinta Refrigeración Sin Adhesivo Negra 70 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Refrigeración",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de refrigeración sin adhesivo de 70 mm de ancho, ideal para aplicaciones en sistemas de refrigeración. Viene en rollo de 20 metros, con 20 unidades por caja.",
+      "atributos": {
+        "medida": "70 mm",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "20"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115059",
+          "Medida": "70 mm",
+          "Color": "Negra",
+          "U/Vta": "c/u",
+          "Caja x": "20"
+        }
+      }
+    },
+    {
+      "codigo": "115071",
+      "nombre_comercial": "Cinta Aluminio Refrigeración 48 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Aluminio",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de aluminio para refrigeración de 48 mm de ancho, ideal para aplicaciones en sistemas de refrigeración. Presentación en rollo de 20 metros, con 90 unidades por caja.",
+      "atributos": {
+        "medida": "48 mm",
+        "largo": "25 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "90"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115071",
+          "Medida": "48 mm",
+          "Largo": "25 Metros",
+          "U/Vta": "c/u",
+          "Caja x": "90"
+        }
+      }
+    },
+    {
+      "codigo": "115072",
+      "nombre_comercial": "Cinta Aluminio Refrigeración 48 mm",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Aluminio",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de aluminio para refrigeración de 48 mm de ancho, ideal para aplicaciones en sistemas de refrigeración. Se presenta en rollo de 20 metros, con 30 unidades por caja.",
+      "atributos": {
+        "medida": "48 mm",
+        "largo": "50 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "30"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115072",
+          "Medida": "48 mm",
+          "Largo": "50 Metros",
+          "U/Vta": "c/u",
+          "Caja x": "30"
+        }
+      }
+    },
+    {
+      "codigo": "115061",
+      "nombre_comercial": "Cinta Doble Faz 12 mm x 5 Metros",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Doble Faz",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta doble faz de 12 mm de ancho y 5 metros de largo, ideal para aplicaciones que requieren adherencia en ambas caras. Presentación en rollo, con 45 unidades por caja.",
+      "atributos": {
+        "medida": "12 mm x 5 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "45"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115061",
+          "Medida": "12 mm x 5 Metros",
+          "U/Vta": "c/u",
+          "Caja x": "45"
+        }
+      }
+    },
+    {
+      "codigo": "115062",
+      "nombre_comercial": "Cinta Doble Faz 18 mm x 2 Metros",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Doble Faz",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta doble faz de 18 mm de ancho y 2 metros de largo, ideal para aplicaciones que requieren adherencia en ambas caras. Se presenta en rollo, con 54 unidades por caja.",
+      "atributos": {
+        "medida": "18 mm x 2 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "54"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115062",
+          "Medida": "18 mm x 2 Metros",
+          "U/Vta": "c/u",
+          "Caja x": "54"
+        }
+      }
+    },
+    {
+      "codigo": "115063",
+      "nombre_comercial": "Cinta Doble Faz 24 mm x 2 Metros",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Cintas Doble Faz",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta doble faz de 24 mm de ancho y 2 metros de largo, ideal para aplicaciones que requieren adherencia en ambas caras. Presentación en rollo, con 36 unidades por caja.",
+      "atributos": {
+        "medida": "24 mm x 2 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "36"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115063",
+          "Medida": "24 mm x 2 Metros",
+          "U/Vta": "c/u",
+          "Caja x": "36"
+        }
+      }
+    },
+    {
+      "codigo": "115075",
+      "nombre_comercial": "Tubo Termocontraible Negra 3/32\"",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Tubos Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible negro de 3/32\" de diámetro, ideal para aplicaciones eléctricas y de aislamiento. Presentación en caja con 8 rollos de 10 metros cada uno.",
+      "atributos": {
+        "medida": "3/32\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115075",
+          "Medida": "3/32\"",
+          "Color": "Negra",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115076",
+      "nombre_comercial": "Tubo Termocontraible Negra 1/8\"",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Tubos Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible negro de 1/8\" de diámetro, ideal para aplicaciones eléctricas y de aislamiento. Se presenta en caja con 8 rollos de 10 metros cada uno.",
+      "atributos": {
+        "medida": "1/8\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115076",
+          "Medida": "1/8\"",
+          "Color": "Negra",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115077",
+      "nombre_comercial": "Tubo Termocontraible Negra 3/16\"",
+      "categoria_padre": "Cintas Adhesivas",
+      "categoria": "Cintas Generales",
+      "subcategoria": "Tubos Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible negro de 3/16\" de diámetro, ideal para aplicaciones eléctricas y de aislamiento. Presentación en caja con 8 rollos de 10 metros cada uno.",
+      "atributos": {
+        "medida": "3/16\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 7,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "115077",
+          "Medida": "3/16\"",
+          "Color": "Negra",
+          "U/Vta": "Caja",
+          "Caja x": "1"
+        }
+      }
+    },
+    {
+      "codigo": "115078",
+      "nombre_comercial": "Tubo Termocontraible 1/4\" Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible de 1/4\" de diámetro en color negra, presentado en caja con 8 rollos de 10 metros cada uno, ideal para aplicaciones eléctricas y de aislamiento.",
+      "atributos": {
+        "medida": "1/4\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "8"
+      }
+    },
+    {
+      "codigo": "115079",
+      "nombre_comercial": "Tubo Termocontraible 5/16\" Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible de 5/16\" de diámetro en color negra, presentado en caja con 8 rollos de 10 metros cada uno, ideal para aplicaciones eléctricas y de aislamiento.",
+      "atributos": {
+        "medida": "5/16\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "8"
+      }
+    },
+    {
+      "codigo": "115080",
+      "nombre_comercial": "Tubo Termocontraible 3/8\" Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible de 3/8\" de diámetro en color negra, presentado en caja con 8 rollos de 10 metros cada uno, ideal para aplicaciones eléctricas y de aislamiento.",
+      "atributos": {
+        "medida": "3/8\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "8"
+      }
+    },
+    {
+      "codigo": "115081",
+      "nombre_comercial": "Tubo Termocontraible 1/2\" Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible de 1/2\" de diámetro en color negra, presentado en caja con 8 rollos de 10 metros cada uno, ideal para aplicaciones eléctricas y de aislamiento.",
+      "atributos": {
+        "medida": "1/2\"",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "8"
+      }
+    },
+    {
+      "codigo": "115082",
+      "nombre_comercial": "Tubo Termocontraible Surtido Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Termocontraibles",
+      "marca": "UXXEN",
+      "descripcion_completa": "Tubo termocontraible surtido en color negra, presentado en caja con 8 rollos de 10 metros cada uno, ideal para aplicaciones eléctricas y de aislamiento.",
+      "atributos": {
+        "medida": "Surtido",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "8"
+      }
+    },
+    {
+      "codigo": "115038",
+      "nombre_comercial": "Cinta Refrigeración Con Adhesivo 70 mm Blanca",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas para Refrigeración",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de refrigeración con adhesivo de 70 mm de ancho en color blanca, presentada en rollo de 20 metros, ideal para aplicaciones en sistemas de refrigeración.",
+      "atributos": {
+        "medida": "70 mm",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "45"
+      }
+    },
+    {
+      "codigo": "115058",
+      "nombre_comercial": "Cinta Refrigeración Con Adhesivo 70 mm Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas para Refrigeración",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de refrigeración con adhesivo de 70 mm de ancho en color negra, presentada en rollo de 20 metros, ideal para aplicaciones en sistemas de refrigeración.",
+      "atributos": {
+        "medida": "70 mm",
+        "color": "Negra",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "20"
+      }
+    },
+    {
+      "codigo": "115042",
+      "nombre_comercial": "Cinta de Tela 4,5 Mts Blanca",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas de Tela",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de tela de 4,5 metros de largo en color blanca, presentada en rollo de 20 metros, ideal para usos generales y reparaciones.",
+      "atributos": {
+        "largo": "4,5 Mts",
+        "color": "Blanca",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "150"
+      }
+    },
+    {
+      "codigo": "115014",
+      "nombre_comercial": "Cinta de Tela 9 Metros Negra",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas de Tela",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta de tela de 9 metros de largo en color negra, presentada en rollo de 20 metros, ideal para usos generales y reparaciones.",
+      "atributos": {
+        "largo": "9 Metros",
+        "color": "Negra",
+        "unidad_venta": "Caja",
+        "paquete_cantidad": "100"
+      }
+    },
+    {
+      "codigo": "115031",
+      "nombre_comercial": "Cinta Auto-Soldable 2 Metros Blanca",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Auto-Soldables",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta auto-soldable de 2 metros de largo en color blanca, presentada en rollo de 20 metros, ideal para reparaciones rápidas y eficientes.",
+      "atributos": {
+        "largo": "2 Metros",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "120"
+      }
+    },
+    {
+      "codigo": "115032",
+      "nombre_comercial": "Cinta Auto-Soldable 4,57 Mts Blanca",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Auto-Soldables",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta auto-soldable de 4,57 metros de largo en color blanca, presentada en rollo de 20 metros, ideal para reparaciones rápidas y eficientes.",
+      "atributos": {
+        "largo": "4,57 Mts",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "26"
+      }
+    },
+    {
+      "codigo": "115033",
+      "nombre_comercial": "Cinta Auto-Soldable 9,14 Mts Blanca",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Auto-Soldables",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta auto-soldable de 9,14 metros de largo en color blanca, presentada en rollo de 20 metros, ideal para reparaciones rápidas y eficientes.",
+      "atributos": {
+        "largo": "9,14 Mts",
+        "color": "Blanca",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Cinta Antideslizante 25 mm",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas Antideslizantes",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta antideslizante de 25 mm de ancho, presentada en rollo de 20 metros, ideal para mejorar la seguridad en superficies resbaladizas.",
+      "atributos": {
+        "ancho": "25 mm",
+        "largo": "5 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "24"
+      }
+    },
+    {
+      "codigo": "115074",
+      "nombre_comercial": "Cinta Para Demarcación 50 mm Amarilla",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas de Demarcación",
+      "marca": "UXXEN",
+      "descripcion_completa": "Cinta para demarcación de 50 mm de ancho en color amarilla, presentada en rollo de 33 metros, ideal para señalización y delimitación de espacios.",
+      "atributos": {
+        "ancho": "50 mm",
+        "largo": "33 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "24"
+      }
+    },
+    {
+      "codigo": "115029",
+      "nombre_comercial": "Cinta Para Demarcación Silo-Bolsa 70 mm x 9 Metros",
+      "categoria_padre": "Cintas",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cintas para Demarcación",
+      "marca": "UXXEN CINTAS ADHESIVAS",
+      "descripcion_completa": "Cinta para demarcación de silo-bolsa, ideal para la señalización y delimitación de áreas. Presenta una medida de 70 mm de ancho y un largo de 9 metros, vendida por unidad y en cajas de 24 unidades.",
+      "atributos": {
+        "medida": "70 mm",
+        "largo": "9 Metros",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "24"
+      }
+    },
+    {
+      "codigo": "253011",
+      "nombre_comercial": "Guante Descarne Standard",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes Standard",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne estándar, diseñado para ofrecer protección y comodidad en trabajos industriales. Se vende por unidad y en paquetes de 10 unidades.",
+      "atributos": {
+        "tipo": "Standard",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      }
+    },
+    {
+      "codigo": "253012",
+      "nombre_comercial": "Guante Descarne Reforzado",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes Reforzados",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne reforzado, ideal para trabajos que requieren mayor resistencia. Se vende por unidad y en paquetes de 10 unidades.",
+      "atributos": {
+        "tipo": "Reforzado",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      }
+    },
+    {
+      "codigo": "253000",
+      "nombre_comercial": "Guante Descarne Puño Corto",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes con Puño Corto",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne con puño corto, diseñado para ofrecer flexibilidad y protección. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto / Puño Descarne",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Puño Corto Lona",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes con Puño Corto Lona",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne con puño corto de lona, ideal para trabajos ligeros. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto Con Puño de Lona",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Puño Corto Lona",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes con Puño Corto Lona",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne con puño corto de lona, ideal para trabajos ligeros. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto Con Puño de Lona",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Puño Corto Jeans",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes con Puño Corto Jeans",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne con puño corto de jeans, ideal para trabajos que requieren resistencia. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto / Puño Jeans",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Puño Corto Jeans",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes con Puño Corto Jeans",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne con puño corto de jeans, ideal para trabajos que requieren resistencia. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto / Puño Jeans",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "253009",
+      "nombre_comercial": "Guante Descarne Reforzado Con Plomo",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes Reforzados con Plomo",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne reforzado con placa de plomo, ideal para trabajos que requieren protección adicional. Se vende por unidad y en paquetes de 10 unidades.",
+      "atributos": {
+        "tipo": "Con Placa de Plomo",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      }
+    },
+    {
+      "codigo": "253008",
+      "nombre_comercial": "Guante Descarne Reforzado Con Goma Plomada",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes Reforzados con Goma Plomada",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne reforzado con goma plomada, ideal para trabajos que requieren protección adicional. Se vende por unidad y en paquetes de 10 unidades.",
+      "atributos": {
+        "tipo": "Con Goma Plomada",
+        "unidad_venta": "c/u",
+        "paquete_cantidad": "10"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Largo",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes Largos",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne largo, diseñado para ofrecer mayor protección en trabajos industriales. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Largo / Puño Descarne",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Descarne Soldador",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Descarne",
+      "subcategoria": "Guantes para Soldador",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante de descarne para soldador, ideal para trabajos que requieren protección térmica. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Soldador / Largo",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "253018",
+      "nombre_comercial": "Guante Protector Dieléctrico",
+      "categoria_padre": "Guantes",
+      "categoria": "Guantes Dieléctricos",
+      "subcategoria": "Guantes Combinados",
+      "marca": "DE PASCALE PROTECCIÉN INDUSTRIAL",
+      "descripcion_completa": "Guante protector dieléctrico, corto combinado con jeans, ideal para trabajos eléctricos. Se vende por pares y en paquetes de 12 pares.",
+      "atributos": {
+        "tipo_y_puño": "Corto Combinado Con Jeans",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Protector Dieléctrico de Vaqueta",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante protector dieléctrico de vaqueta, ideal para trabajos que requieren protección eléctrica. Este modelo cuenta con un diseño de puño corto y se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "41032",
+        "tipo_y_puno": "Puño Corto",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Tipo y Puño",
+          "2": "U/Vta",
+          "3": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Protector Dieléctrico Lincoln Puño Corto",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante protector dieléctrico Lincoln con puño corto, diseñado para ofrecer seguridad en trabajos eléctricos. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253003",
+        "tipo_y_puno": "Lincoln Puño Corto",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "253003",
+          "1": "Lincoln Puño Corto",
+          "2": "Par",
+          "3": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253017",
+      "nombre_comercial": "Guante Vaqueta Combinado ½ Puño Corto",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante vaqueta combinado de ½ con puño corto, ideal para trabajos que requieren flexibilidad y protección. Se ofrece en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253017",
+        "tipo_y_puno": "½ Vaqueta Puño Corto",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253017",
+          "Tipo y Puño": "½ Vaqueta Puño Corto",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253005",
+      "nombre_comercial": "Guante Vaqueta Combinado Puño Corto",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante vaqueta combinado con puño corto, diseñado para proporcionar comodidad y protección en el trabajo. Disponible en paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253005",
+        "tipo_y_puno": "Vaqueta Puño Corto",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253005",
+          "Tipo y Puño": "Vaqueta Puño Corto",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253014",
+      "nombre_comercial": "Guante Algodón Moteado Blanco Mote Naranja",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante de algodón moteado en color blanco con moteado naranja, ideal para trabajos de precisión y protección. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253014",
+        "tipo": "Blanco Mote Naranja",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253014",
+          "Tipo": "Blanco Mote Naranja",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "DPS801305",
+      "nombre_comercial": "Guante Algodón Moteado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante de algodón moteado, ideal para trabajos ligeros. Este modelo no tiene especificaciones adicionales y se presenta en un paquete estándar.",
+      "atributos": {
+        "codigo": "DPS801305",
+        "tipo": "",
+        "unidad_venta": "",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "DPS801305",
+          "Tipo": "",
+          "U/Vta": "",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "253015",
+      "nombre_comercial": "Guante Algodón Moteado Tejido de Terrycloth",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante de algodón moteado con tejido de terrycloth, ideal para trabajos que requieren un buen agarre y protección. Disponible en paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253015",
+        "tipo": "Tejido de Terrycloth",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253015",
+          "Tipo": "Tejido de Terrycloth",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253010",
+      "nombre_comercial": "Guante Algodón Moteado Protector Dieléctrico",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante de algodón moteado, diseñado como protector dieléctrico, ideal para trabajos eléctricos. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253010",
+        "tipo": "Protector Dieléctrico",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253010",
+          "Tipo": "Protector Dieléctrico",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253004",
+      "nombre_comercial": "Guante Vaqueta Combinado ½ Puño Largo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante vaqueta combinado de ½ con puño largo, ideal para trabajos que requieren mayor protección. Disponible en paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253004",
+        "tipo_y_puno": "½ Vaqueta Puño Largo",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253004",
+          "Tipo y Puño": "½ Vaqueta Puño Largo",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "253006",
+      "nombre_comercial": "Guante Vaqueta Combinado Puño Largo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante vaqueta combinado con puño largo, diseñado para ofrecer máxima protección en el trabajo. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "253006",
+        "tipo_y_puno": "Vaqueta Puño Largo",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "253006",
+          "Tipo y Puño": "Vaqueta Puño Largo",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "118026",
+      "nombre_comercial": "Guante Algodón Gris Moteado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Vaqueta",
+      "marca": "DE PASCALE",
+      "descripcion_completa": "Guante de algodón gris moteado, ideal para trabajos que requieren protección y comodidad. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "118026",
+        "tipo": "Gris Mote Negro",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 9,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "118026",
+          "Tipo": "Gris Mote Negro",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "30 Cms - DPS31345",
+      "nombre_comercial": "Guante Sintético PVC 30 Cms",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC de 30 cms, ideal para trabajos que requieren resistencia química y protección. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "30 Cms - DPS31345",
+        "largo_de_puno": "Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": "102053"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "30 Cms - DPS31345",
+          "Largo de Puño": "Par",
+          "U/Vta": "12",
+          "Paq x": "102053"
+        }
+      }
+    },
+    {
+      "codigo": "35 Cms - DPS31445 102054",
+      "nombre_comercial": "Guante Sintético PVC 35 Cms",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC de 35 cms, diseñado para ofrecer protección en trabajos exigentes. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "35 Cms - DPS31445 102054",
+        "largo_de_puno": "Par",
+        "unidad_venta": "",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "35 Cms - DPS31445 102054",
+          "Largo de Puño": "Par",
+          "U/Vta": "",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "40 Cms - 102055",
+      "nombre_comercial": "Guante Sintético PVC 40 Cms",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC de 40 cms, ideal para trabajos que requieren alta resistencia. Se presenta en un paquete de 12 pares.",
+      "atributos": {
+        "codigo": "40 Cms - 102055",
+        "largo_de_puno": "Par",
+        "unidad_venta": "",
+        "paquete_cantidad": "DPS31545 12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "40 Cms - 102055",
+          "Largo de Puño": "Par",
+          "U/Vta": "",
+          "Paq x": "DPS31545 12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético PVC Puño Elastizado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC con puño elastizado, diseñado para ofrecer un ajuste cómodo y seguro. Este modelo está disponible en un paquete estándar.",
+      "atributos": {
+        "codigo": "N/A",
+        "tipo_de_puno": "",
+        "unidad_venta": "",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Tipo de Puño",
+          "2": "U/Vta",
+          "3": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético PVC Puño Elastizado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC con puño elastizado, ideal para trabajos que requieren protección y destreza. Presenta un código de referencia DPS31145 y se vende en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102052",
+        "tipo_puno": "Puño Elastizado",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "102052",
+          "1": "Puño Elastizado",
+          "2": "Par",
+          "3": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético PVC Puño Elastizado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC con puño elastizado, diseñado para ofrecer comodidad y protección. Este modelo corresponde al código DPS12155 y se presenta en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "Código",
+        "tipo_puno": "Tipo de Puño",
+        "unidad_venta": "U/Vta",
+        "paquete_cantidad": "Paq x"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Tipo de Puño",
+          "2": "U/Vta",
+          "3": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético PVC Puño Elastizado",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de PVC con puño elastizado, ideal para diversas aplicaciones. Este producto está identificado con el código DPS12155 y se vende en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102051",
+        "tipo_puno": "Puño Elastizado",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "102051",
+          "1": "Puño Elastizado",
+          "2": "Par",
+          "3": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Nitrilo Baño Completo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de nitrilo con baño completo, ideal para trabajos que requieren alta resistencia. Este modelo está registrado bajo el código DPS11155 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "Código",
+        "tipo_puno": "Tipo de Puño",
+        "unidad_venta": "U/Vta",
+        "paquete_cantidad": "Paq x"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Tipo de Puño",
+          "2": "U/Vta",
+          "3": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Nitrilo Baño Completo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de nitrilo con baño completo, diseñado para ofrecer protección y durabilidad. Este producto corresponde al código DPS11155 y se vende en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "102049",
+        "tipo_puno": "Puño Elastizado",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "102049",
+          "1": "Puño Elastizado",
+          "2": "Par",
+          "3": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Nitrilo Puño Lona",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de nitrilo con puño de lona, ideal para trabajos que requieren resistencia y comodidad. Este modelo está identificado con el código DPS11255 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "Código",
+        "tipo_puno": "Tipo y Puño",
+        "unidad_venta": "U/Vta",
+        "paquete_cantidad": "Paq x"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "Código",
+          "1": "Tipo y Puño",
+          "2": "U/Vta",
+          "3": "Paq x"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Nitrilo Puño Lona",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de nitrilo con puño de lona, diseñado para ofrecer protección y flexibilidad. Este producto corresponde al código DPS11255 y se vende en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "102050",
+        "tipo_puno": "Nitrilo Puño Lona",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "0": "102050",
+          "1": "Nitrilo Puño Lona",
+          "2": "Par",
+          "3": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Tejido - Recubrimiento Nitrilo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético tejido con recubrimiento de nitrilo, sin costura, ideal para trabajos que requieren destreza y protección. Este modelo está registrado bajo el código 102081 8 - DPS88113 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102081 8 - DPS88113",
+        "talle_art": "Par",
+        "unidad_venta": "",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102081 8 - DPS88113",
+          "Talle y Art": "Par",
+          "U/Vta": "",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Tejido - Recubrimiento Nitrilo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético tejido con recubrimiento de nitrilo, sin costura, ideal para trabajos que requieren protección y comodidad. Este producto corresponde al código 102082 9 - DPS88114 y se vende en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "102082 9 - DPS88114",
+        "talle_art": "Par",
+        "unidad_venta": "",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102082 9 - DPS88114",
+          "Talle y Art": "Par",
+          "U/Vta": "",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Tejido - Recubrimiento Nitrilo",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético tejido con recubrimiento de nitrilo, sin costura, ideal para trabajos que requieren destreza. Este modelo está identificado con el código 102083 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102083",
+        "talle_art": "10 - DPS88115",
+        "unidad_venta": "Par",
+        "paquete_cantidad": "12"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102083",
+          "Talle y Art": "10 - DPS88115",
+          "U/Vta": "Par",
+          "Paq x": "12"
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Látex Industrial",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, ideal para trabajos que requieren alta resistencia y protección. Este modelo está registrado bajo el código 102056 S - DPS71392 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102056 S - DPS71392",
+        "talle_art": "Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102056 S - DPS71392",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Látex Industrial",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, diseñado para ofrecer comodidad y protección. Este producto corresponde al código 102057 M - DPS71393 y se vende en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "102057 M - DPS71393",
+        "talle_art": "Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102057 M - DPS71393",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Látex Industrial",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, ideal para trabajos que requieren alta resistencia. Este modelo está identificado con el código 102058 L - DPS71394 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102058 L - DPS71394",
+        "talle_art": "Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102058 L - DPS71394",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Látex Industrial",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, ideal para trabajos que requieren protección y durabilidad. Este producto corresponde al código 102059 XL - y se vende en pares, con un paquete que incluye 12 unidades.",
+      "atributos": {
+        "codigo": "102059 XL -",
+        "talle_art": "DPS71395 Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102059 XL -",
+          "Talle y Art": "DPS71395 Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "N/A",
+      "nombre_comercial": "Guante Sintético Látex Industrial",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes",
+      "subcategoria": "Guantes Sintéticos",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex doméstico, ideal para tareas del hogar que requieren protección. Este modelo está registrado bajo el código 102060 S - DPS61322 y se ofrece en pares, con un paquete que contiene 12 unidades.",
+      "atributos": {
+        "codigo": "102060 S - DPS61322",
+        "talle_art": "Par",
+        "unidad_venta": "12",
+        "paquete_cantidad": ""
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102060 S - DPS61322",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "102061 M - DPS61323",
+      "nombre_comercial": "Guante Sintético de Látex Industrial - Talle M",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes Sintéticos",
+      "subcategoria": "Guantes de Látex",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, ideal para trabajos que requieren protección y destreza. Este modelo en talle M es perfecto para uso doméstico y profesional, ofreciendo una excelente resistencia y comodidad.",
+      "atributos": {
+        "talle": "M",
+        "unidad_venta": "12",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102061 M - DPS61323",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "102062 L - DPS61324",
+      "nombre_comercial": "Guante Sintético de Látex Industrial - Talle L",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes Sintéticos",
+      "subcategoria": "Guantes de Látex",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, diseñado para proporcionar protección y flexibilidad en diversas aplicaciones. Este modelo en talle L es ideal para uso doméstico y profesional, garantizando una excelente durabilidad y confort.",
+      "atributos": {
+        "talle": "L",
+        "unidad_venta": "12",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102062 L - DPS61324",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    },
+    {
+      "codigo": "102063 XL - DPS61325",
+      "nombre_comercial": "Guante Sintético de Látex Industrial - Talle XL",
+      "categoria_padre": "Seguridad Industrial",
+      "categoria": "Guantes Sintéticos",
+      "subcategoria": "Guantes de Látex",
+      "marca": "DIPS",
+      "descripcion_completa": "Guante sintético de látex industrial, perfecto para tareas que requieren protección y precisión. Este modelo en talle XL es adecuado para uso doméstico y profesional, ofreciendo una combinación óptima de resistencia y comodidad.",
+      "atributos": {
+        "talle": "XL",
+        "unidad_venta": "12",
+        "paquete_cantidad": "1"
+      },
+      "metadata_origen": {
+        "pagina": 10,
+        "fuente": "FN Catalogo.pdf",
+        "datos_crudos": {
+          "Código": "102063 XL - DPS61325",
+          "Talle y Art": "Par",
+          "U/Vta": "12",
+          "Paq x": ""
+        }
+      }
+    }
+  ]
+}

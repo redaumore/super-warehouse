@@ -4,218 +4,236 @@ import json
 import logging
 import argparse
 from typing import List, Dict, Any
+import pymupdf as fitz
+import pytesseract
+from PIL import Image
+import io
 
-# Configuración de logging para producción
+# Configuración de logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger("RAG_Fase_0")
+logger = logging.getLogger("RAG_Fase_0_Ferreteria")
 
-def check_dependencies():
-    """
-    Verifica las librerías instaladas y ofrece sugerencias de instalación.
-    """
-    missing_deps = []
-    try:
-        import docling
-    except ImportError:
-        missing_deps.append("docling")
-    
-    try:
-        import pdfplumber
-    except ImportError:
-        missing_deps.append("pdfplumber")
-        
-    if missing_deps:
-        logger.warning(
-            f"Faltan dependencias recomendadas para ejecución local: {missing_deps}. "
-            "Podés instalarlas usando: 'pip install docling pdfplumber'"
-        )
 
-class DocumentParser:
-    def __init__(self, use_docling: bool = True):
-        self.use_docling = use_docling
-        if use_docling:
-            try:
-                from docling.document_converter import DocumentConverter
-                self.converter = DocumentConverter()
-                logger.info("Parser inicializado con Docling (Layout-based AI Parsing).")
-            except ImportError:
-                logger.warning("Docling no está instalado. Se utilizará pdfplumber como fallback.")
-                self.use_docling = False
-                
-    def parse_with_docling(self, pdf_path: str) -> List[Dict[str, Any]]:
+class HardwareCatalogProcessor:
+    def __init__(self):
+        try:
+            from docling.document_converter import DocumentConverter
+            self.converter = DocumentConverter()
+            logger.info("Docling inicializado correctamente.")
+        except ImportError:
+            logger.error("Docling no instalado. Ejecuta: pip install docling pymupdf pytesseract pillow")
+            sys.exit(1)
+
+    DISTRIBUTOR_STOPWORDS = [
+        "FERRETERA", "DEL NORTE", "DISTRIBUIDORA", "CATALOGO", "CATÁLOGO", "AYUDAMOS", "CRECER"
+    ]
+
+    def _ocr_box(self, page, clip_rect: fitz.Rect) -> str:
+        try:
+            pix = page.get_pixmap(clip=clip_rect, dpi=200)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            text = pytesseract.image_to_string(img, config="--psm 6").strip()
+            lines = [l.strip().upper() for l in text.split("\n") if len(l.strip()) > 1]
+            return " ".join(lines) if lines else ""
+        except Exception:
+            return ""
+
+    def _is_distributor(self, text: str) -> bool:
+        if not text:
+            return False
+        return any(stopword in text for stopword in self.DISTRIBUTOR_STOPWORDS)
+
+    def _extract_header_brand_ocr(self, pdf_path: str, page_num: int) -> str:
         """
-        Parsea el PDF usando Docling, extrayendo texto estructurado en Markdown y tablas.
+        Escanea ambas esquinas superiores (izquierda y derecha) para manejar el diseño
+        alternado entre páginas pares e impares, descartando el logo de la distribuidora.
         """
-        logger.info(f"Iniciando conversión con Docling para: {pdf_path}")
-        from docling.document_converter import DocumentConverter
-        
-        # Docling procesa el documento y entiende el layout visual de forma nativa
-        result = self.converter.convert(pdf_path)
-        
-        # Exportamos la representación estructurada completa a Markdown
-        markdown_text = result.document.export_to_markdown()
-        
-        # En producción, segmentamos por páginas o secciones detectadas por el modelo
-        pages_data = []
-        
-        # Extraemos información estructurada de tablas si el motor las detectó
-        tables_extracted = []
-        for table_ix, table in enumerate(result.document.tables):
-            # Convertimos la tabla a un diccionario para metadatos o procesamiento directo
-            table_data = {
-                "table_index": table_ix,
-                "label": getattr(table, "label", f"Tabla {table_ix}"),
-                "markdown": table.export_to_markdown()
-            }
-            tables_extracted.append(table_data)
+        try:
+            doc = fitz.open(pdf_path)
+            page = doc[page_num]
+            rect = page.rect
+
+            # Recorte enfocado estrictamente en la franja del logo superior (0% a 11% del alto)
+            left_box = fitz.Rect(0, 0, rect.width * 0.45, rect.height * 0.11)
+            right_box = fitz.Rect(rect.width * 0.55, 0, rect.width, rect.height * 0.11)
+
+            left_text = self._ocr_box(page, left_box)
+            right_text = self._ocr_box(page, right_box)
+
+            left_is_dist = self._is_distributor(left_text)
+            right_is_dist = self._is_distributor(right_text)
+
+            # Si la izquierda es distribuidora y la derecha es la marca
+            if left_is_dist and not right_is_dist and len(right_text) > 1:
+                return right_text
+            # Si la derecha es distribuidora y la izquierda es la marca
+            elif right_is_dist and not left_is_dist and len(left_text) > 1:
+                return left_text
+            # Si ninguna es distribuidora pero una tiene texto
+            elif not left_is_dist and len(left_text) > 1:
+                return left_text
+            elif not right_is_dist and len(right_text) > 1:
+                return right_text
+
+            # Fallback
+            return left_text or right_text or "GENÉRICO/DISTRIBUIDORA"
+
+        except Exception as e:
+            logger.warning(f"No se pudo extraer logo por OCR en página {page_num + 1}: {e}")
+            return "NO_DETECTADA"
+
+    def process_catalog(self, pdf_path: str, output_json: str, output_md: str, qtables: int = None, max_pages: int = None):
+        target_pdf_path = pdf_path
+        temp_pdf_path = None
+        pdf_fitz = fitz.open(pdf_path)
+        total_pages = len(pdf_fitz)
+
+        if max_pages is not None and max_pages < total_pages:
+            total_pages = max_pages
+            logger.info(f"Extrayendo las primeras {max_pages} páginas para procesar...")
+            temp_pdf_path = f"temp_subset_{max_pages}_pages.pdf"
+            doc_subset = fitz.open()
+            doc_subset.insert_pdf(pdf_fitz, from_page=0, to_page=max_pages - 1)
+            doc_subset.save(temp_pdf_path)
+            doc_subset.close()
+            target_pdf_path = temp_pdf_path
+
+        try:
+            logger.info(f"Convirtiendo catálogo con Docling: {target_pdf_path}")
+            conv_result = self.converter.convert(target_pdf_path)
+            docling_doc = conv_result.document
+        finally:
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                try:
+                    os.remove(temp_pdf_path)
+                except Exception:
+                    pass
+
+        extracted_products = []
+        full_markdown_corpus = []
+        tables_processed = 0
+
+        logger.info(f"Procesando {total_pages} páginas...")
+
+        for page_idx in range(total_pages):
+            if qtables is not None and tables_processed >= qtables:
+                logger.info(f"Límite de qtables ({qtables}) alcanzado. Deteniendo procesamiento.")
+                break
+
+            # 1. Obtener la marca desde el logo de la página
+            brand = self._extract_header_brand_ocr(pdf_path, page_idx)
             
-        # Retornamos un único documento consolidado enriquecido
-        pages_data.append({
-            "text": markdown_text,
+            # 2. Contexto de página
+            page_header = f"# PÁGINA {page_idx + 1} | MARCA: {brand}\n\n"
+            full_markdown_corpus.append(page_header)
+
+            # 3. Extraer elementos de Docling correspondientes a la página
+            # Docling expone los elementos jerárquicamente en el exportador
+            current_category = "GENERAL"
+            current_product = ""
+            current_desc = ""
+
+            # Extraemos los nodos de la página para vincular textos y tablas
+            for item, _level in docling_doc.iterate_items():
+                # Filtrar items por página
+                item_page = getattr(item, "page_no", None)
+                if item_page is None and hasattr(item, "prov") and item.prov:
+                    first_prov = item.prov[0]
+                    item_page = getattr(first_prov, "page_no", None) if not isinstance(first_prov, dict) else first_prov.get("page_no")
+
+                if item_page != (page_idx + 1):
+                    continue
+
+                item_type = item.__class__.__name__
+
+                # Encabezados de Sección (Categorías o Productos)
+                if "SectionHeader" in item_type or "Heading" in item_type:
+                    header_text = item.text.strip()
+                    if header_text.isupper() and len(header_text) > 4:
+                        current_category = header_text
+                    else:
+                        current_product = header_text
+
+                # Texto de descripción (ej: "Fleje de 13 mm de Ancho")
+                elif "Text" in item_type or "Paragraph" in item_type:
+                    txt = item.text.strip()
+                    if not txt.startswith("<!--") and txt != current_product:
+                        current_desc = txt
+
+                # Tablas de productos
+                elif "Table" in item_type:
+                    if qtables is not None and tables_processed >= qtables:
+                        break
+
+                    table_df = item.export_to_dataframe(doc=docling_doc)
+                    table_md = item.export_to_markdown(doc=docling_doc)
+
+                    # Inyección de contexto al Markdown para RAG
+                    enriched_table_md = (
+                        f"### Categoría: {current_category}\n"
+                        f"**Marca:** {brand}\n"
+                        f"**Producto:** {current_product}\n"
+                        f"**Descripción:** {current_desc}\n\n"
+                        f"{table_md}\n\n---\n"
+                    )
+                    full_markdown_corpus.append(enriched_table_md)
+
+                    # Estructuración fina a nivel de fila (JSON)
+                    for _, row in table_df.iterrows():
+                        row_dict = {str(k).strip(): str(v).strip() for k, v in row.to_dict().items() if v is not None}
+                        
+                        # Extraer código si existe en las columnas
+                        codigo = row_dict.get("Código") or row_dict.get("Codigo") or row_dict.get("Cód.", "N/A")
+                        
+                        product_record = {
+                            "pagina": page_idx + 1,
+                            "marca": brand,
+                            "categoria": current_category,
+                            "producto": current_product,
+                            "descripcion_general": current_desc,
+                            "codigo": codigo,
+                            "especificaciones": row_dict
+                        }
+                        extracted_products.append(product_record)
+
+                    tables_processed += 1
+                    if qtables is not None and tables_processed >= qtables:
+                        logger.info(f"Se alcanzó la cantidad solicitada de tablas ({qtables}).")
+                        break
+
+        # 4. Guardar archivo Markdown consolidado enriquecido
+        with open(output_md, "w", encoding="utf-8") as f_md:
+            f_md.write("\n".join(full_markdown_corpus))
+        logger.info(f"Markdown enriquecido guardado en: {output_md}")
+
+        # 5. Guardar archivo JSON estructurado (Nivel de Producto Granular)
+        output_payload = {
             "metadata": {
                 "source_file": os.path.basename(pdf_path),
-                "parser_engine": "Docling",
-                "total_tables_detected": len(tables_extracted),
-                "tables": tables_extracted
-            }
-        })
-        return pages_data
-
-    def parse_with_fallback(self, pdf_path: str) -> List[Dict[str, Any]]:
-        """
-        Extractor de respaldo ultra-robusto usando pdfplumber.
-        Especialmente útil si corrés el script en entornos sin aceleración GPU o livianos.
-        """
-        logger.info(f"Iniciando conversión con pdfplumber (Fallback) para: {pdf_path}")
-        import pdfplumber
+                "total_pages": total_pages,
+                "total_products_indexed": len(extracted_products),
+                "tables_processed": tables_processed
+            },
+            "products": extracted_products
+        }
         
-        extracted_pages = []
-        with pdfplumber.open(pdf_path) as pdf:
-            total_pages = len(pdf.pages)
-            for i, page in enumerate(pdf.pages):
-                page_num = i + 1
-                logger.info(f"Procesando página {page_num}/{total_pages}...")
-                
-                # Extraer texto plano respetando el layout horizontal aproximado
-                text = page.extract_text(layout=True) or ""
-                
-                # Intentar extraer tablas estructuradas en la página
-                tables = page.extract_tables()
-                page_tables = []
-                for t_idx, table in enumerate(tables):
-                    # Formatear la matriz de la tabla a Markdown para inyección limpia en el RAG
-                    md_table = self._matrix_to_markdown(table)
-                    page_tables.append({
-                        "table_index": t_idx,
-                        "markdown": md_table
-                    })
-                    # Reemplazamos la tabla en el texto con su versión Markdown para mantener coherencia
-                    text += f"\n\n### [Tabla Extraída en Página {page_num}]\n{md_table}\n"
-
-                extracted_pages.append({
-                    "text": text,
-                    "metadata": {
-                        "source_file": os.path.basename(pdf_path),
-                        "page_number": page_num,
-                        "parser_engine": "pdfplumber",
-                        "tables": page_tables
-                    }
-                })
-        return extracted_pages
-
-    def _matrix_to_markdown(self, matrix: List[List[str]]) -> str:
-        """Helper para convertir listas de listas de pdfplumber a Markdown Pipe Tables."""
-        if not matrix or not matrix[0]:
-            return ""
-        
-        # Limpiar valores nulos
-        clean_matrix = [[str(cell or "").strip().replace("\n", " ") for cell in row] for row in matrix]
-        headers = clean_matrix[0]
-        rows = clean_matrix[1:]
-        
-        # Crear encabezado Markdown
-        md = "| " + " | ".join(headers) + " |\n"
-        md += "| " + " | ".join(["---"] * len(headers)) + " |\n"
-        
-        # Crear filas
-        for row in rows:
-            # Asegurar que la fila coincida con el número de columnas del encabezado
-            if len(row) < len(headers):
-                row += [""] * (len(headers) - len(row))
-            elif len(row) > len(headers):
-                row = row[:len(headers)]
-            md += "| " + " | ".join(row) + " |\n"
-        return md
-
-    def enrich_metadata(self, parsed_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Fase de enriquecimiento: Agrega metadatos sintéticos útiles para búsqueda e indexación.
-        Aquí podés integrar llamadas a LLMs o pequeños extractores de entidades (NER) 
-        como Gliner o Spacy para automatizar la catalogación.
-        """
-        logger.info("Iniciando fase de enriquecimiento de metadatos...")
-        for chunk in parsed_data:
-            # Placeholder para extracción automática de metadatos de negocio (ferretería/construcción)
-            # En producción, se puede usar regex o LLMs para poblar estas categorías:
-            chunk["metadata"]["project_category"] = "Catálogo de Ferretería y Construcción"
-            chunk["metadata"]["language"] = "es"
-            
-            # Buscamos códigos típicos de producto (ej: códigos numéricos de 8 dígitos o marcas)
-            # Esto facilita búsquedas exactas usando filtrado estructurado previo (pre-filtering)
-            text_upper = chunk["text"].upper()
-            detected_brands = []
-            for brand in ["STANLEY", "BOSCH", "MAKITA", "DEWALT", "BLACK & DECKER", "SINIAT"]:
-                if brand in text_upper:
-                    detected_brands.append(brand)
-            
-            chunk["metadata"]["detected_brands"] = detected_brands
-            
-        return parsed_data
-
-    def run(self, pdf_path: str, output_json_path: str):
-        """
-        Ejecuta todo el pipeline de Fase 0.
-        """
-        if not os.path.exists(pdf_path):
-            logger.error(f"El archivo {pdf_path} no existe en la ruta provista.")
-            sys.exit(1)
-            
-        logger.info(f"Arrancando proceso de Fase 0 para: {pdf_path}")
-        
-        # 1. Parsing
-        if self.use_docling:
-            parsed_data = self.parse_with_docling(pdf_path)
-        else:
-            parsed_data = self.parse_with_fallback(pdf_path)
-            
-        # 2. Enriquecimiento de metadatos
-        enriched_data = self.enrich_metadata(parsed_data)
-        
-        # 3. Serialización del entregable
-        with open(output_json_path, "w", encoding="utf-8") as f:
-            json.dump(enriched_data, f, ensure_ascii=False, indent=2)
-            
-        logger.info(f"Fase 0 finalizada con éxito. Datos estructurados guardados en: {output_json_path}")
+        with open(output_json, "w", encoding="utf-8") as f_json:
+            json.dump(output_payload, f_json, ensure_ascii=False, indent=2)
+        logger.info(f"JSON estructurado guardado en: {output_json}")
 
 
 if __name__ == "__main__":
-    check_dependencies()
-    
-    parser = argparse.ArgumentParser(description="Fase 0 RAG - Ingesta y Parsing de PDFs a JSON Estructurado")
-    parser.add_argument("--pdf", type=str, default="FN_Catalogo.pdf", help="Ruta al archivo PDF")
-    parser.add_argument("--out", type=str, default="catalogo_estructurado.json", help="Ruta del archivo JSON de salida")
-    parser.add_argument("--no-docling", action="store_true", help="Forzar el uso de pdfplumber como motor de extracción")
-    
+    parser = argparse.ArgumentParser(description="Parser de Catálogos Ferreteros para RAG")
+    parser.add_argument("--pdf", type=str, default="data/FN Catalogo.pdf", help="Ruta al PDF")
+    parser.add_argument("--out_json", type=str, default="catalogo_estructurado.json", help="Salida JSON")
+    parser.add_argument("--out_md", type=str, default="catalogo_enriquecido.md", help="Salida Markdown")
+    parser.add_argument("--qtables", type=int, default=None, help="Cantidad máxima de tablas a procesar en orden de aparición")
+    parser.add_argument("--max_pages", type=int, default=None, help="Cantidad máxima de páginas a convertir y procesar")
     args = parser.parse_args()
-    
-    # Decidimos el motor según los argumentos del CLI
-    use_docling = not args.no_docling
-    
-    parser_instance = DocumentParser(use_docling=use_docling)
-    parser_instance.run(args.pdf, args.out)
+
+    processor = HardwareCatalogProcessor()
+    processor.process_catalog(args.pdf, args.out_json, args.out_md, qtables=args.qtables, max_pages=args.max_pages)

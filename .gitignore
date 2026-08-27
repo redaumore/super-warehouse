@@ -1,5 +1,5 @@
 .venv
 .venv-py39
 .vscode
-.data
+data
 catalogo_estructurado.json
