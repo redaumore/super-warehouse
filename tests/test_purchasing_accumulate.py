@@ -11,7 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select
 from sqlalchemy.exc import OperationalError
 
 from src.config import get_settings
@@ -21,7 +21,6 @@ from src.db.models import (
     Order,
     Proveedor,
     SourcingNeed,
-    SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
