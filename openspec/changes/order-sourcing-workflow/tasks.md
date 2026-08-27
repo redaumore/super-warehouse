@@ -52,11 +52,11 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 3: S3 — NL Parsing + Classification + Router + Rehydration
 
-- [ ] 3.1 Create `src/agents/intake.py`: `OrderParser` Protocol, `ParsedOrder` dataclass (customer_name, items, delivery_date), fuzzy date resolver for Spanish phrases.
-- [ ] 3.2 Create `src/sourcing/classify.py`: `classify_case(items, availability, searcher)` → Case A/B/C; unknown SKU treated as missing.
-- [ ] 3.3 Modify `src/orchestrator/router.py`: parse step before Customer agent; route owner selection replies on Case B orders to confirm flow.
-- [ ] 3.4 Modify `src/orchestrator/session.py`: when `store.get()` returns `None`, rehydrate `ConversationState` from the sender's latest open `Order` + `SourcingNeed` rows.
-- [ ] 3.5 Add `tests/test_intake.py`, `tests/test_classify.py`, `tests/test_router_sourcing.py`, `tests/test_session_rehydrate.py` (pure + integration).
+- [x] 3.1 Create `src/agents/intake.py`: `OrderParser` Protocol, `ParsedOrder` dataclass (customer_name, items, delivery_date), fuzzy date resolver for Spanish phrases.
+- [x] 3.2 Create `src/sourcing/classify.py`: `classify_case(items, availability, searcher)` → Case A/B/C; unknown SKU treated as missing.
+- [x] 3.3 Modify `src/orchestrator/router.py`: parse step before Customer agent; route owner selection replies on Case B orders to confirm flow.
+- [x] 3.4 Modify `src/orchestrator/session.py`: when `store.get()` returns `None`, rehydrate `ConversationState` from the sender's latest open `Order` + `SourcingNeed` rows.
+- [x] 3.5 Add `tests/test_intake_parser.py`, `tests/test_classify.py`, `tests/test_router_sourcing.py`, `tests/test_session_rehydrate.py` (pure + integration).
 
 ## Phase 4: S4 — Case A Integration (Quotation/Approval Unchanged)
 

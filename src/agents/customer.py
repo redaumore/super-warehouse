@@ -18,6 +18,7 @@ import enum
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date
 from typing import Protocol
 
 import phonenumbers
@@ -27,12 +28,25 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from src.agents.disambiguation import SearchCandidate, search_catalog
+from src.agents.disambiguation import (
+    ResolutionKind,
+    SearchCandidate,
+    normalize_text,
+    resolve_item,
+    search_catalog,
+)
+from src.agents.dispatch import Notifier
+from src.agents.intake import ParsedItem
+from src.agents.inventory import available_stock
+from src.agents.sales import Quote
 from src.channels.base import InboundMessage
-from src.db.models import Cliente
+from src.db.models import Cliente, Order
 from src.db.session import SessionLocal
 from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ChatMessage, ConversationState
+from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem, SourcingNeedItem
+from src.sourcing.case_a import persist_case_a_order
+from src.sourcing.classify import MissingItem, SourcingCase, classify_case
+from src.supplier.searcher import SupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -160,12 +174,188 @@ def catalog_context_note(query: str, candidates: Sequence[SearchCandidate]) -> s
     )
 
 
+@dataclass
+class SourcingDeps:
+    """Boundaries the sourcing turn needs (session, searcher, notifier, owner)."""
+
+    session_factory: Callable[[], Session]
+    searcher: SupplierCatalogSearcher
+    notifier: Notifier
+    owner_phone: str
+
+
+def format_case_a_reply(
+    order: Order, quote: Quote, delivery_date: date | None, customer_name: str | None = None
+) -> str:
+    """Customer confirmation for a full-stock (Case A) order."""
+    who = f" {customer_name}" if customer_name else ""
+    date_part = f" Fecha estimada de entrega: {delivery_date.isoformat()}." if delivery_date else ""
+    return (
+        f"¡Listo{who}! Pedido #{order.order_id} confirmado, tenemos todo el stock. "
+        f"Total estimado: {quote.total:.2f} ARS.{date_part} "
+        "El dueño lo aprueba y te avisamos."
+    )
+
+
+def format_case_b_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
+    """Case B reply: list each missing item and its numbered supplier options."""
+    lines = [
+        (
+            f"Pedido #{order.order_id}: hay artículos sin stock. "
+            "Elegí proveedor para cada uno (respondé los números):"
+        )
+    ]
+    number = 1
+    for item in missing:
+        options = "  ".join(
+            f"{number + i}) {candidate.business_name}"
+            + (
+                f" ({candidate.available_quantity})"
+                if candidate.available_quantity is not None
+                else ""
+            )
+            for i, candidate in enumerate(item.candidates)
+        )
+        name = item.description or item.sku
+        lines.append(f"- {name}: faltan {item.missing_quantity}. {options}")
+        number += len(item.candidates)
+    return "\n".join(lines)
+
+
+def format_case_c_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
+    """Case C reply: notify the customer the missing items are unavailable."""
+    names = ", ".join(item.description or item.sku for item in missing)
+    return (
+        f"Lo sentimos: el pedido #{order.order_id} fue cancelado. "
+        f"{names} no están disponibles por el momento."
+    )
+
+
+def _resolve_items(
+    session: Session, parsed_items: Sequence[ParsedItem]
+) -> tuple[ResolvedItem, ...]:
+    """Resolve parsed descriptions to catalog SKUs; unknown items stay missing."""
+    resolved: list[ResolvedItem] = []
+    for item in parsed_items:
+        resolution = resolve_item(session, item.description)
+        if resolution.kind is ResolutionKind.AUTO_MAPPED and resolution.candidate is not None:
+            resolved.append(
+                ResolvedItem(
+                    sku=resolution.candidate.sku,
+                    cantidad=item.quantity,
+                    description=item.description,
+                )
+            )
+        else:
+            resolved.append(
+                ResolvedItem(
+                    sku=normalize_text(item.description),
+                    cantidad=item.quantity,
+                    description=item.description,
+                )
+            )
+    return tuple(resolved)
+
+
+def _run_sourcing_turn(
+    message: InboundMessage,
+    state: ConversationState | None,
+    decision: RoutingDecision,
+    deps: SourcingDeps,
+) -> AgentOutcome:
+    """Handle a parsed order turn: classify and run the matching case flow."""
+    parsed = state.parsed_order if state is not None else None
+    base = state if state is not None else ConversationState(sender_id=message.sender_id)
+    if parsed is None or not parsed.items:
+        reply = "¿Qué productos necesitás? Decime el artículo y la cantidad, por ejemplo '10 clavos'."
+        return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+    with deps.session_factory() as session:
+        phone = lookup_phone(session, message.sender_id)
+        if phone.status is not PhoneStatus.KNOWN or phone.customer is None:
+            reply = (
+                "Todavía no estás registrado como cliente; "
+                "hablá con el dueño para darte de alta."
+            )
+            return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+        customer = phone.customer
+        resolved = _resolve_items(session, parsed.items)
+        sourcing = classify_case(
+            resolved, lambda sku: available_stock(session, sku), deps.searcher
+        )
+        if sourcing.case is SourcingCase.A:
+            order, quote = persist_case_a_order(
+                session,
+                customer,
+                resolved,
+                delivery_date=parsed.delivery_date,
+                notifier=deps.notifier,
+                owner_phone=deps.owner_phone,
+            )
+            reply = format_case_a_reply(order, quote, parsed.delivery_date, customer.nombre_comercial)
+            updated = base.with_updates(
+                customer_id=customer.customer_id,
+                order_id=order.order_id,
+                items=tuple(resolved),
+                awaiting_decision=True,
+                parsed_order=None,
+            )
+        elif sourcing.case is SourcingCase.B:
+            from src.sourcing.case_b import (  # type: ignore[import-not-found]  # wired in S5
+                persist_case_b_order,
+            )
+
+            order = persist_case_b_order(
+                session, customer, delivery_date=parsed.delivery_date, missing=sourcing.missing
+            )
+            needs = tuple(
+                SourcingNeedItem(sku=m.sku, missing_quantity=m.missing_quantity)
+                for m in sourcing.missing
+            )
+            candidates = tuple(c for m in sourcing.missing for c in m.candidates)
+            reply = format_case_b_reply(order, sourcing.missing)
+            updated = base.with_updates(
+                customer_id=customer.customer_id,
+                order_id=order.order_id,
+                items=tuple(resolved),
+                parsed_order=None,
+                sourcing_selection_pending=True,
+                sourcing_needs=needs,
+                sourcing_candidates=candidates,
+            )
+        else:
+            from src.sourcing.case_c import (  # type: ignore[import-not-found]  # wired in S6
+                cancel_for_no_supplier,
+                persist_case_c_order,
+            )
+
+            order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
+            cancel_for_no_supplier(
+                session,
+                order,
+                notifier=deps.notifier,
+                owner_phone=deps.owner_phone,
+                customer_name=customer.nombre_comercial,
+            )
+            reply = format_case_c_reply(order, sourcing.missing)
+            updated = base.with_updates(
+                customer_id=customer.customer_id,
+                order_id=order.order_id,
+                items=tuple(resolved),
+                parsed_order=None,
+            )
+        # The sourcing turn owns its transaction: persist the flow's writes so
+        # they survive the session close (the pipeline runs fire-and-forget).
+        session.commit()
+        return AgentOutcome(state=updated, reply=reply)
+
+
 def build_handler(
     responder: CustomerResponder,
     *,
     fallback_reply: str = GREETING,
     system_prompt: str = SYSTEM_PROMPT,
     searcher: CatalogSearcher | None = None,
+    sourcing: SourcingDeps | None = None,
 ) -> Callable[[InboundMessage, ConversationState | None, RoutingDecision], AgentOutcome]:
     """Build the Customer conversational handler around a mockable responder.
 
@@ -177,13 +367,21 @@ def build_handler(
     outgoing message list only and never enters history (which keeps user and
     assistant turns). A SQLAlchemy error skips the note so the conversation
     survives a down database.
+
+    When ``sourcing`` is wired and the orchestrator's parse step flagged the
+    turn (``decision.parsed``), the handler runs the sourcing workflow instead
+    of the LLM chat: the parsed order is classified into Case A/B/C and the
+    matching flow persists the order, reserves stock, lists suppliers or
+    cancels — per the order-sourcing spec.
     """
 
     def handler(
         message: InboundMessage,
         state: ConversationState | None,
-        _decision: RoutingDecision,
+        decision: RoutingDecision,
     ) -> AgentOutcome:
+        if decision.parsed and sourcing is not None:
+            return _run_sourcing_turn(message, state, decision, sourcing)
         history = state.history if state is not None else ()
         base = state if state is not None else ConversationState(sender_id=message.sender_id)
         text = (message.text or "").strip()
