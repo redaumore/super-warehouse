@@ -52,14 +52,26 @@ raises a clear error only when a real call is attempted.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — data flow, the six agents, state machine.
+- [`docs/sourcing.md`](docs/sourcing.md) — order sourcing workflow (parse → classify → Case A/B/C), PO lifecycle, searcher seam.
 - [`docs/runbook.md`](docs/runbook.md) — day-to-day operations and failure modes.
 - [`docs/escenarios-testeados.md`](docs/escenarios-testeados.md) — every tested behavior, generated from test docstrings (`make test-docs`).
 - `openspec/changes/mvp-ferreteria/` — proposal, specs, design, tasks, apply progress.
+
+## Module map
+
+| Path | Responsibility |
+|---|---|
+| `src/agents/` | Customer (LLM chat + sourcing turn), Disambiguation (SKU resolution), Inventory (availability + reservations), Dispatch (owner approve/reject), Sales (quotes), Perception (STT/vision), Intake (NL order parsing) |
+| `src/orchestrator/` | Router + session store (parse step, DB rehydration), approval orchestration |
+| `src/sourcing/` | Case A/B/C flows: classification, persistence of `SourcingNeed`, multi-turn supplier selection |
+| `src/purchasing/` | `SupplierPurchaseOrder` state machine + accumulation (one OPEN PO per supplier) |
+| `src/supplier/` | OCR, barcode, and the `SupplierCatalogSearcher` seam (fake until the RAG exists) |
+| `src/backoffice/` | Gradio app: catalog, clients, order monitor, purchase orders, supplier ingestion |
 
 ## Checklist (first run)
 
 - [ ] `docker compose ps` shows `super-warehouse-db` healthy
 - [ ] `make migrate` completes
-- [ ] `make test` → `223 passed`
+- [ ] `make test` → full suite green
 - [ ] `make lint && make typecheck` → clean
 - [ ] `curl localhost:8000/healthz` → `{"status":"ok"}`

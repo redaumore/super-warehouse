@@ -80,9 +80,9 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 7: S7 — Backoffice PO View + Execution Tab
 
-- [ ] 7.1 Add `src/backoffice/po.py`: `list_purchase_orders`, `send_po_action`, `receive_po_action` (partial/full), `cancel_po_action` wrapping `src/purchasing/state.py`.
-- [ ] 7.2 Modify `src/backoffice/app.py`: new "Purchase Orders" tab wired to PO functions with refresh button (no server auto-launch).
-- [ ] 7.3 Add `tests/test_backoffice_po.py` (integration): OPEN→SENT→PARTIALLY_RECEIVED→FULLY_RECEIVED + CANCELLED from OPEN and SENT.
+- [x] 7.1 Add `src/backoffice/po.py`: `list_purchase_orders`, `send_po_action`, `receive_po_action` (partial/full), `cancel_po_action` wrapping `src/purchasing/state.py`.
+- [x] 7.2 Modify `src/backoffice/app.py`: new "Purchase Orders" tab wired to PO functions with refresh button (no server auto-launch).
+- [x] 7.3 Add `tests/test_backoffice_po.py` (integration): OPEN→SENT→PARTIALLY_RECEIVED→FULLY_RECEIVED + CANCELLED from OPEN and SENT.
 
 ## Phase 8: S8 — Docs / Migration / Rollback / Cleanup
 
