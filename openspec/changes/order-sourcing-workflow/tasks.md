@@ -43,12 +43,12 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 2: S2 — Purchasing PO Lifecycle + Searcher Seam
 
-- [ ] 2.1 Create `src/purchasing/state.py` mirroring `src/order_lifecycle/state.py`: `send_po`, `receive_po`, `cancel_po` with `InvalidTransitionError`; OPEN→SENT→PARTIALLY_RECEIVED→FULLY_RECEIVED, CANCELLED.
-- [ ] 2.2 Create `src/purchasing/accumulate.py`: `open_or_create_po`, `accumulate_need` — one OPEN PO per supplier; sum quantity on existing SKU row, else insert new item.
-- [ ] 2.3 Create `src/supplier/searcher.py`: `SupplierCandidate` dataclass + `SupplierCatalogSearcher` Protocol + `FakeSupplierCatalogSearcher` (in-memory candidates).
-- [ ] 2.4 Extend `tests/conftest.py` TRUNCATE list with `supplier_purchase_orders`, `supplier_purchase_order_items`, `sourcing_needs`, `inventory`.
-- [ ] 2.5 Add `tests/test_purchasing_state.py` (unit, `_FakeSession`): every legal transition + terminal rejection.
-- [ ] 2.6 Add `tests/test_purchasing_accumulate.py` (integration): same-supplier merge + multi-supplier split.
+- [x] 2.1 Create `src/purchasing/state.py` mirroring `src/order_lifecycle/state.py`: `send_po`, `receive_po`, `cancel_po` with `InvalidTransitionError`; OPEN→SENT→PARTIALLY_RECEIVED→FULLY_RECEIVED, CANCELLED.
+- [x] 2.2 Create `src/purchasing/accumulate.py`: `open_or_create_po`, `accumulate_need` — one OPEN PO per supplier; sum quantity on existing SKU row, else insert new item.
+- [x] 2.3 Create `src/supplier/searcher.py`: `SupplierCandidate` dataclass + `SupplierCatalogSearcher` Protocol + `FakeSupplierCatalogSearcher` (in-memory candidates).
+- [x] 2.4 Extend `tests/conftest.py` TRUNCATE list with `supplier_purchase_orders`, `supplier_purchase_order_items`, `sourcing_needs`, `inventory`.
+- [x] 2.5 Add `tests/test_purchasing_state.py` (unit, `_FakeSession`): every legal transition + terminal rejection.
+- [x] 2.6 Add `tests/test_purchasing_accumulate.py` (integration): same-supplier merge + multi-supplier split.
 
 ## Phase 3: S3 — NL Parsing + Classification + Router + Rehydration
 

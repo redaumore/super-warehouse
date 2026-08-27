@@ -65,13 +65,10 @@ class FakeSupplierCatalogSearcher:
         needle = _fold(description) if description else None
         matches: list[SupplierCandidate] = []
         for candidate in self.candidates:
-            if (sku is not None and candidate.sku == sku) or (
-                sku is None
-                and needle is not None
-                and (
-                    needle in _fold(candidate.description)
-                    or needle in _fold(candidate.sku)
-                )
-            ):
+            sku_hit = sku is not None and candidate.sku == sku
+            desc_hit = needle is not None and (
+                needle in _fold(candidate.description) or needle in _fold(candidate.sku)
+            )
+            if sku_hit or desc_hit:
                 matches.append(candidate)
         return tuple(matches)
