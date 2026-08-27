@@ -33,13 +33,13 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 1: S1 — Models + Migrations + Inventory Seed
 
-- [ ] 1.1 Add `SourcingState` (PENDING_ASSEMBLY/IN_PREPARATION/CANCELLED) + `SupplierPurchaseOrderState` enums in `src/db/models.py` via `sa.Enum(name=...)`.
-- [ ] 1.2 Add `Order.sourcing_state` (default PENDING_ASSEMBLY) and `Order.delivery_date` (nullable, informational); `OrderEstado` four-state machine UNTOUCHED.
-- [ ] 1.3 Add `Inventory` (sku_id PK, quantity_on_hand, updated_at), `SupplierPurchaseOrder`, `SupplierPurchaseOrderItem` (sku, quantity aggregated, received_quantity), `SourcingNeed` (order_id FK, sku, missing_quantity, nullable supplier_id, nullable po_item_id).
-- [ ] 1.4 Create `alembic/versions/*_sourcing_axis_inventory.py`: enums, additive nullable columns, `inventory` table, backfill `INSERT INTO inventory SELECT codigo_interno, stock_disponible, now() FROM catalogo`.
-- [ ] 1.5 Create `alembic/versions/*_supplier_purchase_orders.py`: PO header + item + `sourcing_needs` tables; indexes on `(order_id)` and `(supplier_id)`.
-- [ ] 1.6 Repoint `available_stock` in `src/agents/inventory.py` to `Inventory.quantity_on_hand − Σ(ACTIVE unexpired)`; unknown SKU returns `0` (KeyError → 0).
-- [ ] 1.7 Update `tests/test_inventory.py` for KeyError→0; add migration RED test asserting new tables/enums exist after upgrade.
+- [x] 1.1 Add `SourcingState` (PENDING_ASSEMBLY/IN_PREPARATION/CANCELLED) + `SupplierPurchaseOrderState` enums in `src/db/models.py` via `sa.Enum(name=...)`.
+- [x] 1.2 Add `Order.sourcing_state` (default PENDING_ASSEMBLY) and `Order.delivery_date` (nullable, informational); `OrderEstado` four-state machine UNTOUCHED.
+- [x] 1.3 Add `Inventory` (sku_id PK, quantity_on_hand, updated_at), `SupplierPurchaseOrder`, `SupplierPurchaseOrderItem` (sku, quantity aggregated, received_quantity), `SourcingNeed` (order_id FK, sku, missing_quantity, nullable supplier_id, nullable po_item_id).
+- [x] 1.4 Create `alembic/versions/*_sourcing_axis_inventory.py`: enums, additive nullable columns, `inventory` table, backfill `INSERT INTO inventory SELECT codigo_interno, stock_disponible, now() FROM catalogo`.
+- [x] 1.5 Create `alembic/versions/*_supplier_purchase_orders.py`: PO header + item + `sourcing_needs` tables; indexes on `(order_id)` and `(supplier_id)`.
+- [x] 1.6 Repoint `available_stock` in `src/agents/inventory.py` to `Inventory.quantity_on_hand − Σ(ACTIVE unexpired)`; unknown SKU returns `0` (KeyError → 0).
+- [x] 1.7 Update `tests/test_inventory.py` for KeyError→0; add migration RED test asserting new tables/enums exist after upgrade.
 
 ## Phase 2: S2 — Purchasing PO Lifecycle + Searcher Seam
 
