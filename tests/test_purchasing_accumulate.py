@@ -21,10 +21,15 @@ from src.db.models import (
     Order,
     Proveedor,
     SourcingNeed,
+    SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
-from src.purchasing.accumulate import accumulate_need, open_or_create_po
+from src.purchasing.accumulate import (
+    SelectionExecutedError,
+    accumulate_need,
+    open_or_create_po,
+)
 
 
 def _postgres_up() -> bool:
@@ -177,6 +182,37 @@ def test_reselection_detaches_from_previous_open_po(suppliers):
     assert len(new_items) == 1
     assert new_items[0].quantity == 6
     assert need.po_item_id == new_items[0].po_item_id
+
+
+def test_reselection_after_execution_is_refused(suppliers):
+    """Re-elegir tras ejecutar el PO (SENT) se rechaza sin duplicar."""
+    need = _need(suppliers, 100, "CLV-001", 6)
+    po_x = accumulate_need(suppliers, need, supplier_id=1)
+    # The PO is executed before the owner changes their mind.
+    po_x.estado = SupplierPurchaseOrderState.SENT
+    suppliers.flush()
+
+    with pytest.raises(SelectionExecutedError):
+        accumulate_need(suppliers, need, supplier_id=2)
+    # The need keeps its original (executed) link and no new PO was created.
+    assert need.supplier_id == 1
+    assert suppliers.scalar(
+        select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 2)
+    ) is None
+
+
+def test_reselection_same_supplier_is_idempotent(suppliers):
+    """Re-confirmar el mismo proveedor no duplica la cantidad acumulada."""
+    need = _need(suppliers, 100, "CLV-001", 6)
+    po_a = accumulate_need(suppliers, need, supplier_id=1)
+    po_b = accumulate_need(suppliers, need, supplier_id=1)
+    assert po_b.po_id == po_a.po_id
+    item = suppliers.scalar(
+        select(SupplierPurchaseOrderItem).where(
+            SupplierPurchaseOrderItem.po_id == po_a.po_id
+        )
+    )
+    assert item.quantity == 6  # not 12
 
 
 def test_reselection_keeps_linked_item_when_quantity_remains(suppliers):

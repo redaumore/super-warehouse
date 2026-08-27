@@ -300,9 +300,7 @@ def _run_sourcing_turn(
                 parsed_order=None,
             )
         elif sourcing.case is SourcingCase.B:
-            from src.sourcing.case_b import (  # type: ignore[import-not-found]  # wired in S5
-                persist_case_b_order,
-            )
+            from src.sourcing.case_b import persist_case_b_order
 
             order = persist_case_b_order(
                 session, customer, delivery_date=parsed.delivery_date, missing=sourcing.missing

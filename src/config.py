@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     google_sheets_credentials_file: str = ""
     google_sheets_spreadsheet_key: str = ""
 
+    # Owner contact: notifications (quotes, supplier selections, cancellations)
+    # go here. Empty disables the sourcing flow (legacy intake routing).
+    owner_phone: str = ""
+
     # Hybrid catalog search thresholds (confidence in [0, 1]).
     # A single candidate at/above the auto-map threshold maps without prompting;
     # candidates at/above the ambiguity floor populate the disambiguation menu.

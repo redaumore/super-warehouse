@@ -26,7 +26,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.agents.intake import ParsedOrder
-from src.db.models import Cliente, Order, OrderEstado, SourcingNeed, SourcingState
+from src.db.models import (
+    Cliente,
+    Order,
+    OrderEstado,
+    SourcingNeed,
+    SourcingState,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
+)
 from src.supplier.searcher import SupplierCandidate, SupplierCatalogSearcher
 
 
@@ -47,6 +56,7 @@ class SourcingNeedItem:
     missing_quantity: int
     supplier_id: int | None = None
     need_id: int | None = None
+    po_item_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -170,6 +180,7 @@ def rehydrate_conversation(
             missing_quantity=need.missing_quantity,
             supplier_id=need.supplier_id,
             need_id=need.need_id,
+            po_item_id=need.po_item_id,
         )
         for need in session.scalars(
             select(SourcingNeed).where(SourcingNeed.order_id == order.order_id)
@@ -179,9 +190,28 @@ def rehydrate_conversation(
         order.estado is OrderEstado.PENDING_APPROVAL
         and order.sourcing_state is SourcingState.PENDING_ASSEMBLY
     )
-    selection_pending = (
-        order.sourcing_state is SourcingState.IN_PREPARATION
-        and any(need.supplier_id is None for need in needs)
+    # The selection turn stays pending while any need is unassigned OR any of
+    # the order's purchase orders is still OPEN (re-selection before execution).
+    linked_items = [need.po_item_id for need in needs if need.po_item_id is not None]
+    open_po_exists = False
+    if linked_items:
+        open_po_exists = (
+            session.scalar(
+                select(SupplierPurchaseOrderItem.po_id)
+                .join(
+                    SupplierPurchaseOrder,
+                    SupplierPurchaseOrder.po_id == SupplierPurchaseOrderItem.po_id,
+                )
+                .where(
+                    SupplierPurchaseOrderItem.po_item_id.in_(linked_items),
+                    SupplierPurchaseOrder.estado == SupplierPurchaseOrderState.OPEN,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+    selection_pending = order.sourcing_state is SourcingState.IN_PREPARATION and (
+        any(need.supplier_id is None for need in needs) or open_po_exists
     )
     candidates: tuple[SupplierCandidate, ...] = ()
     if selection_pending and searcher is not None:

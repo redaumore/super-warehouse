@@ -44,6 +44,10 @@ def open_or_create_po(session: Session, supplier_id: int) -> SupplierPurchaseOrd
     return po
 
 
+class SelectionExecutedError(Exception):
+    """A need's selection was already executed (its PO is SENT or later)."""
+
+
 def accumulate_need(
     session: Session,
     need: SourcingNeed,
@@ -53,9 +57,19 @@ def accumulate_need(
 
     The selection is persisted on the need. When the need already belongs to a
     different supplier's OPEN PO (owner re-selection before execution), the old
-    quantity is detached first so the SKU is never double-ordered.
+    quantity is detached first so the SKU is never double-ordered. Re-selecting
+    after the previous PO was executed (SENT or later) raises
+    ``SelectionExecutedError`` — the owner must not re-order an executed line.
     """
+    if need.supplier_id is not None and need.supplier_id == supplier_id:
+        # Same supplier re-selected: the need is already accumulated there.
+        item = session.get(SupplierPurchaseOrderItem, need.po_item_id) if need.po_item_id else None
+        if item is not None:
+            po = session.get(SupplierPurchaseOrder, item.po_id)
+            if po is not None:
+                return po
     if need.supplier_id is not None and need.supplier_id != supplier_id:
+        _guard_previous_po_not_executed(session, need)
         _detach_from_previous_po(session, need)
     po = open_or_create_po(session, supplier_id)
     item = session.scalar(
@@ -79,6 +93,20 @@ def accumulate_need(
     need.po_item_id = item.po_item_id
     session.flush()
     return po
+
+
+def _guard_previous_po_not_executed(session: Session, need: SourcingNeed) -> None:
+    """Refuse a re-selection whose previous PO is no longer OPEN."""
+    if need.po_item_id is None:
+        return
+    item = session.get(SupplierPurchaseOrderItem, need.po_item_id)
+    if item is None:
+        return
+    po = session.get(SupplierPurchaseOrder, item.po_id)
+    if po is not None and po.estado is not SupplierPurchaseOrderState.OPEN:
+        raise SelectionExecutedError(
+            f"selection for sku {need.sku} already executed on PO {po.po_id}"
+        )
 
 
 def _detach_from_previous_po(session: Session, need: SourcingNeed) -> None:

@@ -60,10 +60,10 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 4: S4 — Case A Integration (Quotation/Approval Unchanged)
 
-- [ ] 4.1 Create `src/sourcing/case_a.py`: `persist_case_a_order` — full-stock items through existing reservation + quotation flow; sourcing=PENDING_ASSEMBLY; delivery_date stored.
-- [ ] 4.2 Modify `src/agents/customer.py` Case A reply: confirm availability, delivery date, order number.
-- [ ] 4.3 Modify `src/orchestrator/approval.py` `_deduct_stock`: write `Inventory.quantity_on_hand` (touch `updated_at`) on approval; `Catalogo.stock_disponible` untouched.
-- [ ] 4.4 Add `tests/test_case_a.py` (integration + orchestrator e2e): PENDING_ASSEMBLY + TTL/re-quote rules apply unchanged.
+- [x] 4.1 Create `src/sourcing/case_a.py`: `persist_case_a_order` — full-stock items through existing reservation + quotation flow; sourcing=PENDING_ASSEMBLY; delivery_date stored.
+- [x] 4.2 Modify `src/agents/customer.py` Case A reply: confirm availability, delivery date, order number.
+- [x] 4.3 Modify `src/orchestrator/approval.py` `_deduct_stock`: write `Inventory.quantity_on_hand` (touch `updated_at`) on approval; `Catalogo.stock_disponible` untouched.
+- [x] 4.4 Add `tests/test_case_a.py` (integration + orchestrator e2e): PENDING_ASSEMBLY + TTL/re-quote rules apply unchanged.
 
 ## Phase 5: S5 — Case B Multi-Turn Selection + Accumulation
 
