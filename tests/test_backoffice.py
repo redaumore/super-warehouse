@@ -51,11 +51,11 @@ def _tabs_block(demo) -> object:
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
 
 
-def test_build_app_creates_four_tabs_with_expected_labels():
-    """Construir la app genera cuatro pestañas con los títulos esperados."""
+def test_build_app_creates_five_tabs_with_expected_labels():
+    """Construir la app genera cinco pestañas con los títulos esperados."""
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
-    assert labels == ["Catalog", "Clients", "Orders/Monitor", "Ingestion"]
+    assert labels == ["Catalog", "Clients", "Orders/Monitor", "Purchase Orders", "Ingestion"]
 
 
 def test_build_app_ingestion_tab_has_preview_and_confirm():

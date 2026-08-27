@@ -320,7 +320,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Construir la app genera cuatro pestañas con los títulos esperados. _(`test_build_app_creates_four_tabs_with_expected_labels`)_
+- Construir la app genera cinco pestañas con los títulos esperados. _(`test_build_app_creates_five_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_

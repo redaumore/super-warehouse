@@ -19,6 +19,12 @@ from src.backoffice.catalog import list_products, update_margin, update_price, u
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.ingestion import confirm_items, to_grid_rows
 from src.backoffice.monitor import list_orders
+from src.backoffice.po import (
+    cancel_po_action,
+    list_purchase_orders,
+    receive_po_action,
+    send_po_action,
+)
 from src.config import Settings, get_settings
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIVisionAnalyzer
@@ -55,6 +61,39 @@ def _monitor_grid() -> list[list[object]]:
          r["active_reservations"], r["sheets_synced"]]
         for r in rows
     ]
+
+
+def _po_grid() -> list[list[object]]:
+    with SessionLocal() as session:
+        rows = list_purchase_orders(session)
+    return [
+        [r["po_id"], r["supplier"], r["estado"], r["items"], r["received"]]
+        for r in rows
+    ]
+
+
+def _po_send(po_id: object) -> str:
+    with SessionLocal() as session:
+        try:
+            return send_po_action(session, int(str(po_id)))
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
+
+
+def _po_receive(po_id: object, sku: str, quantity: object) -> str:
+    with SessionLocal() as session:
+        try:
+            return receive_po_action(session, int(str(po_id)), sku, int(float(str(quantity))))
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
+
+
+def _po_cancel(po_id: object) -> str:
+    with SessionLocal() as session:
+        try:
+            return cancel_po_action(session, int(str(po_id)))
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
 
 
 def _register_client(nombre: str, telefono: str, lista_id: object, descuento: float) -> str:
@@ -199,6 +238,31 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             monitor_refresh = gr.Button("Refrescar")
             monitor_refresh.click(_monitor_grid, outputs=orders_grid)
+
+        with gr.Tab("Purchase Orders"):
+            gr.Markdown("### Órdenes de compra a proveedores")
+            po_grid = gr.Dataframe(
+                headers=["PO", "Proveedor", "Estado", "Artículos", "Recibido"],
+                datatype=["number", "str", "str", "str", "str"],
+                value=_po_grid,
+                label="Órdenes de compra",
+            )
+            po_refresh = gr.Button("Refrescar")
+            po_refresh.click(_po_grid, outputs=po_grid)
+            with gr.Row():
+                po_id = gr.Number(label="PO ID", precision=0, value=1)
+                po_sku = gr.Textbox(label="SKU recibido", placeholder="CLV-001")
+                po_qty = gr.Number(label="Cantidad recibida", precision=0, value=0)
+            with gr.Row():
+                po_send = gr.Button("Enviar al proveedor (OPEN → SENT)")
+                po_receive = gr.Button("Registrar recepción (parcial/total)")
+                po_cancel = gr.Button("Cancelar PO", variant="stop")
+            po_status = gr.Textbox(label="Ejecución", interactive=False)
+            po_send.click(_po_send, inputs=[po_id], outputs=po_status)
+            po_receive.click(
+                _po_receive, inputs=[po_id, po_sku, po_qty], outputs=po_status
+            )
+            po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
 
         with gr.Tab("Ingestion"):
             gr.Markdown("### Ingreso de remitos / facturas de proveedor")

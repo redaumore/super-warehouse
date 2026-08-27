@@ -311,6 +311,8 @@ class SupplierPurchaseOrder(Base):
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    supplier: Mapped[Proveedor] = relationship()
+
     items: Mapped[list[SupplierPurchaseOrderItem]] = relationship(back_populates="po")
 
 
