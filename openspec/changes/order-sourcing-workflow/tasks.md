@@ -74,9 +74,9 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 6: S6 — Case C Cancellation + Notify
 
-- [ ] 6.1 Create `src/sourcing/case_c.py`: `cancel_for_no_supplier` — `OrderEstado=REJECTED` via existing reject flow + `sourcing=CANCELLED`; notify via injected `Notifier`.
-- [ ] 6.2 Modify `src/agents/customer.py` Case C reply: notify customer missing items are unavailable.
-- [ ] 6.3 Add `tests/test_case_c.py` (integration): REJECTED + sourcing CANCELLED + reservations released + notifier called.
+- [x] 6.1 Create `src/sourcing/case_c.py`: `cancel_for_no_supplier` — `OrderEstado=REJECTED` via existing reject flow + `sourcing=CANCELLED`; notify via injected `Notifier`.
+- [x] 6.2 Modify `src/agents/customer.py` Case C reply: notify customer missing items are unavailable.
+- [x] 6.3 Add `tests/test_case_c.py` (integration): REJECTED + sourcing CANCELLED + reservations released + notifier called.
 
 ## Phase 7: S7 — Backoffice PO View + Execution Tab
 
@@ -86,8 +86,8 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 8: S8 — Docs / Migration / Rollback / Cleanup
 
-- [ ] 8.1 Add `docs/sourcing.md`: workflow, Case A/B/C matrix, PO lifecycle, searcher seam.
-- [ ] 8.2 Update `ops/runbook.md` (or create) with backfill, downgrade, feature-flag disable (parse-step off → legacy intake).
-- [ ] 8.3 Add `scripts/seed_inventory.py` (idempotent `INSERT … ON CONFLICT (sku_id) DO NOTHING`).
-- [ ] 8.4 Update `README.md` module map with `src/sourcing/`, `src/purchasing/`, `src/supplier/searcher.py`.
-- [ ] 8.5 Update `tests/test_db_models.py` asserting new enums + tables; full regression (existing 229 + new) meets ≥85% coverage gate.
+- [x] 8.1 Add `docs/sourcing.md`: workflow, Case A/B/C matrix, PO lifecycle, searcher seam.
+- [x] 8.2 Update `docs/runbook.md` with backfill, downgrade, feature-flag disable (parse-step off → legacy intake).
+- [x] 8.3 Add `scripts/seed_inventory.py` (idempotent `INSERT … ON CONFLICT (sku_id) DO NOTHING`).
+- [x] 8.4 Update `README.md` module map with `src/sourcing/`, `src/purchasing/`, `src/supplier/searcher.py`.
+- [x] 8.5 Update `tests/test_db_models.py` asserting new enums + tables; full regression (existing + new) meets ≥85% coverage gate.
