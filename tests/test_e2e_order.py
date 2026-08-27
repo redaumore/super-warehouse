@@ -23,13 +23,14 @@ from sqlalchemy.exc import OperationalError
 from src.agents.customer import lookup_phone
 from src.agents.disambiguation import resolve_item
 from src.agents.dispatch import Decision, DecisionAction, apply_decision, format_quote_message
-from src.agents.inventory import available_stock, reserve_stock
+from src.agents.inventory import available_stock, reserve_stock, seed_inventory
 from src.agents.sales import ItemInput, quote_order
 from src.channels.whatsapp import WhatsAppChannel, WhatsAppError
 from src.config import Settings, get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
+    Inventory,
     ListaPrecios,
     Order,
     OrderEstado,
@@ -87,8 +88,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -127,6 +129,7 @@ def shop(db_session):
         )
     )
     db_session.flush()
+    seed_inventory(db_session)
     return {"session": db_session, "sku": "CLV-PRS-2"}
 
 
@@ -251,8 +254,11 @@ async def test_e2e_text_order_flows_to_owner_approval_and_stock_deduction(shop):
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
     assert reservation.estado is ReservationEstado.CONVERTED
-    product = session.get(Catalogo, 1)
-    assert product.stock_disponible == 40  # 50 − 10 reserved
+    # The approval deduction now writes Inventory (canonical on-hand), not the
+    # legacy catalogo counter.
+    on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == shop["sku"]))
+    assert on_hand.quantity_on_hand == 40  # 50 − 10 reserved
+    assert session.get(Catalogo, 1).stock_disponible == 50  # legacy counter untouched
     assert available_stock(session, shop["sku"]) == 40
     assert notifier_client.post.await_count == 1
     confirm = notifier_client.post.await_args.kwargs["json"]["text"]["body"]
@@ -323,4 +329,5 @@ async def test_e2e_http_error_on_confirm_still_completes_flow(shop):
             await notifier.drain()
     # Registration side effects already committed to the session before the send.
     assert order.estado is OrderEstado.APPROVED
-    assert session.get(Catalogo, 1).stock_disponible == 40
+    on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == shop["sku"]))
+    assert on_hand.quantity_on_hand == 40

@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.inventory import available_stock, reserve_stock
+from src.agents.inventory import available_stock, reserve_stock, seed_inventory
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
@@ -236,8 +236,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -275,6 +276,8 @@ def order_ctx(db_session):
             sinonimos=["clavos 2 pulgadas"],
         )
     )
+    db_session.flush()
+    seed_inventory(db_session)
     order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
     db_session.add(order)
     db_session.flush()

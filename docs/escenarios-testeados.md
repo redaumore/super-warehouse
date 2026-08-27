@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 229, agrupados en 26 dominios.
+**Total de escenarios:** 239, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -10,7 +10,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 - [Motor de precios](#motor-de-precios) — 6
 - [Cotización y ventas](#cotización-y-ventas) — 11
-- [Stock e inventario](#stock-e-inventario) — 10
+- [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
@@ -25,7 +25,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 7
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 14
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 5
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
@@ -66,7 +66,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Las reservas no activas (convertidas, liberadas, expiradas) no bloquean stock. _(`test_non_active_reservations_do_not_lock_stock`)_
 - Una reserva ACTIVE vencida por TTL se excluye al leer la disponibilidad. _(`test_expired_ttl_reservation_does_not_lock_stock`)_
 - Una reserva vigente todavía bloquea stock. _(`test_unexpired_reservation_still_locks_stock`)_
-- Consultar un SKU desconocido lanza error. _(`test_unknown_sku_raises`)_
+- Consultar un SKU desconocido devuelve 0 (nunca KeyError). _(`test_unknown_sku_returns_zero`)_
+- El seed copia stock_disponible del catálogo a Inventory.quantity_on_hand. _(`test_seed_inventory_backfills_from_catalogo`)_
+- Volver a sembrar no duplica filas ni pisa valores existentes. _(`test_seed_inventory_is_idempotent`)_
+- Un SKU sin fila en Inventory se trata como no disponible. _(`test_missing_inventory_row_means_zero_on_hand`)_
 - Reservar crea una reserva activa con el TTL configurado y bloquea stock. _(`test_reserve_creates_active_reservation_and_locks`)_
 - Reservar más de lo disponible se rechaza sin bloquear de más. _(`test_reserve_beyond_available_stock_is_refused`)_
 - Reservar una cantidad no positiva se rechaza. _(`test_reserve_rejects_non_positive_quantity`)_
@@ -253,10 +256,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 ## Modelo de datos y migraciones
 
 - Cada entidad del diseño tiene su modelo ORM correspondiente. _(`test_all_design_entities_are_modeled`)_
+- Las tablas del eje de sourcing existen en el modelo ORM. _(`test_sourcing_entities_are_modeled`)_
+- El pedido tiene sourcing_state y delivery_date, sin tocar order_estado. _(`test_order_has_sourcing_axis_and_delivery_date`)_
+- El enum SourcingState tiene exactamente los tres estados del eje. _(`test_sourcing_state_enum_values`)_
+- El enum del PO tiene exactamente los cinco estados de su máquina. _(`test_po_state_enum_values`)_
 - La columna `catalogo.embedding` se declara como pgvector vector(1536). _(`test_catalogo_has_vector_1536_embedding`)_
 - El modelo `clientes` no modela límites de crédito ni condiciones de pago. _(`test_cliente_has_no_credit_or_payment_fields`)_
 - La máquina de estados del pedido se fija a los cuatro estados de la spec. _(`test_order_estado_enum_values`)_
 - La migración crea todas las tablas del diseño. _(`test_migration_creates_all_tables`)_
+- RED: la migración agrega sourcing_state y delivery_date a orders. _(`test_migration_creates_sourcing_columns`)_
+- RED: los enums del eje de sourcing existen tras la migración. _(`test_migration_creates_sourcing_enums`)_
+- RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
 

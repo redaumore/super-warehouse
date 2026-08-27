@@ -8,12 +8,13 @@ from the pricing rules.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import Catalogo
+from src.db.models import Catalogo, Inventory
 from src.pricing.engine import compute_base
 
 _CENT = Decimal("0.01")
@@ -47,11 +48,21 @@ def _product_by_sku(session: Session, sku: str) -> Catalogo:
 
 
 def update_stock(session: Session, sku: str, stock: int) -> Catalogo:
-    """Set the available stock of a product (audited adjustments live in Phase 3+)."""
+    """Set the available stock of a product (audited adjustments live in Phase 3+).
+
+    The canonical on-hand counter (``Inventory``) mirrors the new value so the
+    legacy ``catalogo.stock_disponible`` and the availability source never drift.
+    """
     if stock < 0:
         raise ValueError("stock cannot be negative")
     product = _product_by_sku(session, sku)
     product.stock_disponible = stock
+    inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == sku))
+    if inventory_row is not None:
+        inventory_row.quantity_on_hand = stock
+        inventory_row.updated_at = datetime.now(UTC)
+    else:
+        session.add(Inventory(sku_id=sku, quantity_on_hand=stock))
     session.flush()
     return product
 

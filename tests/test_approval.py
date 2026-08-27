@@ -19,12 +19,13 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.agents.dispatch import Decision, DecisionAction, LineAdjustment, apply_decision
-from src.agents.inventory import reserve_stock
+from src.agents.inventory import reserve_stock, seed_inventory
 from src.agents.sales import ItemInput, quote_order
 from src.config import Settings, get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
+    Inventory,
     ListaPrecios,
     Order,
     OrderEstado,
@@ -110,10 +111,18 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
+
+
+def _on_hand(session, sku: str) -> int:
+    """Read a SKU's canonical on-hand quantity from Inventory."""
+    row = session.scalar(select(Inventory).where(Inventory.sku_id == sku))
+    assert row is not None
+    return row.quantity_on_hand
 
 
 @pytest.fixture
@@ -149,6 +158,8 @@ def order_ctx(db_session):
             sinonimos=["clavos 2 pulgadas"],
         )
     )
+    db_session.flush()
+    seed_inventory(db_session)
     order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
     db_session.add(order)
     db_session.flush()
@@ -198,8 +209,9 @@ def test_approve_and_register_converts_deducts_and_confirms(order_ctx):
         )
     ).all()
     assert all(r.estado is ReservationEstado.CONVERTED for r in reservations)
-    product = order_ctx["session"].get(Catalogo, 1)
-    assert product.stock_disponible == 6
+    assert _on_hand(order_ctx["session"], "CLV-001") == 6
+    # Legacy catalogo stock counter is untouched by the approval deduction.
+    assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 10
     assert len(notifier.sent) == 1
     assert "Pedido #" in notifier.sent[0][1]
     assert "aprobado" in notifier.sent[0][1]
@@ -249,8 +261,7 @@ def test_register_after_adjustment_approve_uses_revised_total(order_ctx):
         select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
     )
     assert item.final_price == Decimal("95.00")
-    product = order_ctx["session"].get(Catalogo, 1)
-    assert product.stock_disponible == 6
+    assert _on_hand(order_ctx["session"], "CLV-001") == 6
     assert notifier.sent[0][1].startswith("Pedido #")
 
 
@@ -279,7 +290,7 @@ def test_approve_on_expired_reservation_refuses_without_side_effects(order_ctx):
     reservation = order_ctx["session"].get(StockReservation, reservation.reservation_id)
     assert reservation.estado is ReservationEstado.ACTIVE
     assert notifier.sent == []
-    assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 10
+    assert _on_hand(order_ctx["session"], "CLV-001") == 10  # nothing deducted
 
 
 def test_sheets_quarantine_never_blocks_approval(order_ctx):
@@ -301,5 +312,5 @@ def test_sheets_quarantine_never_blocks_approval(order_ctx):
     )
     assert result.sheets_status is SheetsWriteStatus.QUARANTINED
     assert result.order.estado is OrderEstado.APPROVED
-    assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 6
+    assert _on_hand(order_ctx["session"], "CLV-001") == 6
     assert "cuarentena" in notifier.sent[0][1]

@@ -21,14 +21,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.agents.dispatch import Notifier
-from src.db.models import Catalogo, Order, ReservationEstado, StockReservation
+from src.db.models import Inventory, Order, ReservationEstado, StockReservation
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.order_lifecycle.state import approve_order
 
@@ -81,19 +81,22 @@ def _convert_reservations(
 
 
 def _deduct_stock(session: Session, reservations: list[StockReservation]) -> None:
-    """Subtract each converted reservation's quantity from the catalog stock."""
+    """Subtract each converted reservation's quantity from the canonical Inventory.
+
+    ``Inventory.quantity_on_hand`` is the single on-hand source; the legacy
+    ``catalogo.stock_disponible`` counter is deliberately left untouched.
+    """
     for reservation in reservations:
-        product = session.scalar(
-            select(Catalogo).where(Catalogo.codigo_interno == reservation.sku)
-        )
-        if product is None:
+        row = session.scalar(select(Inventory).where(Inventory.sku_id == reservation.sku))
+        if row is None:
             logger.warning(
                 "stock deduction skipped: unknown sku %s (reservation %s)",
                 reservation.sku,
                 reservation.reservation_id,
             )
             continue
-        product.stock_disponible -= reservation.cantidad
+        row.quantity_on_hand -= reservation.cantidad
+        row.updated_at = datetime.now(UTC)
 
 
 def _confirmation_text(order: Order, total: Decimal, sheets_status: SheetsWriteStatus) -> str:
