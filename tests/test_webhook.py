@@ -17,6 +17,13 @@ from src.api.webhook import app, settings
 from src.channels.telegram import TelegramChannel
 
 
+class _FakeResponder:
+    """Deterministic fake LLM responder so the pipeline never calls OpenAI."""
+
+    def respond(self, messages) -> str:
+        return "respuesta del modelo"
+
+
 @pytest.fixture(autouse=True)
 def _no_telegram_network(monkeypatch):
     """Keep webhook ACK tests offline: the walking-skeleton reply must not post.
@@ -24,12 +31,21 @@ def _no_telegram_network(monkeypatch):
     The intake now wires the pipeline handler by default, so a 200 response on
     the Telegram endpoint dispatches a background reply. No-op the send so the
     ACK latency assertion stays deterministic and no network call leaks out.
+    The pipeline orchestrator is also swapped for a fake-responder build so the
+    Customer agent never reaches OpenAI, and a fake catalog searcher so it
+    never reaches Postgres, regardless of env credentials.
     """
+    from src.pipeline import build_orchestrator
+    from tests.test_customer import FakeSearcher
 
     async def _noop(self, sender_id, text):
         return None
 
     monkeypatch.setattr(TelegramChannel, "send_text", _noop)
+    monkeypatch.setattr(
+        "src.pipeline.ORCHESTRATOR",
+        build_orchestrator(responder=_FakeResponder(), searcher=FakeSearcher()),
+    )
 
 
 @pytest.fixture

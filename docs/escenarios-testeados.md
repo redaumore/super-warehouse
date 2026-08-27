@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 215, agrupados en 25 dominios.
+**Total de escenarios:** 229, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -13,8 +13,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Stock e inventario](#stock-e-inventario) — 10
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 17
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 5
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 13
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -124,14 +125,31 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El orquestador enruta y persiste el contexto. _(`test_orchestrator_routes_and_persists_context`)_
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
+- La respuesta que produce un agente viaja en el resultado del turno. _(`test_orchestrator_surfaces_agent_reply`)_
 
 ## Pipeline de orquestación (walking skeleton)
 
 - El orquestador de la pipeline enlaza los seis agentes. _(`test_build_orchestrator_registers_all_six_agents`)_
-- Un mensaje entrante se enruta, persiste contexto y responde por el canal. _(`test_handle_inbound_routes_persists_and_replies`)_
-- Un segundo mensaje del mismo remitente continúa el pedido (contexto persistido). _(`test_second_message_resumes_context`)_
+- Un mensaje de Telegram nuevo es respondido por el agente Customer a través del responder LLM. _(`test_handle_inbound_routes_persists_and_replies`)_
+- Un segundo mensaje del mismo remitente continúa la conversación con el responder LLM. _(`test_second_message_resumes_context`)_
 - Una nota de voz se enruta a Percepción con una respuesta específica. _(`test_voice_routes_to_perception_reply`)_
 - Un canal sin adaptador no rompe la pipeline: descarta la respuesta. _(`test_unknown_channel_drops_reply_without_crash`)_
+
+## Agente Customer (respondedor conversacional)
+
+- Un mensaje nuevo le llega al responder con el system prompt y el turno del usuario. _(`test_fresh_text_message_goes_to_responder_with_system_and_user`)_
+- Una conversación en curso le pasa el historial completo al responder y agrega el nuevo par. _(`test_continuing_conversation_sends_history_and_appends_new_pair`)_
+- Sin clave de API el responder falla al saludo y el historial igual registra el turno. _(`test_unconfigured_responder_falls_back_to_greeting_and_logs_turns`)_
+- Un mensaje sin texto saluda sin consultar al responder ni registrar turno de usuario. _(`test_textless_message_greets_without_calling_responder`)_
+- El handler respeta el fallback y el system prompt personalizados que recibe. _(`test_build_handler_uses_custom_fallback_and_system_prompt`)_
+- Sin OPENAI_API_KEY, el responder OpenAI lanza ResponderNotConfigured. _(`test_openai_responder_raises_not_configured_without_key`)_
+- El responder OpenAI mapea roles y contenido y devuelve el texto del modelo. _(`test_openai_responder_maps_messages_and_returns_model_text`)_
+- Un modelo que no produce texto dispara ResponderError. _(`test_openai_responder_raises_when_model_returns_empty_reply`)_
+- Con catálogo vacío el responder recibe la nota 'sin resultados' y el historial no la guarda. _(`test_product_query_with_empty_catalog_injects_no_stock_note`)_
+- Con candidatos, la nota lista nombre oficial y SKU de cada producto. _(`test_catalog_candidates_become_note_listing_names_and_skus`)_
+- Un error de base de datos omite la nota y el responder igual contesta. _(`test_searcher_database_error_skips_note_and_keeps_reply`)_
+- Sin searcher, la lista de mensajes mantiene la forma del slice 1: system + historial + usuario. _(`test_handler_without_searcher_keeps_slice1_message_shape`)_
+- En una conversación en curso, la nota va después del historial y justo antes del último turno del usuario. _(`test_note_lands_after_history_and_before_latest_user_turn`)_
 
 ## Ciclo de vida del pedido
 

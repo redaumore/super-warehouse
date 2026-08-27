@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName, Orchestrator, route_message
+from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route_message
 from src.orchestrator.session import ConversationState, ConversationStore, ResolvedItem
 
 
@@ -172,7 +172,7 @@ def _capturing_handler(updated_state):
 
     def handler(message, state, decision):
         calls.append((message, state, decision))
-        return updated_state
+        return AgentOutcome(state=updated_state)
 
     calls: list = []
     return handler, calls
@@ -184,9 +184,9 @@ def test_orchestrator_routes_and_persists_context():
     handler, calls = _capturing_handler(_state(sender_id="+5491155551234", customer_id=3, order_id=7))
     orchestrator = Orchestrator(store, agents={AgentName.CUSTOMER: handler})
 
-    decision = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
+    result = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
 
-    assert decision.agent is AgentName.CUSTOMER
+    assert result.decision.agent is AgentName.CUSTOMER
     assert len(calls) == 1
     assert calls[0][1] is None  # no prior context on first message
     assert store.get("+5491155551234") is not None  # context persisted
@@ -204,9 +204,9 @@ def test_orchestrator_resumes_order_after_owner_wait():
     )
     orchestrator = Orchestrator(store, agents={AgentName.DISPATCH: dispatch_handler})
 
-    decision = orchestrator.handle_inbound(_message(text="sí, aprobá"))
+    result = orchestrator.handle_inbound(_message(text="sí, aprobá"))
 
-    assert decision.agent is AgentName.DISPATCH
+    assert result.decision.agent is AgentName.DISPATCH
     assert dispatch_calls[0][1].order_id == 7  # context was loaded, not lost
     assert store.get("+5491155551234").awaiting_decision is False  # updated
 
@@ -218,3 +218,17 @@ def test_orchestrator_register_binds_handler():
     orchestrator = Orchestrator(store)
     orchestrator.register(AgentName.PERCEPTION, handler)
     assert orchestrator.agents[AgentName.PERCEPTION] is handler
+
+
+def test_orchestrator_surfaces_agent_reply():
+    """La respuesta que produce un agente viaja en el resultado del turno."""
+
+    def greeting_handler(message, _state, _decision):
+        return AgentOutcome(state=ConversationState(sender_id=message.sender_id), reply="hola")
+
+    orchestrator = Orchestrator(ConversationStore(), agents={AgentName.CUSTOMER: greeting_handler})
+
+    result = orchestrator.handle_inbound(_message(text="buenas"))
+
+    assert result.decision.agent is AgentName.CUSTOMER
+    assert result.reply == "hola"

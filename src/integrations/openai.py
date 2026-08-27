@@ -19,8 +19,10 @@ from typing import Any, cast
 
 from openai import OpenAI
 
+from src.agents.customer import CustomerResponder, ResponderError, ResponderNotConfigured
 from src.agents.perception import TranscriptionResult, VisionResult
 from src.config import Settings, get_settings
+from src.orchestrator.session import ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,46 @@ class OpenAIVisionAnalyzer:
         # content_filter, …) means the output is suspect.
         confidence = 1.0 if finish_reason == "stop" else 0.0
         return VisionResult(text=text, confidence=confidence)
+
+
+class OpenAIResponder(CustomerResponder):
+    """GPT chat client implementing the ``CustomerResponder`` protocol.
+
+    gpt-4o-mini is the default model for conversational replies. Missing
+    credentials surface as ``ResponderNotConfigured`` so the Customer agent
+    can fall back to its greeting without swallowing other provider errors.
+    """
+
+    def __init__(
+        self,
+        client: OpenAI | None = None,
+        *,
+        model: str = "gpt-4o-mini",
+        settings: Settings | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
+        self._holder = _ClientHolder(client, self.settings.openai_api_key)
+        self.model = model
+
+    def respond(self, messages: Sequence[ChatMessage]) -> str:
+        """Answer from the full message list (system + history + latest user turn)."""
+        try:
+            client = self._holder.client
+        except OpenAINotConfiguredError as exc:
+            raise ResponderNotConfigured(
+                "openai api key not configured (set OPENAI_API_KEY)"
+            ) from exc
+        completion = client.chat.completions.create(
+            model=self.model,
+            # The SDK overloads `messages` with typed param unions; a plain
+            # role/content dict list is accepted at runtime but needs the Any
+            # cast to match (same pattern as the transcriber's `file` arg).
+            messages=[cast(Any, {"role": m.role, "content": m.content}) for m in messages],
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        if not text:
+            raise ResponderError("model produced no reply")
+        return text
 
 
 class OpenAIEmbedder:

@@ -1,30 +1,52 @@
-"""Customer agent: phone normalization and identity resolution.
+"""Customer agent: catalog context injection and conversational replies.
 
-Normalizes an inbound phone string to a canonical E.164 form and resolves it
-against the `clientes` table. Argentine (country code 54) numbers are rendered
-in the WhatsApp mobile form (`+54 9 …`) so formatting variants reconcile to the
-same customer — the spec's "formatting differences reconciled" scenario.
+Every text turn is answered by the LLM responder over the full context
+(system prompt + prior history + the new message). Slice 2 adds a catalog
+search boundary: when a ``CatalogSearcher`` is wired, the turn's text is
+searched against `catalogo` and the results become a TRANSIENT system note
+injected right before the user turn — never persisted into history.
 
-Outcomes follow the clients-and-price-lists spec:
-- parseable and registered → ``KNOWN`` (pricing uses this customer's condition);
-- parseable but not registered → ``UNKNOWN`` (flagged for later onboarding);
-- unparseable → ``INVALID`` (never silently guessed).
+Because the catalog is currently empty, a product query returns no candidates
+and the note instructs the assistant to tell the customer the product is not
+in stock. A database error skips the note instead of failing the turn, so the
+conversation keeps answering while the DB is down.
 """
 
 from __future__ import annotations
 
 import enum
+import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 import phonenumbers
 from phonenumbers import PhoneNumber, PhoneNumberFormat
 from phonenumbers.phonenumberutil import NumberParseException
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.agents.disambiguation import SearchCandidate, search_catalog
+from src.channels.base import InboundMessage
 from src.db.models import Cliente
+from src.db.session import SessionLocal
+from src.orchestrator.router import AgentOutcome, RoutingDecision
+from src.orchestrator.session import ChatMessage, ConversationState
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_REGION = "AR"
+
+# Fallback reply when the LLM responder is unavailable.
+GREETING = "Que quieres viejo?"
+
+SYSTEM_PROMPT = (
+    "Sos el asistente de una ferretería de barrio que atiende por WhatsApp y Telegram. "
+    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos. "
+    "Tu trabajo es entender qué productos y cantidades busca el cliente para armarle el pedido. "
+    "Si no sabés algo, decilo y ofrecé consultar al dueño."
+)
 
 
 class PhoneStatus(str, enum.Enum):
@@ -82,3 +104,110 @@ def lookup_phone(session: Session, raw: str, *, region: str = _DEFAULT_REGION) -
     if customer is None:
         return PhoneLookup(status=PhoneStatus.UNKNOWN, normalized=normalized)
     return PhoneLookup(status=PhoneStatus.KNOWN, normalized=normalized, customer=customer)
+
+
+class ResponderError(Exception):
+    """Base error for the conversational responder."""
+
+
+class ResponderNotConfigured(ResponderError):
+    """Raised when the responder has no API key (caller may fall back)."""
+
+
+class CustomerResponder(Protocol):
+    """Mockable LLM boundary the Customer agent talks through (real impl: OpenAIResponder)."""
+
+    def respond(self, messages: Sequence[ChatMessage]) -> str:
+        """Answer the customer from the full message list (system + history + latest user turn)."""
+
+
+class CatalogSearcher(Protocol):
+    """Search boundary over the product catalog (real impl: DbCatalogSearcher)."""
+
+    def search(self, query: str) -> tuple[SearchCandidate, ...]:
+        """Return catalog candidates for ``query``, best first."""
+
+
+class DbCatalogSearcher:
+    """Catalog search backed by Postgres; one short-lived session per call.
+
+    The with-block closes the session even when the query raises, so the
+    Customer agent never leaks connections across turns.
+    """
+
+    def search(self, query: str) -> tuple[SearchCandidate, ...]:
+        """Open a session, run the hybrid catalog search, return candidates."""
+        with SessionLocal() as session:
+            return tuple(search_catalog(session, query, limit=3))
+
+
+def catalog_context_note(query: str, candidates: Sequence[SearchCandidate]) -> str:
+    """Render catalog search results as a transient system note (Spanish, rioplatense).
+
+    The note is product copy for the store's assistant: an empty result set
+    tells it the product is not in stock; candidates list the products the
+    reply must use.
+    """
+    if not candidates:
+        return (
+            f"Búsqueda en catálogo para «{query}»: sin resultados. "
+            "Si el cliente está preguntando por un producto, respondé que no lo tenemos en stock."
+        )
+    items = ", ".join(f"{c.nombre_oficial} ({c.sku})" for c in candidates)
+    return (
+        f"Búsqueda en catálogo para «{query}»: {len(candidates)} resultado(s): {items}. "
+        "Respondé usando estos productos."
+    )
+
+
+def build_handler(
+    responder: CustomerResponder,
+    *,
+    fallback_reply: str = GREETING,
+    system_prompt: str = SYSTEM_PROMPT,
+    searcher: CatalogSearcher | None = None,
+) -> Callable[[InboundMessage, ConversationState | None, RoutingDecision], AgentOutcome]:
+    """Build the Customer conversational handler around a mockable responder.
+
+    Every user turn is answered by the LLM over the full context (system prompt
+    + prior history + the new message); the greeting is only a fallback when
+    the responder has no API key or the message carries no text. When a
+    ``searcher`` is wired, catalog results for the turn's text become a
+    transient system note injected right before the user turn: it rides the
+    outgoing message list only and never enters history (which keeps user and
+    assistant turns). A SQLAlchemy error skips the note so the conversation
+    survives a down database.
+    """
+
+    def handler(
+        message: InboundMessage,
+        state: ConversationState | None,
+        _decision: RoutingDecision,
+    ) -> AgentOutcome:
+        history = state.history if state is not None else ()
+        base = state if state is not None else ConversationState(sender_id=message.sender_id)
+        text = (message.text or "").strip()
+        if not text:
+            reply = fallback_reply
+            new_history = (*history, ChatMessage("assistant", reply))
+        else:
+            messages = [ChatMessage("system", system_prompt), *history]
+            if searcher is not None:
+                try:
+                    candidates = searcher.search(text)
+                except SQLAlchemyError:
+                    logger.warning(
+                        "catalog search failed for query=%r; answering without catalog context",
+                        text,
+                    )
+                else:
+                    messages.append(ChatMessage("system", catalog_context_note(text, candidates)))
+            messages.append(ChatMessage("user", text))
+            try:
+                reply = responder.respond(messages)
+            except ResponderNotConfigured:
+                reply = fallback_reply
+            new_history = (*history, ChatMessage("user", text), ChatMessage("assistant", reply))
+        return AgentOutcome(state=base.with_updates(history=new_history), reply=reply)
+
+    return handler

@@ -46,16 +46,32 @@ class RoutingDecision:
     context_loaded: bool = False
 
 
+@dataclass(frozen=True)
+class AgentOutcome:
+    """Result of one agent turn; a handler may omit the reply (pipeline falls back to its skeleton echo)."""
+
+    state: ConversationState | None = None
+    reply: str | None = None
+
+
 class AgentHandler(Protocol):
-    """An agent handler: message + current context + routing → updated context."""
+    """An agent handler: message + current context + routing → turn outcome (state, optional reply)."""
 
     def __call__(
         self,
         message: InboundMessage,
         state: ConversationState | None,
         decision: RoutingDecision,
-    ) -> ConversationState | None:
-        """Process ``message`` and return the updated conversation state."""
+    ) -> AgentOutcome | None:
+        """Process ``message`` and return the updated state and optional reply."""
+
+
+@dataclass(frozen=True)
+class TurnResult:
+    """One orchestrator turn — where the message went and the agent's optional reply."""
+
+    decision: RoutingDecision
+    reply: str | None = None
 
 
 def route_message(
@@ -91,27 +107,30 @@ class Orchestrator:
     def __init__(
         self,
         store: ConversationStore,
-        agents: dict[AgentName, Callable[..., ConversationState | None]] | None = None,
+        agents: dict[AgentName, Callable[..., AgentOutcome | None]] | None = None,
     ) -> None:
         self.store = store
-        self.agents: dict[AgentName, Callable[..., ConversationState | None]] = agents or {}
+        self.agents: dict[AgentName, Callable[..., AgentOutcome | None]] = agents or {}
 
-    def register(self, agent: AgentName, handler: Callable[..., ConversationState | None]) -> None:
+    def register(
+        self, agent: AgentName, handler: Callable[..., AgentOutcome | None]
+    ) -> None:
         """Bind an agent handler to its name."""
         self.agents[agent] = handler
 
-    def handle_inbound(self, message: InboundMessage) -> RoutingDecision:
+    def handle_inbound(self, message: InboundMessage) -> TurnResult:
         """Process one inbound message through the routed agent.
 
         Context is loaded before routing and persisted after the handler, so a
-        multi-step order never loses its identity between agents.
+        multi-step order never loses its identity between agents. The agent's
+        optional reply rides the turn result back to the pipeline.
         """
         state = self.store.get(message.sender_id)
         decision = route_message(message, state)
         handler = self.agents.get(decision.agent)
-        updated = None
+        outcome = None
         if handler is not None:
-            updated = handler(message, state, decision)
-        if updated is not None:
-            self.store.put(updated)
-        return decision
+            outcome = handler(message, state, decision)
+        if outcome is not None and outcome.state is not None:
+            self.store.put(outcome.state)
+        return TurnResult(decision=decision, reply=outcome.reply if outcome else None)

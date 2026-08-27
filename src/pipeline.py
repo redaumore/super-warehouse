@@ -2,21 +2,38 @@
 
 Composes the real ``Orchestrator`` (router + in-memory session store) with thin
 stub agent handlers and sends a reply back on the inbound channel, so a message
-round-trips end-to-end through routing and persistence without yet needing
-OpenAI/Postgres/Sheets. Real agents replace the stubs incrementally.
+round-trips end-to-end through routing and persistence. Customer replies come
+from the LLM responder (OpenAI, greeting fallback when unconfigured) and each
+text turn also queries Postgres for catalog context (``DbCatalogSearcher``),
+which degrades gracefully — no catalog note — when the DB is down; the other
+five agents stay stubs.
 
 The reply is bridged at the pipeline edge: the sync ``Orchestrator`` returns a
-``RoutingDecision``, and this module composes the reply text and sends it via the
-async channel adapter (``Channel.send_text``).
+``TurnResult``, and the reply comes from the routed agent when it provides one;
+``_reply_for`` composes the skeleton echo (media ack + stage echo) only as a
+fallback for the stub agents and sends the text via the async channel adapter
+(``Channel.send_text``).
 """
 
 from __future__ import annotations
 
 import logging
 
+from src.agents.customer import (
+    CatalogSearcher,
+    CustomerResponder,
+    DbCatalogSearcher,
+    build_handler,
+)
 from src.channels import CHANNELS
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName, Orchestrator, RoutingDecision
+from src.integrations.openai import OpenAIResponder
+from src.orchestrator.router import (
+    AgentName,
+    AgentOutcome,
+    Orchestrator,
+    RoutingDecision,
+)
 from src.orchestrator.session import ConversationState, ConversationStore
 
 logger = logging.getLogger(__name__)
@@ -26,18 +43,28 @@ def _stub_agent(
     message: InboundMessage,
     state: ConversationState | None,
     _decision: RoutingDecision,
-) -> ConversationState:
+) -> AgentOutcome:
     """Walking-skeleton agent stub: no domain work — preserve (or seed) context."""
     if state is not None:
-        return state.with_updates()
-    return ConversationState(sender_id=message.sender_id)
+        return AgentOutcome(state=state.with_updates())
+    return AgentOutcome(state=ConversationState(sender_id=message.sender_id))
 
 
-def build_orchestrator() -> Orchestrator:
-    """Build the app's orchestrator with all six agents bound to stubs."""
+def build_orchestrator(
+    responder: CustomerResponder | None = None,
+    searcher: CatalogSearcher | None = None,
+) -> Orchestrator:
+    """Build the app's orchestrator: Customer is wired to the real OpenAI-backed responder (greeting fallback when unconfigured) plus a Postgres-backed catalog searcher for context injection; the other five stay walking-skeleton stubs."""
     orchestrator = Orchestrator(ConversationStore())
     for agent in AgentName:
         orchestrator.register(agent, _stub_agent)
+    orchestrator.register(
+        AgentName.CUSTOMER,
+        build_handler(
+            responder or OpenAIResponder(),
+            searcher=searcher if searcher is not None else DbCatalogSearcher(),
+        ),
+    )
     return orchestrator
 
 
@@ -46,8 +73,10 @@ def build_orchestrator() -> Orchestrator:
 ORCHESTRATOR: Orchestrator = build_orchestrator()
 
 
-def _reply_for(message: InboundMessage, decision: RoutingDecision) -> str:
-    """Compose the walking-skeleton reply for one routing decision."""
+def _reply_for(message: InboundMessage, decision: RoutingDecision, reply: str | None) -> str:
+    """Compose the walking-skeleton reply for one turn; the agent's reply wins, echo is fallback."""
+    if reply is not None:
+        return reply
     if decision.media_kind == "voice":
         return "Recibí tu nota de voz (transcripción pendiente)."
     if decision.media_kind == "image":
@@ -61,8 +90,8 @@ def _reply_for(message: InboundMessage, decision: RoutingDecision) -> str:
 
 async def handle_inbound(message: InboundMessage) -> None:
     """Route one inbound message through the orchestrator and reply on its channel."""
-    decision = ORCHESTRATOR.handle_inbound(message)
-    reply = _reply_for(message, decision)
+    result = ORCHESTRATOR.handle_inbound(message)
+    reply = _reply_for(message, result.decision, result.reply)
     adapter = CHANNELS.get(message.channel)
     if adapter is None:
         logger.warning("no adapter for channel=%s; reply dropped", message.channel)

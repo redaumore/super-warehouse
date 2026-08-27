@@ -14,10 +14,12 @@ Prerequisites:
     - ``TELEGRAM_BOT_TOKEN`` set in ``.env``.
     - ``ngrok`` installed AND authed (``ngrok config add-authtoken <token>``).
     - ``FASE2_ENABLED=true`` (the default) so the webhook dispatches the handler.
+    - Postgres up (``make db-up``) for catalog context; when it is down the
+      replies degrade gracefully and skip the catalog note.
 
 This exercises the same ``/webhook/telegram`` endpoint, ``TelegramChannel``
 adapter and orchestrator routing as production, but with stub agents (no
-OpenAI/Postgres needed).
+OpenAI needed); the Customer agent queries Postgres for catalog context.
 """
 
 from __future__ import annotations

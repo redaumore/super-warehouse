@@ -24,6 +24,14 @@ class ResolvedItem:
     description: str | None = None
 
 
+@dataclass(frozen=True)
+class ChatMessage:
+    """One conversational turn (role ∈ {"system", "user", "assistant"})."""
+
+    role: str
+    content: str
+
+
 @dataclass
 class ConversationState:
     """Context for one sender's order, preserved across pipeline steps."""
@@ -33,6 +41,7 @@ class ConversationState:
     order_id: int | None = None
     items: tuple[ResolvedItem, ...] = ()
     awaiting_decision: bool = False
+    history: tuple[ChatMessage, ...] = ()  # multi-turn chat log shared by agents
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def with_updates(self, **changes: Any) -> ConversationState:
