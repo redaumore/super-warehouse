@@ -321,10 +321,7 @@ def _run_sourcing_turn(
                 sourcing_candidates=candidates,
             )
         else:
-            from src.sourcing.case_c import (  # type: ignore[import-not-found]  # wired in S6
-                cancel_for_no_supplier,
-                persist_case_c_order,
-            )
+            from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
 
             order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
             cancel_for_no_supplier(

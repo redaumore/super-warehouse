@@ -67,10 +67,10 @@ User budget override: 2500 lines. Estimated ~3300 → over custom budget AND ove
 
 ## Phase 5: S5 — Case B Multi-Turn Selection + Accumulation
 
-- [ ] 5.1 Create `src/sourcing/persistence.py`: `upsert_sourcing_need`, `record_supplier_selection` (writes nullable `SourcingNeed.supplier_id`; re-selection updates before PO execution).
-- [ ] 5.2 Create `src/sourcing/case_b.py`: `list_missing_with_suppliers` (calls searcher) + `confirm_selection` (calls `accumulate_need`, sets sourcing=IN_PREPARATION).
-- [ ] 5.3 Modify `src/agents/customer.py` Case B reply: list each missing item + candidate suppliers.
-- [ ] 5.4 Add `tests/test_case_b.py` (orchestrator e2e) and `tests/test_sourcing_persistence.py` (selection survives 30-min TTL via DB rehydration).
+- [x] 5.1 Create `src/sourcing/persistence.py`: `upsert_sourcing_need`, `record_supplier_selection` (writes nullable `SourcingNeed.supplier_id`; re-selection updates before PO execution).
+- [x] 5.2 Create `src/sourcing/case_b.py`: `list_missing_with_suppliers` (calls searcher) + `confirm_selection` (calls `accumulate_need`, sets sourcing=IN_PREPARATION).
+- [x] 5.3 Modify `src/agents/customer.py` Case B reply: list each missing item + candidate suppliers.
+- [x] 5.4 Add `tests/test_case_b.py` (orchestrator e2e) and `tests/test_sourcing_persistence.py` (selection survives 30-min TTL via DB rehydration).
 
 ## Phase 6: S6 — Case C Cancellation + Notify
 

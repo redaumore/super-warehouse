@@ -39,7 +39,7 @@ def persist_case_b_order(
     session: Session,
     customer: Cliente,
     *,
-    delivery_date: date | None,
+    delivery_date: date | None = None,
     missing: tuple[MissingItem, ...],
 ) -> Order:
     """Persist the order with sourcing IN_PREPARATION and its SourcingNeed rows.
