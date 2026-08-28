@@ -13,9 +13,12 @@ from src.db.models import (
     Base,
     Catalogo,
     Cliente,
+    IvaCondition,
     Order,
     OrderEstado,
     SourcingState,
+    Supplier,
+    SupplierStatus,
     SupplierPurchaseOrderState,
 )
 
@@ -30,8 +33,8 @@ def test_all_design_entities_are_modeled():
         "lista_precios",
         "clientes",
         "catalogo",
-        "proveedores",
-        "proveedor_sku_mapping",
+        "suppliers",
+        "supplier_sku_mappings",
         "stock_reservations",
         "orders",
         "order_items",
@@ -95,6 +98,51 @@ def test_po_state_enum_values():
     }
 
 
+def test_supplier_status_enum_values():
+    """El enum SupplierStatus tiene exactamente ACTIVO e INACTIVO."""
+    assert {m.value for m in SupplierStatus} == {"ACTIVO", "INACTIVO"}
+
+
+def test_iva_condition_enum_values():
+    """El enum IvaCondition tiene exactamente los cinco valores confirmados."""
+    assert {m.value for m in IvaCondition} == {
+        "RESPONSABLE_INSCRIPTO",
+        "MONOTRIBUTO",
+        "EXENTO",
+        "CONSUMIDOR_FINAL",
+        "NO_RESPONSABLE",
+    }
+
+
+def test_supplier_model_has_master_data_columns():
+    """El modelo suppliers expone las columnas de datos maestros."""
+    cols = set(Supplier.__table__.c.keys())
+    assert {
+        "id",
+        "business_name",
+        "contact_name",
+        "phone",
+        "default_margin_pct",
+        "terms",
+        "cuit",
+        "address",
+        "email",
+        "whatsapp",
+        "code",
+        "iva_condition",
+        "status",
+    }.issubset(cols)
+
+
+def test_supplier_code_and_cuit_indexes():
+    """code tiene índice único; cuit único parcial cuando no es NULL."""
+    indexes = {index.name: index for index in Supplier.__table__.indexes}
+    assert "uq_suppliers_code" in indexes
+    assert indexes["uq_suppliers_code"].unique is True
+    assert "uq_suppliers_cuit" in indexes
+    assert indexes["uq_suppliers_cuit"].unique is True
+
+
 def test_catalogo_has_vector_1536_embedding():
     """La columna `catalogo.embedding` se declara como pgvector vector(1536).
 
@@ -133,8 +181,8 @@ def test_migration_creates_all_tables(db_inspector):
         "lista_precios",
         "clientes",
         "catalogo",
-        "proveedores",
-        "proveedor_sku_mapping",
+        "suppliers",
+        "supplier_sku_mappings",
         "stock_reservations",
         "orders",
         "order_items",
