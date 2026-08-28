@@ -101,6 +101,14 @@ def test_parse_customer_name_best_effort(parser):
     assert parser.parse("para don roberto, 10 clavos").customer_name == "Don roberto"
 
 
+def test_parse_customer_name_with_cliente_keyword(parser):
+    """El dueño identifica al cliente con 'cliente <nombre>' (owner pivot)."""
+    order = parser.parse("cliente ferretería don juan: 10 clavos")
+    assert order.customer_name == "Ferretería don juan"
+    order = parser.parse("cliente pinturería san martín, 5 latas")
+    assert order.customer_name == "Pinturería san martín"
+
+
 def test_parse_non_order_message_returns_none(parser):
     """Un mensaje sin intención de pedido no se parsea como orden."""
     assert parser.parse("hola que tal") is None

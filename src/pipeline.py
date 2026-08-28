@@ -1,32 +1,37 @@
-"""Walking-skeleton pipeline: orchestrator + agent stubs + channel reply.
+"""Walking-skeleton pipeline: owner gate + orchestrator + agent handlers.
 
-Composes the real ``Orchestrator`` (router + in-memory session store) with thin
-stub agent handlers and sends a reply back on the inbound channel, so a message
-round-trips end-to-end through routing and persistence. Customer replies come
-from the LLM responder (OpenAI, greeting fallback when unconfigured) and each
-text turn also queries Postgres for catalog context (``DbCatalogSearcher``),
-which degrades gracefully — no catalog note — when the DB is down; the other
-agents stay stubs.
+Composes the real ``Orchestrator`` (router + in-memory session store) with
+agent handlers and sends a reply back on the inbound channel, so a message
+round-trips end-to-end through routing and persistence. The owner is the only
+chat actor: every inbound message is gated at the pipeline edge
+(``src/orchestrator/owner.py``) BEFORE routing; non-owner senders get a polite
+rejection and are never routed. Customer replies come from the LLM responder
+(OpenAI, greeting fallback when unconfigured) and each text turn also queries
+Postgres for catalog context (``DbCatalogSearcher``), which degrades
+gracefully — no catalog note — when the DB is down.
 
-When the owner phone is configured, the order-sourcing workflow is enabled:
-the parse step extracts structured order fields before the Customer agent, the
-Customer handler classifies each order into Case A/B/C, and the SOURCING agent
-handles the owner's supplier-selection replies. The conversation store is wired
-to rehydrate expired conversations from the database, so a multi-turn Case B
-selection survives the 30-minute in-memory TTL. Clearing ``OWNER_PHONE`` turns
-the parse step off and keeps the legacy conversational intake.
+When an owner sender key is configured, the order-sourcing workflow is
+enabled: the parse step extracts structured order fields (customer name, items,
+delivery date) before the Customer agent, the Customer handler resolves the
+customer by name and classifies each order into Case A/B/C, the SOURCING agent
+handles the owner's supplier-selection replies, and the DISPATCH agent runs the
+real approval flow (``parse_decision`` → ``apply_decision`` →
+``register_approved_order`` with the ``SheetsWriter``). The conversation store
+is wired to rehydrate expired conversations from the database (latest open
+order across customers), so multi-turn flows survive the 30-minute in-memory
+TTL. Clearing both owner keys disables the parse step and keeps the legacy
+conversational intake.
 
-The reply is bridged at the pipeline edge: the sync ``Orchestrator`` returns a
-``TurnResult``, and the reply comes from the routed agent when it provides one;
-``_reply_for`` composes the skeleton echo (media ack + stage echo) only as a
-fallback for the stub agents and sends the text via the async channel adapter
-(``Channel.send_text``).
+Quotes, cancellations and approvals are IN-CHAT replies: the old
+``_ChannelNotifier`` owner push (``owner_phone``) is gone — the pipeline edge
+owns the single outbound send. The webhook ACKs before this background handler
+runs, so the 5-second SLA is never affected.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
+from collections.abc import Callable
 
 from src.agents.customer import (
     CatalogSearcher,
@@ -35,12 +40,15 @@ from src.agents.customer import (
     SourcingDeps,
     build_handler,
 )
+from src.agents.dispatch import build_dispatch_handler
 from src.agents.intake import OrderParser, SimpleOrderParser
 from src.channels import CHANNELS
-from src.channels.base import Channel, InboundMessage
+from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIResponder
+from src.integrations.sheets import SheetsWriter
+from src.orchestrator.owner import is_owner_sender, rejection_reply
 from src.orchestrator.router import (
     AgentName,
     AgentOutcome,
@@ -52,28 +60,6 @@ from src.sourcing.case_b import build_sourcing_handler
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
-
-
-class _ChannelNotifier:
-    """Bridges the sync Notifier protocol to an async channel adapter.
-
-    The orchestrator runs inside the async intake handler, so a running event
-    loop exists when notifications are sent; each send is scheduled as a
-    background task on that loop. Without a loop the notification is dropped
-    with a warning (never raises).
-    """
-
-    def __init__(self, channel: Channel) -> None:
-        """Wrap one channel adapter as a sync Notifier bridge."""
-        self._channel = channel
-
-    def send_text(self, recipient: str, text: str) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            logger.warning("notification dropped (no event loop): %s", text[:80])
-            return
-        loop.create_task(self._channel.send_text(recipient, text))
 
 
 def _stub_agent(
@@ -93,17 +79,15 @@ def _sourcing_deps() -> SourcingDeps | None:
     The supplier searcher is the in-memory fake (empty candidate list) until
     the external RAG exists: every missing item then classifies as Case C —
     the safe degraded behavior — and the owner swaps in a real searcher later.
+    The flow is enabled by configuring an owner sender key (either channel);
+    with both keys empty the legacy intake keeps working.
     """
     settings = get_settings()
-    if not settings.owner_phone:
+    if not (settings.owner_telegram_chat_id or settings.owner_whatsapp_phone):
         return None
-    from src.channels import CHANNELS
-
     return SourcingDeps(
         session_factory=SessionLocal,
         searcher=FakeSupplierCatalogSearcher(),
-        notifier=_ChannelNotifier(CHANNELS["telegram"]),
-        owner_phone=settings.owner_phone,
     )
 
 
@@ -113,14 +97,18 @@ def build_orchestrator(
     *,
     sourcing: SourcingDeps | None = None,
     parser: OrderParser | None = None,
+    dispatch: Callable[..., AgentOutcome | None] | None = None,
+    sheets: SheetsWriter | None = None,
 ) -> Orchestrator:
     """Build the app's orchestrator.
 
     Customer is wired to the real OpenAI-backed responder (greeting fallback
     when unconfigured) plus a Postgres-backed catalog searcher; the other
     agents stay walking-skeleton stubs. With ``sourcing`` wired, the parse
-    step and the SOURCING confirm agent are enabled and the store rehydrates
-    expired conversations from the database.
+    step, the SOURCING confirm agent and the wired DISPATCH approval flow are
+    enabled, and the store rehydrates expired conversations from the database.
+    ``dispatch``/``sheets`` are injectable for tests; production uses
+    ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
     """
     rehydrator = None
     if sourcing is not None:
@@ -144,6 +132,12 @@ def build_orchestrator(
     )
     if sourcing is not None:
         orchestrator.register(AgentName.SOURCING, build_sourcing_handler(SessionLocal))
+        dispatcher = (
+            dispatch
+            if dispatch is not None
+            else build_dispatch_handler(SessionLocal, sheets or SheetsWriter())
+        )
+        orchestrator.register(AgentName.DISPATCH, dispatcher)
     return orchestrator
 
 
@@ -179,10 +173,26 @@ def _reply_for(message: InboundMessage, decision: RoutingDecision, reply: str | 
 
 
 async def handle_inbound(message: InboundMessage) -> None:
-    """Route one inbound message through the orchestrator and reply on its channel."""
+    """Route one inbound message through the orchestrator and reply on its channel.
+
+    The owner gate runs FIRST, at the pipeline edge: a non-owner sender gets a
+    polite rejection and is never routed — no order is created, quoted or
+    approved for them. The webhook already ACKed before this background task
+    runs, so the gate never delays the 5-second SLA.
+    """
+    settings = get_settings()
+    adapter = CHANNELS.get(message.channel)
+    if not is_owner_sender(message.sender_id, message.channel, settings):
+        if adapter is None:
+            logger.warning("no adapter for channel=%s; rejection dropped", message.channel)
+            return
+        try:
+            await adapter.send_text(message.sender_id, rejection_reply())
+        except Exception:
+            logger.exception("rejection reply failed on channel=%s", message.channel)
+        return
     result = ORCHESTRATOR.handle_inbound(message)
     reply = _reply_for(message, result.decision, result.reply)
-    adapter = CHANNELS.get(message.channel)
     if adapter is None:
         logger.warning("no adapter for channel=%s; reply dropped", message.channel)
         return

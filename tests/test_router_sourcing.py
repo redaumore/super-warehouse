@@ -14,7 +14,9 @@ from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route
 from src.orchestrator.session import ConversationState, ConversationStore
 
 
-def _message(*, text: str | None = None, media_type: str | None = None, sender: str = "+5491155551234") -> InboundMessage:
+def _message(
+    *, text: str | None = None, media_type: str | None = None, sender: str = "+5491155551234"
+) -> InboundMessage:
     return InboundMessage(channel="whatsapp", sender_id=sender, text=text, media_type=media_type)
 
 
@@ -41,6 +43,18 @@ def test_approval_decision_still_routes_to_dispatch_first():
     state = _state(order_id=7, awaiting_decision=True, sourcing_selection_pending=True)
     decision = route_message(_message(text="aprobá"), state)
     assert decision.agent is AgentName.DISPATCH
+
+
+def test_customer_disambiguation_pending_routes_to_customer():
+    """Un cliente ambiguo pendiente de elegir sigue yendo al Customer agent."""
+    state = _state(
+        sender="+5491100000000",
+        customer_disambiguation_pending=True,
+        customer_candidates=(),
+    )
+    decision = route_message(_message(text="1", sender="+5491100000000"), state)
+    assert decision.agent is AgentName.CUSTOMER
+    assert decision.context_loaded is True
 
 
 def test_fresh_text_without_pending_selection_routes_to_customer():

@@ -80,7 +80,7 @@ _ITEM_RE = re.compile(
     re.IGNORECASE,
 )
 _NAME_RE = re.compile(
-    r"(?:soy|para|de parte de)\s+"
+    r"(?:soy|para|de parte de|cliente)\s+"
     r"([a-záéíóúñü]+(?:\s+(?!y\b|quiero\b|necesito\b|necesitamos\b|comprar\b)[a-záéíóúñü]+){0,3})",
     re.IGNORECASE,
 )

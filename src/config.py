@@ -52,8 +52,16 @@ class Settings(BaseSettings):
     google_sheets_credentials_file: str = ""
     google_sheets_spreadsheet_key: str = ""
 
-    # Owner contact: notifications (quotes, supplier selections, cancellations)
-    # go here. Empty disables the sourcing flow (legacy intake routing).
+    # Owner sender allowlist. The owner is the ONLY chat actor: every inbound
+    # message is gated against these keys before routing (Telegram senders are
+    # chat ids, WhatsApp senders are phone numbers). When both are empty the
+    # gate is open and the legacy customer intake keeps working (rollback path).
+    owner_telegram_chat_id: str = ""
+    owner_whatsapp_phone: str = ""
+
+    # DEPRECATED: legacy owner notification target (quotes/cancellations pushed
+    # over Telegram). Kept parseable so old .env files still load; the owner
+    # push was removed — replies now travel in the owner's chat.
     owner_phone: str = ""
 
     # Hybrid catalog search thresholds (confidence in [0, 1]).

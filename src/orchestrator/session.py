@@ -9,10 +9,12 @@ not linger; the pipeline keeps state here instead of in module globals.
 The sourcing axis extends the state with the Case B supplier-selection turn:
 ``sourcing_selection_pending`` marks an owner reply that must reach the
 SOURCING confirm flow, and ``sourcing_needs``/``sourcing_candidates`` carry the
-missing items and the supplier options shown. Because the in-memory store
-expires after 30 minutes, ``rehydrate_conversation`` rebuilds a sender's state
-from the database (latest open Order + its SourcingNeed rows) — the DB is the
-source of truth for the multi-turn selection, so it survives the TTL.
+missing items and the supplier options shown. The owner-pivot axis adds
+``customer_disambiguation_pending``/``customer_candidates`` for the numbered
+customer-name menu. Because the in-memory store expires after 30 minutes,
+``rehydrate_conversation`` rebuilds the OWNER's state from the database (latest
+open Order across all customers + its SourcingNeed rows) — the DB is the source
+of truth for the multi-turn flows, so they survive the TTL.
 """
 
 from __future__ import annotations
@@ -83,6 +85,9 @@ class ConversationState:
     sourcing_selection_pending: bool = False  # awaiting the owner's supplier choice
     sourcing_needs: tuple[SourcingNeedItem, ...] = ()
     sourcing_candidates: tuple[SupplierCandidate, ...] = ()
+    # Owner pivot axis: customer-name disambiguation (numbered menu pick).
+    customer_disambiguation_pending: bool = False  # awaiting the owner's client pick
+    customer_candidates: tuple[Cliente, ...] = ()  # the numbered menu options
 
     def with_updates(self, **changes: Any) -> ConversationState:
         """Return a copy with the given fields replaced and the clock touched."""
@@ -150,27 +155,30 @@ def rehydrate_conversation(
     sender_id: str,
     *,
     searcher: SupplierCatalogSearcher | None = None,
+    order_ref: int | None = None,
 ) -> ConversationState | None:
-    """Rebuild a sender's state from the DB when the in-memory entry is gone.
+    """Rebuild the owner's state from the DB when the in-memory entry is gone.
 
-    Uses the sender's latest non-rejected Order plus its SourcingNeed rows.
-    A Case B order still awaiting supplier choices is restored with
-    ``sourcing_selection_pending`` and the supplier candidates recomputed
-    through the searcher; a Case A order awaiting approval restores
+    Owner-keyed: the latest open Order across ALL customers is restored (there
+    is no owner entity — the latest open order IS the owner's, per the design).
+    An explicit ``order_ref`` (``pedido #N``) targets that specific order
+    instead of the latest. The state carries the order's items, its SourcingNeed
+    rows and the routing flags: a Case B order still awaiting supplier choices
+    is restored with ``sourcing_selection_pending`` and the candidates
+    recomputed through the searcher; a Case A order awaiting approval restores
     ``awaiting_decision`` so the owner's approve/reject reply routes correctly.
     """
-    customer = session.scalar(select(Cliente).where(Cliente.telefono_norm == sender_id))
-    if customer is None:
-        return None
-    order = session.scalar(
-        select(Order)
-        .where(
-            Order.customer_id == customer.customer_id,
-            Order.estado != OrderEstado.REJECTED,
+    if order_ref is not None:
+        order = session.get(Order, order_ref)
+        if order is None or order.estado is OrderEstado.REJECTED:
+            return None
+    else:
+        order = session.scalar(
+            select(Order)
+            .where(Order.estado == OrderEstado.PENDING_APPROVAL)
+            .order_by(Order.order_id.desc())
+            .limit(1)
         )
-        .order_by(Order.order_id.desc())
-        .limit(1)
-    )
     if order is None:
         return None
     items = tuple(ResolvedItem(sku=item.sku, cantidad=item.cantidad) for item in order.items)
@@ -222,7 +230,7 @@ def rehydrate_conversation(
         candidates = tuple(collected)
     return ConversationState(
         sender_id=sender_id,
-        customer_id=customer.customer_id,
+        customer_id=order.customer_id,
         order_id=order.order_id,
         items=items,
         awaiting_decision=awaiting_decision,

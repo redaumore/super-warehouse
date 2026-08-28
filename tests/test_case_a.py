@@ -1,10 +1,11 @@
-"""Case A orchestrator e2e tests (task 4.4).
+"""Case A orchestrator e2e tests (owner pivot).
 
 Drives the sourcing flow through the real orchestrator with a fake responder,
-a fake (empty) supplier searcher and a recording notifier: a full-stock text
-order is parsed, classified Case A, persisted through the existing
-reservation + quotation flow with sourcing PENDING_ASSEMBLY and the delivery
-date stored, and the owner receives the quote (approval flow unchanged).
+a fake (empty) supplier searcher and the owner sender: a full-stock text order
+naming its customer is parsed, the customer is resolved by NAME, classified
+Case A, persisted through the existing reservation + quotation flow with
+sourcing PENDING_ASSEMBLY and the delivery date stored, and the quote is the
+agent's IN-CHAT reply (no owner push — the notifier bridge is gone).
 """
 
 from __future__ import annotations
@@ -34,12 +35,13 @@ from src.db.models import (
     SourcingState,
     StockReservation,
 )
+from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.router import AgentName, Orchestrator
 from src.orchestrator.session import ConversationStore
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
-OWNER_PHONE = "+5491100000000"
-CUSTOMER_PHONE = "+5491155551234"
+OWNER_SENDER = "+5491100000000"
+CUSTOMER_NAME = "Ferretería Don Juan"
 
 
 class FakeResponder:
@@ -49,14 +51,17 @@ class FakeResponder:
         raise AssertionError("the sourcing flow must not call the LLM responder")
 
 
-class FakeNotifier:
-    """Records outbound sends; never touches the network."""
+class FakeSheets:
+    """Append-only Sheets stand-in: records rows, always APPENDED."""
 
-    def __init__(self):
-        self.sent: list[tuple[str, str]] = []
+    def __init__(self) -> None:
+        self.rows: list[tuple[int, str]] = []
 
-    def send_text(self, recipient, text):
-        self.sent.append((recipient, text))
+    def append_order_row(
+        self, order_id, *, customer_name=None, total=None, items_summary="", registered_at=None
+    ):
+        self.rows.append((order_id, items_summary))
+        return SheetsWriteStatus.APPENDED
 
 
 def _postgres_up() -> bool:
@@ -85,15 +90,13 @@ def shop(db_session):
     """Catalog with 50 units on hand, a customer and a supplier."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0)
-        )
+        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
     )
     db_session.add(
         Cliente(
             customer_id=1,
-            nombre_comercial="Ferretería Don Juan",
-            telefono_norm=CUSTOMER_PHONE,
+            nombre_comercial=CUSTOMER_NAME,
+            telefono_norm="+5491155551234",
             lista_precios_id=1,
             descuento_particular_pct=Decimal(0),
         )
@@ -118,38 +121,37 @@ def shop(db_session):
     return {"session": db_session}
 
 
-def _orchestrator(session, notifier) -> Orchestrator:
+def _orchestrator(session) -> Orchestrator:
     deps = SourcingDeps(
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
-        notifier=notifier,
-        owner_phone=OWNER_PHONE,
     )
     store = ConversationStore()
     orchestrator = Orchestrator(store, parser=SimpleOrderParser())
     orchestrator.register(
-        AgentName.CUSTOMER, build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
+        AgentName.CUSTOMER,
+        build_handler(FakeResponder(), sourcing=deps),  # type: ignore[arg-type]
     )
     return orchestrator
 
 
 def _message(text: str) -> InboundMessage:
-    return InboundMessage(channel="whatsapp", sender_id=CUSTOMER_PHONE, text=text)
+    return InboundMessage(channel="whatsapp", sender_id=OWNER_SENDER, text=text)
 
 
 def test_full_stock_order_flows_through_case_a(shop):
-    """Un pedido con stock completo crea la orden Case A y cotiza al dueño."""
+    """Un pedido con stock completo crea la orden Case A y cotiza en el chat del dueño."""
     session = shop["session"]
-    notifier = FakeNotifier()
-    orchestrator = _orchestrator(session, notifier)
+    orchestrator = _orchestrator(session)
 
     result = orchestrator.handle_inbound(
-        _message("quiero 10 clavos de 2 pulgadas para el viernes")
+        _message(f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas para el viernes")
     )
 
     assert result.decision.agent is AgentName.CUSTOMER
     assert result.decision.parsed is True
-    assert "Pedido #1 confirmado" in result.reply  # type: ignore[operator]
+    assert "Pedido #1 de Ferretería Don Juan confirmado" in result.reply  # type: ignore[operator]
+    assert "aprobá" in result.reply  # type: ignore[operator]  # in-chat quote asks approval
     assert "2026" in result.reply  # type: ignore[operator]  # delivery date shown
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
@@ -159,7 +161,9 @@ def test_full_stock_order_flows_through_case_a(shop):
     assert order.delivery_date is not None  # fuzzy "para el viernes" resolved
 
     # Standard reservation with the configured TTL (approval flow unchanged).
-    reservation = session.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
+    reservation = session.scalar(
+        select(StockReservation).where(StockReservation.order_id == order.order_id)
+    )
     assert reservation is not None
     assert reservation.estado is ReservationEstado.ACTIVE
     assert reservation.ttl_minutes == get_settings().reservation_ttl_minutes
@@ -170,34 +174,29 @@ def test_full_stock_order_flows_through_case_a(shop):
     assert item.final_price == Decimal("135.00")
     assert item.cantidad == 10
 
-    # The owner received the quote → the unchanged approval flow resumes.
-    assert len(notifier.sent) == 1
-    assert notifier.sent[0][0] == OWNER_PHONE
-    assert notifier.sent[0][1].startswith("Pedido #1")
+    # The conversation is awaiting the decision → the next owner reply routes
+    # to Dispatch (no external push was made).
+    state = orchestrator.store.get(OWNER_SENDER)
+    assert state is not None
+    assert state.awaiting_decision is True
+    assert state.order_id == order.order_id
 
 
 def test_case_a_order_can_be_approved_with_stock_deduction(shop):
     """La aprobación de un pedido Case A descuenta el Inventory canónico."""
     session = shop["session"]
-    notifier = FakeNotifier()
-    orchestrator = _orchestrator(session, notifier)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas"))
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
     from src.agents.dispatch import Decision, DecisionAction, apply_decision
-    from src.integrations.sheets import SheetsWriter
     from src.orchestrator.approval import register_approved_order
 
     apply_decision(session, order, Decision(action=DecisionAction.APPROVE))
-    result = register_approved_order(
-        session,
-        order,
-        sheets=SheetsWriter(gc=None, settings=get_settings()),
-        notifier=notifier,
-        owner_phone=OWNER_PHONE,
-        customer_name="Ferretería Don Juan",
-    )
+    result = register_approved_order(session, order, sheets=FakeSheets())
     assert result.order.estado is OrderEstado.APPROVED
+    assert "aprobado" in result.confirmation_text
+    assert "Registrado en Google Sheets" in result.confirmation_text
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-PRS-2"))
     assert on_hand.quantity_on_hand == 40  # 50 − 10
 
@@ -205,12 +204,13 @@ def test_case_a_order_can_be_approved_with_stock_deduction(shop):
 def test_case_a_reservation_ttl_requote_rules_unchanged(shop):
     """Las reglas de TTL/recotización aplican igual a un pedido Case A."""
     session = shop["session"]
-    notifier = FakeNotifier()
-    orchestrator = _orchestrator(session, notifier)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas"))
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
-    reservation = session.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
+    reservation = session.scalar(
+        select(StockReservation).where(StockReservation.order_id == order.order_id)
+    )
     reservation.timestamp = datetime.now(UTC) - timedelta(minutes=31)
     session.flush()
 
@@ -224,13 +224,19 @@ def test_case_a_reservation_ttl_requote_rules_unchanged(shop):
     assert available_stock(session, "CLV-PRS-2") == 50  # expired lock freed
 
 
-def test_case_a_unknown_customer_is_asked_to_register(shop):
-    """Un sender no registrado recibe el aviso de alta, sin crear orden."""
+def test_case_a_unknown_customer_name_offers_creation(shop):
+    """Un nombre de cliente desconocido ofrece crearlo en chat, sin crear orden."""
     session = shop["session"]
-    notifier = FakeNotifier()
-    orchestrator = _orchestrator(session, notifier)
-    result = orchestrator.handle_inbound(
-        InboundMessage(channel="whatsapp", sender_id="+5491199990000", text="quiero 10 clavos")
-    )
-    assert "registrado" in result.reply  # type: ignore[operator]
+    orchestrator = _orchestrator(session)
+    result = orchestrator.handle_inbound(_message("para Almacén La Esquina quiero 10 clavos"))
+    assert "nuevo cliente" in result.reply  # type: ignore[operator]
+    assert session.scalar(select(Order)) is None
+
+
+def test_case_a_order_without_customer_name_asks_for_it(shop):
+    """Un pedido sin nombre de cliente pide identificarlo antes de continuar."""
+    session = shop["session"]
+    orchestrator = _orchestrator(session)
+    result = orchestrator.handle_inbound(_message("quiero 10 clavos"))
+    assert "¿Para qué cliente" in result.reply  # type: ignore[operator]
     assert session.scalar(select(Order)) is None

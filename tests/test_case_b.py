@@ -1,11 +1,12 @@
-"""Case B orchestrator e2e tests (task 5.4).
+"""Case B orchestrator e2e tests (owner pivot).
 
 Drives the multi-turn sourcing flow through the real orchestrator: a partial
-stock order is parsed, classified Case B, persisted with sourcing
-IN_PREPARATION and its SourcingNeed rows, and the reply lists the missing items
-with numbered supplier options. The owner's numbered reply routes to the
-SOURCING agent, which accumulates the selection into one OPEN PO per supplier;
-re-selection before execution moves the need between POs.
+stock order NAMING its customer is parsed, the customer is resolved by name,
+classified Case B, persisted with sourcing IN_PREPARATION and its SourcingNeed
+rows, and the reply lists the missing items with numbered supplier options. The
+owner's numbered reply routes to the SOURCING agent, which accumulates the
+selection into one OPEN PO per supplier; re-selection before execution moves
+the need between POs.
 """
 
 from __future__ import annotations
@@ -39,12 +40,25 @@ from src.orchestrator.session import ConversationStore, rehydrate_conversation
 from src.sourcing.case_b import build_sourcing_handler
 from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
 
-OWNER_PHONE = "+5491100000000"
-CUSTOMER_PHONE = "+5491155551234"
+OWNER_SENDER = "+5491100000000"
+CUSTOMER_NAME = "Ferretería Don Juan"
+ORDER_MESSAGE = f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas"
 
 CANDIDATES = (
-    SupplierCandidate(supplier_id=1, business_name="Proveedor X", sku="CLV-PRS-2", description="Clavos Paris 2 Pulgadas", available_quantity=50),
-    SupplierCandidate(supplier_id=2, business_name="Proveedor Y", sku="CLV-PRS-2", description="Clavos Paris 2 Pulgadas", available_quantity=30),
+    SupplierCandidate(
+        supplier_id=1,
+        business_name="Proveedor X",
+        sku="CLV-PRS-2",
+        description="Clavos Paris 2 Pulgadas",
+        available_quantity=50,
+    ),
+    SupplierCandidate(
+        supplier_id=2,
+        business_name="Proveedor Y",
+        sku="CLV-PRS-2",
+        description="Clavos Paris 2 Pulgadas",
+        available_quantity=30,
+    ),
 )
 
 
@@ -53,16 +67,6 @@ class FakeResponder:
 
     def respond(self, messages):
         raise AssertionError("the sourcing flow must not call the LLM responder")
-
-
-class FakeNotifier:
-    """Records outbound sends; never touches the network."""
-
-    def __init__(self):
-        self.sent: list[tuple[str, str]] = []
-
-    def send_text(self, recipient, text):
-        self.sent.append((recipient, text))
 
 
 def _postgres_up() -> bool:
@@ -91,20 +95,16 @@ def shop(db_session):
     """Catalog with only 4 units on hand → 10 requested leaves 6 missing."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0)
-        )
+        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
     )
     db_session.add(
-        Proveedor(
-            proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0)
-        )
+        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
     )
     db_session.add(
         Cliente(
             customer_id=1,
             nombre_comercial="Ferretería Don Juan",
-            telefono_norm=CUSTOMER_PHONE,
+            telefono_norm=OWNER_SENDER,
             lista_precios_id=1,
             descuento_particular_pct=Decimal(0),
         )
@@ -127,35 +127,33 @@ def shop(db_session):
     return {"session": db_session}
 
 
-def _orchestrator(session) -> tuple[Orchestrator, FakeNotifier]:
-    notifier = FakeNotifier()
+def _orchestrator(session) -> Orchestrator:
     deps = SourcingDeps(
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(CANDIDATES),
-        notifier=notifier,
-        owner_phone=OWNER_PHONE,
     )
     store = ConversationStore(
         rehydrator=lambda sid: rehydrate_conversation(session, sid, searcher=deps.searcher)
     )
     orchestrator = Orchestrator(store, parser=SimpleOrderParser())
     orchestrator.register(
-        AgentName.CUSTOMER, build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
+        AgentName.CUSTOMER,
+        build_handler(FakeResponder(), sourcing=deps),  # type: ignore[arg-type]
     )
     orchestrator.register(AgentName.SOURCING, build_sourcing_handler(lambda: session))
-    return orchestrator, notifier
+    return orchestrator
 
 
 def _message(text: str) -> InboundMessage:
-    return InboundMessage(channel="whatsapp", sender_id=CUSTOMER_PHONE, text=text)
+    return InboundMessage(channel="whatsapp", sender_id=OWNER_SENDER, text=text)
 
 
 def test_partial_order_lists_missing_items_and_suppliers(shop):
     """Un pedido parcial lista los faltantes y los proveedores numerados."""
     session = shop["session"]
-    orchestrator, _ = _orchestrator(session)
+    orchestrator = _orchestrator(session)
 
-    result = orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    result = orchestrator.handle_inbound(_message(ORDER_MESSAGE))
 
     assert result.decision.parsed is True
     reply = result.reply
@@ -170,7 +168,7 @@ def test_partial_order_lists_missing_items_and_suppliers(shop):
     assert need.missing_quantity == 6
     assert need.supplier_id is None  # pending selection
     # No approval wait: the selection conversation owns the next turn.
-    state = orchestrator.store.get(CUSTOMER_PHONE)
+    state = orchestrator.store.get(OWNER_SENDER)
     assert state.sourcing_selection_pending is True
     assert {c.supplier_id for c in state.sourcing_candidates} == {1, 2}
 
@@ -178,8 +176,8 @@ def test_partial_order_lists_missing_items_and_suppliers(shop):
 def test_owner_selection_accumulates_open_po(shop):
     """La elección del dueño acumula un PO abierto para el proveedor elegido."""
     session = shop["session"]
-    orchestrator, _ = _orchestrator(session)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(ORDER_MESSAGE))
 
     result = orchestrator.handle_inbound(_message("1"))
 
@@ -199,14 +197,14 @@ def test_owner_selection_accumulates_open_po(shop):
     assert item.sku == "CLV-PRS-2"
     assert item.quantity == 6
     # The selection phase stays open until the PO is executed (re-selection).
-    assert orchestrator.store.get(CUSTOMER_PHONE).sourcing_selection_pending is True
+    assert orchestrator.store.get(OWNER_SENDER).sourcing_selection_pending is True
 
 
 def test_reselection_before_execution_moves_need_between_pos(shop):
     """Re-elegir proveedor antes de ejecutar mueve la necesidad entre POs."""
     session = shop["session"]
-    orchestrator, _ = _orchestrator(session)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(ORDER_MESSAGE))
     orchestrator.handle_inbound(_message("1"))  # supplier X first
 
     result = orchestrator.handle_inbound(_message("2"))  # owner changes to Y
@@ -217,15 +215,11 @@ def test_reselection_before_execution_moves_need_between_pos(shop):
     assert need.supplier_id == 2
     # The old X PO lost the line (no double ordering).
     old_items = session.scalars(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == 1
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == 1)
     ).all()
     assert old_items == []
     new_item = session.scalar(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == 2
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == 2)
     )
     assert new_item.quantity == 6
     assert need.po_item_id == new_item.po_item_id
@@ -234,12 +228,12 @@ def test_reselection_before_execution_moves_need_between_pos(shop):
 def test_selection_survives_ttl_in_orchestrator_flow(shop):
     """Tras el TTL, la selección continúa rehidratada desde la DB."""
     session = shop["session"]
-    orchestrator, _ = _orchestrator(session)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(ORDER_MESSAGE))
 
     # Expire the in-memory state; the store rehydrates from the DB.
     now = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
-    state = orchestrator.store.get(CUSTOMER_PHONE)
+    state = orchestrator.store.get(OWNER_SENDER)
     state.updated_at = now - timedelta(minutes=31)
     orchestrator.store.put(state)
 
@@ -254,8 +248,8 @@ def test_selection_survives_ttl_in_orchestrator_flow(shop):
 def test_invalid_selection_number_asks_again(shop):
     """Un número fuera de rango no acumula y pide repetir."""
     session = shop["session"]
-    orchestrator, _ = _orchestrator(session)
-    orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(ORDER_MESSAGE))
 
     result = orchestrator.handle_inbound(_message("9"))
 

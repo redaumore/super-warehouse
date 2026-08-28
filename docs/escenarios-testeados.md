@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 239, agrupados en 26 dominios.
+**Total de escenarios:** 237, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -26,7 +26,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 14
-- [Teléfonos y clientes](#teléfonos-y-clientes) — 5
+- [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
@@ -76,8 +76,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Despacho y aprobación del dueño
 
-- Se notifica al dueño la cotización a través del notificador. _(`test_notify_owner_sends_quote_via_notifier`)_
 - El mensaje de cotización menciona las líneas y el total. _(`test_format_quote_message_mentions_lines_and_total`)_
+- La referencia 'pedido #N' se extrae como número de pedido. _(`test_parse_order_reference`)_
+  - aprobá el pedido #3
+  - aprobá el pedido#3
+  - aprobá # 42
+  - aprobá
+  - rechazá el pedido
+  - (vacío)
+  - aprobá el pedido #3 y el #7
 - El texto del dueño se interpreta como aprobar, rechazar o desconocido. _(`test_parse_decision_actions`)_
   - sí, aprobá
   - aprobá
@@ -107,7 +114,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
 - Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
 - Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
-- La cuarentena de Sheets no bloquea: se confirma y el estado lo reporta. _(`test_sheets_quarantine_never_blocks_approval`)_
+- La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente. _(`test_sheets_quarantine_rolls_back_approval`)_
 
 ## Orquestador y enrutamiento
 
@@ -278,9 +285,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - abc
   - 5555
   - 12
-- Un número registrado — aun reescrito en otro formato — resuelve como KNOWN. _(`test_known_phone_matches_registered_customer`)_
-- Un número válido pero no registrado se marca UNKNOWN, nunca se adivina. _(`test_unknown_phone_is_flagged_for_onboarding`)_
-- Un número no interpretable se marca INVALID sin forma normalizada. _(`test_invalid_phone_is_flagged_not_guessed`)_
+- Una línea fija válida normaliza a su forma E.164 sin prefijo 9. _(`test_non_mobile_landline_still_normalizes`)_
 
 ## Registro en Google Sheets
 
@@ -354,10 +359,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## E2E: pedido completo
 
-- Un pedido de texto llega, cotiza al dueño y al aprobar descuenta stock. _(`test_e2e_text_order_flows_to_owner_approval_and_stock_deduction`)_
+- El pedido del dueño se aprueba: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_approves_and_deducts_stock`)_
+- Si Sheets falla, la aprobación se revierte y el pedido sigue pendiente. _(`test_e2e_sheets_failure_keeps_order_pending`)_
 - Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre. _(`test_e2e_owner_reject_releases_reservation`)_
 - Una nota de voz de WhatsApp se normaliza marcando media_type voice. _(`test_e2e_whatsapp_voice_payload_flags_media`)_
-- Aunque el envío de confirmación falle, el flujo de aprobación no se corta. _(`test_e2e_http_error_on_confirm_still_completes_flow`)_
 
 ## E2E: ingesta de documentos
 

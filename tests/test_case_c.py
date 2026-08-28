@@ -1,9 +1,9 @@
-"""Case C tests (task 6.3).
+"""Case C tests (owner pivot).
 
 No-supplier orders move through the existing rejection flow: OrderEstado →
 REJECTED (releasing every reservation) together with sourcing → CANCELLED, and
-the owner is notified via the injected Notifier while the customer receives the
-unavailability message as the reply.
+the owner receives the unavailability message as the in-chat reply (the
+separate notification push is gone).
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ from src.orchestrator.session import ConversationStore
 from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
-OWNER_PHONE = "+5491100000000"
-CUSTOMER_PHONE = "+5491155551234"
+OWNER_SENDER = "+5491100000000"
+CUSTOMER_NAME = "Ferretería Don Juan"
 
 
 class FakeResponder:
@@ -44,16 +44,6 @@ class FakeResponder:
 
     def respond(self, messages):
         raise AssertionError("the sourcing flow must not call the LLM responder")
-
-
-class FakeNotifier:
-    """Records outbound sends; never touches the network."""
-
-    def __init__(self):
-        self.sent: list[tuple[str, str]] = []
-
-    def send_text(self, recipient, text):
-        self.sent.append((recipient, text))
 
 
 def _postgres_up() -> bool:
@@ -82,15 +72,13 @@ def shop(db_session):
     """Catalog with only 2 units on hand and NO supplier candidates."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0)
-        )
+        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
     )
     db_session.add(
         Cliente(
             customer_id=1,
-            nombre_comercial="Ferretería Don Juan",
-            telefono_norm=CUSTOMER_PHONE,
+            nombre_comercial=CUSTOMER_NAME,
+            telefono_norm="+5491155551234",
             lista_precios_id=1,
             descuento_particular_pct=Decimal(0),
         )
@@ -113,32 +101,32 @@ def shop(db_session):
     return {"session": db_session}
 
 
-def _orchestrator(session) -> tuple[Orchestrator, FakeNotifier]:
-    notifier = FakeNotifier()
+def _orchestrator(session) -> Orchestrator:
     deps = SourcingDeps(
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),  # no supplier offers the item
-        notifier=notifier,
-        owner_phone=OWNER_PHONE,
     )
     store = ConversationStore()
     orchestrator = Orchestrator(store, parser=SimpleOrderParser())
     orchestrator.register(
-        AgentName.CUSTOMER, build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
+        AgentName.CUSTOMER,
+        build_handler(FakeResponder(), sourcing=deps),  # type: ignore[arg-type]
     )
-    return orchestrator, notifier
+    return orchestrator
 
 
 def _message(text: str) -> InboundMessage:
-    return InboundMessage(channel="whatsapp", sender_id=CUSTOMER_PHONE, text=text)
+    return InboundMessage(channel="whatsapp", sender_id=OWNER_SENDER, text=text)
 
 
-def test_no_supplier_order_is_cancelled_and_notified(shop):
-    """Sin proveedor: pedido rechazado, sourcing CANCELLED y aviso al dueño."""
+def test_no_supplier_order_is_cancelled_and_reported_in_chat(shop):
+    """Sin proveedor: pedido rechazado, sourcing CANCELLED y aviso en el chat."""
     session = shop["session"]
-    orchestrator, notifier = _orchestrator(session)
+    orchestrator = _orchestrator(session)
 
-    result = orchestrator.handle_inbound(_message("quiero 10 clavos de 2 pulgadas"))
+    result = orchestrator.handle_inbound(
+        _message(f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas")
+    )
 
     assert "cancelado" in result.reply  # type: ignore[operator]
     assert "no están disponibles" in result.reply  # type: ignore[operator]
@@ -147,12 +135,8 @@ def test_no_supplier_order_is_cancelled_and_notified(shop):
     assert order.estado is OrderEstado.REJECTED  # existing rejection flow
     assert order.sourcing_state is SourcingState.CANCELLED
     assert order.rejected_at is not None
-    # The owner was notified through the injected Notifier.
-    assert len(notifier.sent) == 1
-    assert notifier.sent[0][0] == OWNER_PHONE
-    assert "cancelado" in notifier.sent[0][1]
-    # No selection pending: nothing to rehydrate into a conversation.
-    assert orchestrator.store.get(CUSTOMER_PHONE) is not None  # context retained
+    # The reply traveled in the chat: no separate push was made.
+    assert orchestrator.store.get(OWNER_SENDER) is not None  # context retained
 
 
 def test_cancel_for_no_supplier_releases_reservations(shop):
@@ -162,9 +146,7 @@ def test_cancel_for_no_supplier_releases_reservations(shop):
     reserve_stock(session, "CLV-PRS-2", customer_id=1, cantidad=2, order_id=order.order_id)
     assert available_stock(session, "CLV-PRS-2") == 0
 
-    cancel_for_no_supplier(
-        session, order, notifier=FakeNotifier(), owner_phone=OWNER_PHONE
-    )
+    cancel_for_no_supplier(session, order)
 
     assert order.estado is OrderEstado.REJECTED
     assert order.sourcing_state is SourcingState.CANCELLED
@@ -173,19 +155,3 @@ def test_cancel_for_no_supplier_releases_reservations(shop):
     )
     assert reservation.estado is ReservationEstado.RELEASED
     assert available_stock(session, "CLV-PRS-2") == 2  # stock available again
-
-
-def test_cancel_for_no_supplier_notifies_owner_with_customer_name(shop):
-    """El aviso al dueño identifica al cliente del pedido cancelado."""
-    session = shop["session"]
-    notifier = FakeNotifier()
-    order = persist_case_c_order(session, session.get(Cliente, 1))
-    cancel_for_no_supplier(
-        session,
-        order,
-        notifier=notifier,
-        owner_phone=OWNER_PHONE,
-        customer_name="Ferretería Don Juan",
-    )
-    assert notifier.sent[0][0] == OWNER_PHONE
-    assert "Ferretería Don Juan" in notifier.sent[0][1]

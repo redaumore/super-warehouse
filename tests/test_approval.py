@@ -1,11 +1,11 @@
-"""Approval orchestration tests (task 3.4).
+"""Approval orchestration tests.
 
 Unit (no DB): order totals and items summaries over ORM-shaped objects.
 
 Integration (Postgres, skipped when down): the full APPROVE flow — state
-transition, reservation conversion, stock deduction, Sheets append and owner
-confirmation — plus the failure paths (stale order refuses, Sheets quarantine
-never blocks the flow).
+transition, reservation conversion, stock deduction, Sheets append and the
+in-chat confirmation — plus the failure paths (stale order refuses, and a
+Sheets quarantine ROLLS THE APPROVAL BACK so the order stays PENDING).
 """
 
 from __future__ import annotations
@@ -36,23 +36,13 @@ from src.db.models import (
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.orchestrator.approval import (
+    SheetsRegistrationError,
     approve_and_register,
     build_items_summary,
     order_total,
     register_approved_order,
 )
 from src.order_lifecycle.state import RequiresRequoteError
-
-
-class FakeNotifier:
-    """Records outbound sends; never touches the network."""
-
-    def __init__(self):
-        self.sent: list[tuple[str, str]] = []
-
-    def send_text(self, recipient, text):
-        self.sent.append((recipient, text))
-
 
 # ---------------------------------------------------------------- unit tests
 
@@ -88,6 +78,7 @@ def test_build_items_summary_lists_each_line():
 
 
 # -------------------------------------------------- integration (approval flow)
+
 
 def _postgres_up() -> bool:
     try:
@@ -182,6 +173,19 @@ def _sheets_writer() -> SheetsWriter:
     return SheetsWriter(gc=None, settings=Settings(google_sheets_credentials_file=""))
 
 
+class FakeSheets:
+    """Sheets stand-in that always succeeds: records the appended rows."""
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[int, str]] = []
+
+    def append_order_row(
+        self, order_id, *, customer_name=None, total=None, items_summary="", registered_at=None
+    ):
+        self.rows.append((order_id, items_summary))
+        return SheetsWriteStatus.APPENDED
+
+
 def test_approve_and_register_converts_deducts_and_confirms(order_ctx):
     """Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma."""
     reserve_stock(
@@ -191,30 +195,28 @@ def test_approve_and_register_converts_deducts_and_confirms(order_ctx):
         cantidad=4,
         order_id=order_ctx["order"].order_id,
     )
-    notifier = FakeNotifier()
     result = approve_and_register(
         order_ctx["session"],
         order_ctx["order"],
-        sheets=_sheets_writer(),
-        notifier=notifier,
-        owner_phone="+5491100000000",
+        sheets=FakeSheets(),
         customer_name="Ferretería Don Juan",
     )
     assert result.order.estado is OrderEstado.APPROVED
     assert result.converted == 1
     assert result.total == Decimal("1000.00")
-    reservations = order_ctx["session"].scalars(
-        select(StockReservation).where(
-            StockReservation.order_id == order_ctx["order"].order_id
+    assert "aprobado" in result.confirmation_text
+    assert "Pedido #" in result.confirmation_text
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
         )
-    ).all()
+        .all()
+    )
     assert all(r.estado is ReservationEstado.CONVERTED for r in reservations)
     assert _on_hand(order_ctx["session"], "CLV-001") == 6
     # Legacy catalogo stock counter is untouched by the approval deduction.
     assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 10
-    assert len(notifier.sent) == 1
-    assert "Pedido #" in notifier.sent[0][1]
-    assert "aprobado" in notifier.sent[0][1]
 
 
 def test_register_after_adjustment_approve_uses_revised_total(order_ctx):
@@ -247,22 +249,19 @@ def test_register_after_adjustment_approve_uses_revised_total(order_ctx):
         ),
         quote=quote,
     )
-    notifier = FakeNotifier()
     result = register_approved_order(
         order_ctx["session"],
         order_ctx["order"],
-        sheets=_sheets_writer(),
-        notifier=notifier,
-        owner_phone="+5491100000000",
+        sheets=FakeSheets(),
         customer_name="Ferretería Don Juan",
     )
     assert result.total == Decimal("950.00")
+    assert result.confirmation_text.startswith("Pedido #")
     item = order_ctx["session"].scalar(
         select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
     )
     assert item.final_price == Decimal("95.00")
     assert _on_hand(order_ctx["session"], "CLV-001") == 6
-    assert notifier.sent[0][1].startswith("Pedido #")
 
 
 def test_approve_on_expired_reservation_refuses_without_side_effects(order_ctx):
@@ -276,25 +275,21 @@ def test_approve_on_expired_reservation_refuses_without_side_effects(order_ctx):
     )
     reservation.timestamp = datetime.now(UTC) - timedelta(minutes=31)
     order_ctx["session"].flush()
-    notifier = FakeNotifier()
     with pytest.raises(RequiresRequoteError):
         approve_and_register(
             order_ctx["session"],
             order_ctx["order"],
-            sheets=_sheets_writer(),
-            notifier=notifier,
-            owner_phone="+5491100000000",
+            sheets=FakeSheets(),
         )
     assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
     assert order_ctx["order"].needs_requote is True
     reservation = order_ctx["session"].get(StockReservation, reservation.reservation_id)
     assert reservation.estado is ReservationEstado.ACTIVE
-    assert notifier.sent == []
     assert _on_hand(order_ctx["session"], "CLV-001") == 10  # nothing deducted
 
 
-def test_sheets_quarantine_never_blocks_approval(order_ctx):
-    """La cuarentena de Sheets no bloquea: se confirma y el estado lo reporta."""
+def test_sheets_quarantine_rolls_back_approval(order_ctx):
+    """La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente."""
     reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
@@ -302,15 +297,24 @@ def test_sheets_quarantine_never_blocks_approval(order_ctx):
         cantidad=4,
         order_id=order_ctx["order"].order_id,
     )
-    notifier = FakeNotifier()
-    result = approve_and_register(
-        order_ctx["session"],
-        order_ctx["order"],
-        sheets=_sheets_writer(),
-        notifier=notifier,
-        owner_phone="+5491100000000",
+    # A SAVEPOINT mirrors the dispatch handler's transaction boundary: when the
+    # Sheets write quarantines, rolling the savepoint back must leave the order
+    # PENDING and the stock undeducted.
+    with pytest.raises(SheetsRegistrationError), order_ctx["session"].begin_nested():
+        approve_and_register(
+            order_ctx["session"],
+            order_ctx["order"],
+            sheets=_sheets_writer(),  # no credentials → append quarantines
+        )
+    order = order_ctx["session"].get(Order, order_ctx["order"].order_id)
+    assert order is not None
+    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert _on_hand(order_ctx["session"], "CLV-001") == 10  # no stock deducted
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
+        )
+        .all()
     )
-    assert result.sheets_status is SheetsWriteStatus.QUARANTINED
-    assert result.order.estado is OrderEstado.APPROVED
-    assert _on_hand(order_ctx["session"], "CLV-001") == 6
-    assert "cuarentena" in notifier.sent[0][1]
+    assert all(r.estado is ReservationEstado.ACTIVE for r in reservations)

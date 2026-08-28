@@ -1,20 +1,25 @@
-"""Customer agent: catalog context injection and conversational replies.
+"""Customer agent: owner-assistant catalog context and conversational replies.
 
-Every text turn is answered by the LLM responder over the full context
-(system prompt + prior history + the new message). Slice 2 adds a catalog
-search boundary: when a ``CatalogSearcher`` is wired, the turn's text is
-searched against `catalogo` and the results become a TRANSIENT system note
-injected right before the user turn — never persisted into history.
+The owner is the only chat actor: the persona is the owner's assistant, not a
+customer-facing chatbot. Every text turn is answered by the LLM responder over
+the full context (system prompt + prior history + the new message). Slice 2
+adds a catalog search boundary: when a ``CatalogSearcher`` is wired, the
+turn's text is searched against `catalogo` and the results become a TRANSIENT
+system note injected right before the user turn — never persisted into
+history.
 
 Because the catalog is currently empty, a product query returns no candidates
-and the note instructs the assistant to tell the customer the product is not
-in stock. A database error skips the note instead of failing the turn, so the
+and the note instructs the assistant to tell the owner the product is not in
+stock. A database error skips the note instead of failing the turn, so the
 conversation keeps answering while the DB is down.
+
+The sourcing turn (parsed orders) resolves the customer by NAME
+(``src/agents/customers.py``), offers in-chat creation for unknown names and
+runs the Case A/B/C flows; quotes and cancellations are in-chat replies.
 """
 
 from __future__ import annotations
 
-import enum
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -28,6 +33,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.agents.customers import (
+    CustomerResolutionKind,
+    format_customer_menu,
+    parse_create_client_command,
+    parse_customer_pick,
+    resolve_customer_name,
+)
 from src.agents.disambiguation import (
     ResolutionKind,
     SearchCandidate,
@@ -35,7 +47,6 @@ from src.agents.disambiguation import (
     resolve_item,
     search_catalog,
 )
-from src.agents.dispatch import Notifier
 from src.agents.intake import ParsedItem
 from src.agents.inventory import available_stock
 from src.agents.sales import Quote
@@ -53,31 +64,14 @@ logger = logging.getLogger(__name__)
 _DEFAULT_REGION = "AR"
 
 # Fallback reply when the LLM responder is unavailable.
-GREETING = "Que quieres viejo?"
+GREETING = "¿Qué pedido cargamos hoy? Decime el cliente, los productos y la cantidad."
 
 SYSTEM_PROMPT = (
-    "Sos el asistente de una ferretería de barrio que atiende por WhatsApp y Telegram. "
-    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos. "
-    "Tu trabajo es entender qué productos y cantidades busca el cliente para armarle el pedido. "
-    "Si no sabés algo, decilo y ofrecé consultar al dueño."
+    "Sos el asistente del dueño de una ferretería de barrio, y te escribe el dueño "
+    "por WhatsApp o Telegram. Tu trabajo es cargar los pedidos de sus clientes: "
+    "primero identificás al cliente por nombre, después los productos y cantidades. "
+    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos."
 )
-
-
-class PhoneStatus(str, enum.Enum):
-    """Outcome of resolving a raw phone string."""
-
-    INVALID = "INVALID"
-    UNKNOWN = "UNKNOWN"
-    KNOWN = "KNOWN"
-
-
-@dataclass(frozen=True)
-class PhoneLookup:
-    """Result of resolving a raw phone against the customer table."""
-
-    status: PhoneStatus
-    normalized: str | None = None
-    customer: Cliente | None = None
 
 
 def _to_whatsapp_e164(number: PhoneNumber) -> str:
@@ -107,17 +101,6 @@ def normalize_phone(raw: str, *, region: str = _DEFAULT_REGION) -> str | None:
     if not phonenumbers.is_valid_number(number):
         return None
     return _to_whatsapp_e164(number)
-
-
-def lookup_phone(session: Session, raw: str, *, region: str = _DEFAULT_REGION) -> PhoneLookup:
-    """Resolve a raw phone to a stored customer, flagging INVALID / UNKNOWN / KNOWN."""
-    normalized = normalize_phone(raw, region=region)
-    if normalized is None:
-        return PhoneLookup(status=PhoneStatus.INVALID)
-    customer = session.scalar(select(Cliente).where(Cliente.telefono_norm == normalized))
-    if customer is None:
-        return PhoneLookup(status=PhoneStatus.UNKNOWN, normalized=normalized)
-    return PhoneLookup(status=PhoneStatus.KNOWN, normalized=normalized, customer=customer)
 
 
 class ResponderError(Exception):
@@ -158,14 +141,14 @@ class DbCatalogSearcher:
 def catalog_context_note(query: str, candidates: Sequence[SearchCandidate]) -> str:
     """Render catalog search results as a transient system note (Spanish, rioplatense).
 
-    The note is product copy for the store's assistant: an empty result set
+    The note is product copy for the owner's assistant: an empty result set
     tells it the product is not in stock; candidates list the products the
     reply must use.
     """
     if not candidates:
         return (
             f"Búsqueda en catálogo para «{query}»: sin resultados. "
-            "Si el cliente está preguntando por un producto, respondé que no lo tenemos en stock."
+            "Si el cliente pidió un producto que no está en stock, decíselo al dueño."
         )
     items = ", ".join(f"{c.nombre_oficial} ({c.sku})" for c in candidates)
     return (
@@ -176,24 +159,26 @@ def catalog_context_note(query: str, candidates: Sequence[SearchCandidate]) -> s
 
 @dataclass
 class SourcingDeps:
-    """Boundaries the sourcing turn needs (session, searcher, notifier, owner)."""
+    """Boundaries the sourcing turn needs (session + supplier searcher).
+
+    Quotes, cancellations and approvals are in-chat replies, so no notifier or
+    owner phone is bridged anymore — the pipeline edge owns the only outbound.
+    """
 
     session_factory: Callable[[], Session]
     searcher: SupplierCatalogSearcher
-    notifier: Notifier
-    owner_phone: str
 
 
 def format_case_a_reply(
     order: Order, quote: Quote, delivery_date: date | None, customer_name: str | None = None
 ) -> str:
-    """Customer confirmation for a full-stock (Case A) order."""
-    who = f" {customer_name}" if customer_name else ""
+    """Owner confirmation for a full-stock (Case A) order, in the owner's chat."""
+    who = f" de {customer_name}" if customer_name else ""
     date_part = f" Fecha estimada de entrega: {delivery_date.isoformat()}." if delivery_date else ""
     return (
-        f"¡Listo{who}! Pedido #{order.order_id} confirmado, tenemos todo el stock. "
+        f"Pedido #{order.order_id}{who} confirmado, tenemos todo el stock. "
         f"Total estimado: {quote.total:.2f} ARS.{date_part} "
-        "El dueño lo aprueba y te avisamos."
+        "¿Lo aprobás? Respondé 'aprobá' o 'rechazá'."
     )
 
 
@@ -222,13 +207,13 @@ def format_case_b_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
     return "\n".join(lines)
 
 
-def format_case_c_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
-    """Case C reply: notify the customer the missing items are unavailable."""
+def format_case_c_reply(
+    order: Order, missing: tuple[MissingItem, ...], customer_name: str | None = None
+) -> str:
+    """Case C reply: tell the owner the missing items are unavailable."""
+    who = f" de {customer_name}" if customer_name else ""
     names = ", ".join(item.description or item.sku for item in missing)
-    return (
-        f"Lo sentimos: el pedido #{order.order_id} fue cancelado. "
-        f"{names} no están disponibles por el momento."
-    )
+    return f"Pedido #{order.order_id}{who} cancelado: {names} no están disponibles por el momento."
 
 
 def _resolve_items(
@@ -257,42 +242,141 @@ def _resolve_items(
     return tuple(resolved)
 
 
+def _handle_create_client(
+    deps: SourcingDeps,
+    base: ConversationState,
+    nombre: str,
+    telefono: str,
+) -> AgentOutcome:
+    """Create a client in chat: ``nuevo cliente <nombre> <teléfono>``.
+
+    Reuses ``backoffice.clients.create_client`` with the default (Base) price
+    list. A phone that already belongs to a client reports the existing client
+    instead of creating a duplicate (locked input #2); any other invalid input
+    is reported as an error.
+    """
+    from src.backoffice.clients import (
+        InvalidClientDataError,
+        create_client,
+        default_price_list_id,
+    )
+
+    with deps.session_factory() as session:
+        normalized = normalize_phone(telefono)
+        existing = (
+            session.scalar(select(Cliente).where(Cliente.telefono_norm == normalized))
+            if normalized is not None
+            else None
+        )
+        if existing is not None:
+            return AgentOutcome(
+                state=base.with_updates(parsed_order=None),
+                reply=(
+                    f"Ese teléfono ya es de {existing.nombre_comercial}; "
+                    "no creé un duplicado. Usalo por nombre en el próximo pedido."
+                ),
+            )
+        try:
+            client = create_client(
+                session,
+                nombre_comercial=nombre,
+                telefono_raw=telefono,
+                lista_precios_id=default_price_list_id(session),
+            )
+        except InvalidClientDataError as exc:
+            session.rollback()
+            return AgentOutcome(
+                state=base.with_updates(parsed_order=None),
+                reply=f"No pude crear el cliente: {exc}",
+            )
+        session.commit()
+    reply = f"Listo: di de alta a {client.nombre_comercial}. Ahora mandá el pedido con su nombre."
+    return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+
+
 def _run_sourcing_turn(
     message: InboundMessage,
     state: ConversationState | None,
     decision: RoutingDecision,
     deps: SourcingDeps,
 ) -> AgentOutcome:
-    """Handle a parsed order turn: classify and run the matching case flow."""
+    """Handle a parsed order turn: resolve the customer and run the matching case flow.
+
+    The customer is resolved by NAME (never by sender phone): one match
+    auto-selects, two or more show a numbered disambiguation menu (the pick
+    arrives on a later turn), zero offers in-chat creation. ``nuevo cliente
+    <nombre> <teléfono>`` is intercepted before any order handling.
+    """
     parsed = state.parsed_order if state is not None else None
     base = state if state is not None else ConversationState(sender_id=message.sender_id)
+    text = (message.text or "").strip()
+
+    # In-chat client creation intercept: runs before order parsing so the
+    # command never falls into the "specify products" branch.
+    create = parse_create_client_command(text)
+    if create is not None:
+        return _handle_create_client(deps, base, *create)
+
     if parsed is None or not parsed.items:
-        reply = "¿Qué productos necesitás? Decime el artículo y la cantidad, por ejemplo '10 clavos'."
-        return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
-    with deps.session_factory() as session:
-        phone = lookup_phone(session, message.sender_id)
-        if phone.status is not PhoneStatus.KNOWN or phone.customer is None:
-            reply = (
-                "Todavía no estás registrado como cliente; "
-                "hablá con el dueño para darte de alta."
-            )
-            return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
-        customer = phone.customer
-        resolved = _resolve_items(session, parsed.items)
-        sourcing = classify_case(
-            resolved, lambda sku: available_stock(session, sku), deps.searcher
+        reply = (
+            "¿Qué pedido cargamos? Decime el nombre del cliente, "
+            "el artículo y la cantidad, por ejemplo 'para Don Juan, 10 clavos'."
         )
+        return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+
+    with deps.session_factory() as session:
+        if base.customer_disambiguation_pending:
+            # The owner picks from the numbered menu; the order waits in the
+            # state (parsed_order was kept for this turn).
+            candidate = parse_customer_pick(text, base.customer_candidates)
+            if candidate is None:
+                return AgentOutcome(
+                    state=base, reply=format_customer_menu(base.customer_candidates)
+                )
+            customer = session.get(Cliente, candidate.customer_id)
+            assert customer is not None
+            pending_cleared = base.with_updates(
+                customer_disambiguation_pending=False, customer_candidates=()
+            )
+        else:
+            name = parsed.customer_name
+            if not name:
+                reply = (
+                    "¿Para qué cliente es el pedido? Decime el nombre "
+                    "(o 'nuevo cliente <nombre> <teléfono>' si es nuevo) y los productos."
+                )
+                return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+            resolution = resolve_customer_name(session, name)
+            if resolution.kind is CustomerResolutionKind.AMBIGUOUS:
+                reply = format_customer_menu(resolution.candidates)
+                updated = base.with_updates(
+                    customer_disambiguation_pending=True,
+                    customer_candidates=resolution.candidates,
+                    parsed_order=parsed,  # kept for the pick turn
+                )
+                return AgentOutcome(state=updated, reply=reply)
+            if resolution.kind is CustomerResolutionKind.NOT_FOUND:
+                reply = (
+                    f"No encontré ningún cliente llamado «{name}». "
+                    "Si es nuevo, mandá: 'nuevo cliente <nombre> <teléfono>'."
+                )
+                return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+            customer = resolution.candidate
+            assert customer is not None
+            pending_cleared = base.with_updates(
+                customer_disambiguation_pending=False, customer_candidates=()
+            )
+
+        resolved = _resolve_items(session, parsed.items)
+        sourcing = classify_case(resolved, lambda sku: available_stock(session, sku), deps.searcher)
         if sourcing.case is SourcingCase.A:
             order, quote = persist_case_a_order(
-                session,
-                customer,
-                resolved,
-                delivery_date=parsed.delivery_date,
-                notifier=deps.notifier,
-                owner_phone=deps.owner_phone,
+                session, customer, resolved, delivery_date=parsed.delivery_date
             )
-            reply = format_case_a_reply(order, quote, parsed.delivery_date, customer.nombre_comercial)
-            updated = base.with_updates(
+            reply = format_case_a_reply(
+                order, quote, parsed.delivery_date, customer.nombre_comercial
+            )
+            updated = pending_cleared.with_updates(
                 customer_id=customer.customer_id,
                 order_id=order.order_id,
                 items=tuple(resolved),
@@ -311,7 +395,7 @@ def _run_sourcing_turn(
             )
             candidates = tuple(c for m in sourcing.missing for c in m.candidates)
             reply = format_case_b_reply(order, sourcing.missing)
-            updated = base.with_updates(
+            updated = pending_cleared.with_updates(
                 customer_id=customer.customer_id,
                 order_id=order.order_id,
                 items=tuple(resolved),
@@ -324,15 +408,9 @@ def _run_sourcing_turn(
             from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
 
             order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
-            cancel_for_no_supplier(
-                session,
-                order,
-                notifier=deps.notifier,
-                owner_phone=deps.owner_phone,
-                customer_name=customer.nombre_comercial,
-            )
-            reply = format_case_c_reply(order, sourcing.missing)
-            updated = base.with_updates(
+            cancel_for_no_supplier(session, order)
+            reply = format_case_c_reply(order, sourcing.missing, customer.nombre_comercial)
+            updated = pending_cleared.with_updates(
                 customer_id=customer.customer_id,
                 order_id=order.order_id,
                 items=tuple(resolved),

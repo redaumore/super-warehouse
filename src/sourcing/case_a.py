@@ -4,7 +4,8 @@ Per the order-sourcing spec, a Case A order is created with sourcing
 PENDING_ASSEMBLY and a delivery date, then routed through the unchanged
 quotation/approval flow: every line is priced through the pure pricing engine,
 soft-locked with the standard reservation TTL, and the owner receives the quote
-to approve (or reject) exactly as before the sourcing axis existed.
+in chat to approve (or reject). The separate Telegram push to ``owner_phone``
+was removed — the quote travels as the agent's in-chat reply.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.dispatch import Notifier, notify_owner
 from src.agents.inventory import reserve_stock
 from src.agents.sales import ItemInput, Quote, quote_order
 from src.db.models import Catalogo, Cliente, Order, OrderEstado, OrderItem, SourcingState
@@ -32,19 +32,16 @@ def persist_case_a_order(
     items: Sequence[ResolvedItem],
     *,
     delivery_date: date | None,
-    notifier: Notifier,
-    owner_phone: str,
 ) -> tuple[Order, Quote]:
     """Persist a full-stock order: quote, order row, reservations, order items.
 
-    Returns the created ``Order`` and its ``Quote``; the owner is notified with
-    the quote so the unchanged approval flow resumes (awaiting the decision).
+    Returns the created ``Order`` and its ``Quote``; the caller renders the
+    quote as the in-chat reply so the unchanged approval flow resumes (awaiting
+    the owner's decision).
     """
     inputs: list[ItemInput] = []
     for item in items:
-        product = session.scalar(
-            select(Catalogo).where(Catalogo.codigo_interno == item.sku)
-        )
+        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == item.sku))
         if product is None:
             raise UnknownSkuError(f"unknown sku: {item.sku}")
         inputs.append(
@@ -89,5 +86,4 @@ def persist_case_a_order(
             )
         )
     session.flush()
-    notify_owner(notifier, owner_phone, quote, order.order_id, customer.nombre_comercial)
     return order, quote
