@@ -471,9 +471,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 supplier_email = gr.Textbox(label="Email")
             with gr.Row():
                 supplier_address = gr.Textbox(label="Address", scale=2)
-                supplier_iva = gr.Dropdown(
-                    choices=_IVA_CHOICES, value="", label="IVA condition"
-                )
+                supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="IVA condition")
                 supplier_margin = gr.Number(label="Default margin %", value=0.0)
                 supplier_terms = gr.Textbox(label="Terms")
             supplier_status = gr.Textbox(label="Status", interactive=False)

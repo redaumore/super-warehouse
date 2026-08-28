@@ -12,6 +12,7 @@ SupplierPurchaseOrder, SourcingNeed or SupplierSkuMapping row.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -168,7 +169,7 @@ def update_supplier(
     if address is not _UNSET:
         supplier.address = _as_optional_text(address)
     if default_margin_pct is not _UNSET:
-        supplier.default_margin_pct = _coerce_margin(default_margin_pct)
+        supplier.default_margin_pct = _coerce_margin(cast(Decimal | float, default_margin_pct))
     if iva_condition is not _UNSET:
         supplier.iva_condition = _coerce_iva_condition(_as_optional_text(iva_condition))
     if terms is not _UNSET:
@@ -239,9 +240,7 @@ def _validate_optional_email(email: str | None) -> str | None:
     return cleaned
 
 
-def _validate_optional_phone(
-    phone: str | None, whatsapp: str | None
-) -> dict[str, str | None]:
+def _validate_optional_phone(phone: str | None, whatsapp: str | None) -> dict[str, str | None]:
     phone_clean = normalize_e164_phone(phone) if phone and phone.strip() else None
     if phone and phone.strip() and phone_clean is None:
         raise InvalidSupplierDataError(f"invalid phone: {phone}")
@@ -274,23 +273,35 @@ def _assert_code_not_linked(session: Session, supplier: Supplier, new_code: str)
     if supplier.code == new_code:
         return
     linked = (
-        session.scalar(
-            select(func.count(Catalogo.id)).where(Catalogo.supplier_id == supplier.id)
-        )
-        + session.scalar(
-            select(func.count(SupplierPurchaseOrder.po_id)).where(
-                SupplierPurchaseOrder.supplier_id == supplier.id
+        (
+            session.scalar(
+                select(func.count(Catalogo.id)).where(Catalogo.supplier_id == supplier.id)
             )
+            or 0
         )
-        + session.scalar(
-            select(func.count(SourcingNeed.need_id)).where(
-                SourcingNeed.supplier_id == supplier.id
+        + (
+            session.scalar(
+                select(func.count(SupplierPurchaseOrder.po_id)).where(
+                    SupplierPurchaseOrder.supplier_id == supplier.id
+                )
             )
+            or 0
         )
-        + session.scalar(
-            select(func.count(SupplierSkuMapping.id)).where(
-                SupplierSkuMapping.supplier_id == supplier.id
+        + (
+            session.scalar(
+                select(func.count(SourcingNeed.need_id)).where(
+                    SourcingNeed.supplier_id == supplier.id
+                )
             )
+            or 0
+        )
+        + (
+            session.scalar(
+                select(func.count(SupplierSkuMapping.id)).where(
+                    SupplierSkuMapping.supplier_id == supplier.id
+                )
+            )
+            or 0
         )
     )
     if linked > 0:

@@ -29,7 +29,7 @@ from src.barcode.decoder import (
     lookup_barcode,
 )
 from src.config import get_settings
-from src.db.models import Catalogo, Supplier, StockAdjustment
+from src.db.models import Catalogo, StockAdjustment, Supplier
 
 
 def _real_png(path: Path) -> None:
@@ -101,9 +101,10 @@ def _clean_schema(db_engine):
 def _seed_catalog(db_session, *, barcodes: list[str], skus: list[str]) -> None:
     db_session.add(
         Supplier(
-            supplier_id=1,
-            razon_social="Supplier Test",
-            margen_predeterminado=Decimal(0),
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
         )
     )
     for index, (sku, barcode) in enumerate(zip(skus, barcodes, strict=True)):

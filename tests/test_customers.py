@@ -283,7 +283,12 @@ def shop_with_catalog(shop):
     """Extends ``shop`` with a catalog product (50 units) for the Case A flow."""
     db_session = shop["session"]
     db_session.add(
-        Supplier(supplier_id=1, razon_social="Supplier Test", margen_predeterminado=Decimal(0))
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
+        )
     )
     db_session.add(
         Catalogo(

@@ -30,10 +30,10 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Supplier,
     ReservationEstado,
     SourcingState,
     StockReservation,
+    Supplier,
 )
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.router import AgentName, Orchestrator
@@ -90,7 +90,12 @@ def shop(db_session):
     """Catalog with 50 units on hand, a customer and a supplier."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Supplier(supplier_id=1, razon_social="Supplier Test", margen_predeterminado=Decimal(0))
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
+        )
     )
     db_session.add(
         Cliente(

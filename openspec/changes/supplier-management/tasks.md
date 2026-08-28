@@ -65,14 +65,14 @@ Chain strategy: size-exception (approved)
 
 ## Phase 5: Test Updates Across the Suite
 
-- [ ] 5.1 `tests/conftest.py`: swap `proveedores, proveedor_sku_mapping`→`suppliers, supplier_sku_mappings` in `TRUNCATE_TABLES`; same swap in inline truncates in `test_backoffice.py`, `test_e2e_ingestion.py`, `test_approval.py`, `test_inventory.py`.
-- [ ] 5.2 Across `test_approval.py`, `test_inventory.py`, `test_case_a.py`, `test_pipeline_owner.py`, `test_backoffice_po.py`, `test_barcode.py`, `test_case_c.py`, `test_classify.py`, `test_customers.py`, `test_dispatch.py`, `test_dispatch_handler.py`, `test_e2e_order.py`, `test_order_lifecycle.py`, `test_search.py`, `test_session_rehydrate_owner.py`, `test_sweeper.py`, `test_ocr.py`, `test_case_b.py`, `test_sourcing_persistence.py`: rename `Proveedor`→`Supplier`, `proveedor_id`→`id` (seed), `razon_social`→`business_name`, `margen_predeterminado`→`default_margin_pct`; add `code` + `status=ACTIVO` to every `Supplier(...)` constructor.
-- [ ] 5.3 In `test_ocr.py` and `test_case_b.py` rename any local `ProveedorSkuMapping`; confirm tabs `5`→`6` and `"Suppliers"` label in `test_backoffice.py`.
+- [x] 5.1 `tests/conftest.py`: swap `proveedores, proveedor_sku_mapping`→`suppliers, supplier_sku_mappings` in `TRUNCATE_TABLES`; same swap in inline truncates in `test_backoffice.py`, `test_e2e_ingestion.py`, `test_approval.py`, `test_inventory.py`.
+- [x] 5.2 Across `test_approval.py`, `test_inventory.py`, `test_case_a.py`, `test_pipeline_owner.py`, `test_backoffice_po.py`, `test_barcode.py`, `test_case_c.py`, `test_classify.py`, `test_customers.py`, `test_dispatch.py`, `test_dispatch_handler.py`, `test_e2e_order.py`, `test_order_lifecycle.py`, `test_search.py`, `test_session_rehydrate_owner.py`, `test_sweeper.py`, `test_ocr.py`, `test_case_b.py`, `test_sourcing_persistence.py`: rename `Proveedor`→`Supplier`, `proveedor_id`→`id` (seed), `razon_social`→`business_name`, `margen_predeterminado`→`default_margin_pct`; add `code` + `status=ACTIVO` to every `Supplier(...)` constructor.
+- [x] 5.3 In `test_ocr.py` and `test_case_b.py` rename any local `ProveedorSkuMapping`; confirm tabs `5`→`6` and `"Suppliers"` label in `test_backoffice.py`.
 
 ## Phase 6: Final Verification
 
-- [ ] 6.1 `ruff check .` — resolve all violations.
-- [ ] 6.2 `mypy src` (strict) — resolve all type errors.
-- [ ] 6.3 `pytest -q` — full suite green including new `test_supplier_validation.py` + `test_suppliers_backoffice.py`.
-- [ ] 6.4 `alembic upgrade head && alembic downgrade -1` round-trip on throwaway DB; verify `down_revision='5f304e18a765'` and no legacy `proveedores`.
-- [ ] 6.5 Grep verify: no remaining `Proveedor`/`proveedor` (allowlist: `docs/escenarios-testeados.md`, `scripts/gen_test_scenarios.py`, `alembic/versions/26a4a1b103fe_initial_schema_with_pgvector.py`).
+- [x] 6.1 `ruff check .` — resolve all violations.
+- [x] 6.2 `mypy src` (strict) — resolve all type errors.
+- [x] 6.3 `pytest -q` — full suite green including new `test_supplier_validation.py` + `test_suppliers_backoffice.py`.
+- [x] 6.4 `alembic upgrade head && alembic downgrade -1` round-trip on throwaway DB; verify `down_revision='5f304e18a765'` and no legacy `proveedores`.
+- [x] 6.5 Grep verify: no remaining `Proveedor`/`proveedor` (allowlist: `docs/escenarios-testeados.md`, `scripts/gen_test_scenarios.py`, `alembic/versions/26a4a1b103fe_initial_schema_with_pgvector.py`).

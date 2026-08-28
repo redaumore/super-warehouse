@@ -20,8 +20,15 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from email_validator import EmailNotValidError, validate_email as _validate_email
-from phonenumbers import NumberParseException, PhoneNumberFormat, parse, format_number, is_valid_number
+from email_validator import EmailNotValidError
+from email_validator import validate_email as _validate_email
+from phonenumbers import (
+    NumberParseException,
+    PhoneNumberFormat,
+    format_number,
+    is_valid_number,
+    parse,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

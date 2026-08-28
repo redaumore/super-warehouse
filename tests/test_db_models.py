@@ -18,8 +18,8 @@ from src.db.models import (
     OrderEstado,
     SourcingState,
     Supplier,
-    SupplierStatus,
     SupplierPurchaseOrderState,
+    SupplierStatus,
 )
 
 

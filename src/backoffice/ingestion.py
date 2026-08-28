@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from src.agents.disambiguation import normalize_text
 from src.agents.perception import VisionAnalyzer
-from src.db.models import Catalogo, Inventory, Supplier
+from src.db.models import Catalogo, Inventory
 from src.pricing.engine import compute_base
 from src.supplier.guards import ensure_active_supplier
 from src.supplier.ocr import DocumentExtraction, extract_document

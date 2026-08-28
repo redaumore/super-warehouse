@@ -30,9 +30,9 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Supplier,
     ReservationEstado,
     StockReservation,
+    Supplier,
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.orchestrator.approval import (
@@ -122,9 +122,10 @@ def order_ctx(db_session):
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
         Supplier(
-            supplier_id=1,
-            razon_social="Supplier Test",
-            margen_predeterminado=Decimal(0),
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
         )
     )
     db_session.add(

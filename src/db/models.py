@@ -346,9 +346,7 @@ class SupplierPurchaseOrder(Base):
     __tablename__ = "supplier_purchase_orders"
 
     po_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    supplier_id: Mapped[int] = mapped_column(
-        ForeignKey("suppliers.id"), nullable=False, index=True
-    )
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False, index=True)
     estado: Mapped[SupplierPurchaseOrderState] = mapped_column(
         Enum(
             SupplierPurchaseOrderState,

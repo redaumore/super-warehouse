@@ -24,9 +24,9 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Supplier,
     SourcingNeed,
     SourcingState,
+    Supplier,
 )
 from src.orchestrator.session import (
     ConversationState,
