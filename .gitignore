@@ -36,3 +36,6 @@ htmlcov/
 
 # Google service-account credentials (never commit)
 credentials/
+
+# Dev script runtime logs
+logs/
