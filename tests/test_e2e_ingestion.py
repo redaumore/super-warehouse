@@ -109,9 +109,7 @@ def test_e2e_remito_upload_previews_and_confirms_inventory(supplier, tmp_path):
     assert result.updated == 1
     assert result.created == 1
 
-    existing = session.scalar(
-        select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2")
-    )
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2"))
     assert existing.stock_disponible == 60  # 50 + 10
     created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "PINT-001"))
     assert created.stock_disponible == 4
@@ -137,9 +135,7 @@ def test_e2e_owner_corrections_override_raw_extraction(supplier, tmp_path):
 def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     """Una foto de código de barras decodifica y responde el stock disponible."""
     session = supplier["session"]
-    product = session.scalar(
-        select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2")
-    )
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2"))
     product.codigo_barras = "7790000000001"
     session.flush()
 

@@ -111,7 +111,9 @@ def _parse_line(line: str) -> ExtractedItem | None:
         )
     match = _CODE_QTY_RE.match(line)
     if match:
-        return ExtractedItem(codigo=match.group(1), descripcion=match.group(2), cantidad=int(match.group(3)))
+        return ExtractedItem(
+            codigo=match.group(1), descripcion=match.group(2), cantidad=int(match.group(3))
+        )
     return None
 
 
@@ -180,16 +182,12 @@ def extract_document(
 def _match_existing_sku(session: Session, codigo: str, descripcion: str) -> str | None:
     """Find an existing catalog SKU by supplier code or normalized name."""
     by_code = session.scalar(
-        select(Catalogo.codigo_interno).where(
-            Catalogo.codigo_interno == codigo.strip().upper()
-        )
+        select(Catalogo.codigo_interno).where(Catalogo.codigo_interno == codigo.strip().upper())
     )
     if by_code is not None:
         return str(by_code)
     needle = normalize_text(descripcion)
-    for sku, nombre in session.execute(
-        select(Catalogo.codigo_interno, Catalogo.nombre_oficial)
-    ):
+    for sku, nombre in session.execute(select(Catalogo.codigo_interno, Catalogo.nombre_oficial)):
         if needle and needle == normalize_text(nombre):
             return str(sku)
     return None

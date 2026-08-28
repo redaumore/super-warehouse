@@ -180,7 +180,9 @@ def test_seed_inventory_is_idempotent(stock):
     stock.flush()
     second = seed_inventory(stock)
     assert second == 0
-    assert stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001")).quantity_on_hand == 7
+    assert (
+        stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001")).quantity_on_hand == 7
+    )
 
 
 def test_missing_inventory_row_means_zero_on_hand(stock):

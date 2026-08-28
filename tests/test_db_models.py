@@ -49,7 +49,12 @@ def test_sourcing_entities_are_modeled():
     The sourcing axis tables (Inventory, POs, SourcingNeed) are modeled.
     """
     tables = set(Base.metadata.tables)
-    assert {"inventory", "supplier_purchase_orders", "supplier_purchase_order_items", "sourcing_needs"}.issubset(tables)
+    assert {
+        "inventory",
+        "supplier_purchase_orders",
+        "supplier_purchase_order_items",
+        "sourcing_needs",
+    }.issubset(tables)
 
 
 def test_order_has_sourcing_axis_and_delivery_date():
@@ -62,7 +67,12 @@ def test_order_has_sourcing_axis_and_delivery_date():
     assert "sourcing_state" in cols
     assert "delivery_date" in cols
     assert "estado" in cols  # the four-state machine is still there
-    assert {m.value for m in OrderEstado} == {"PENDING_APPROVAL", "APPROVED", "IN_DISPATCH", "REJECTED"}
+    assert {m.value for m in OrderEstado} == {
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "IN_DISPATCH",
+        "REJECTED",
+    }
 
 
 def test_sourcing_state_enum_values():

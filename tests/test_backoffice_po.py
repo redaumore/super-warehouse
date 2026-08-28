@@ -56,15 +56,15 @@ def po_ctx(db_session):
     """A supplier and an OPEN purchase order with one line of 10 units."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor Mayorista", margen_predeterminado=Decimal(0))
+        Proveedor(
+            proveedor_id=1, razon_social="Proveedor Mayorista", margen_predeterminado=Decimal(0)
+        )
     )
     po = SupplierPurchaseOrder(supplier_id=1, estado=SupplierPurchaseOrderState.OPEN)
     db_session.add(po)
     db_session.flush()
     db_session.add(
-        SupplierPurchaseOrderItem(
-            po_id=po.po_id, sku="CLV-001", quantity=10, received_quantity=0
-        )
+        SupplierPurchaseOrderItem(po_id=po.po_id, sku="CLV-001", quantity=10, received_quantity=0)
     )
     db_session.flush()
     return {"session": db_session, "po_id": po.po_id}
@@ -108,7 +108,10 @@ def test_partial_then_full_receipt(po_ctx):
     second = receive_po_action(session, po_ctx["po_id"], "CLV-001", 6)
     assert "FULLY_RECEIVED" in second
     assert _po(session, po_ctx["po_id"]).estado is SupplierPurchaseOrderState.FULLY_RECEIVED
-    assert session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001")).quantity_on_hand == 10
+    assert (
+        session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001")).quantity_on_hand
+        == 10
+    )
 
 
 def test_receive_more_than_remaining_is_rejected(po_ctx):

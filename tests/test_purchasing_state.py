@@ -44,7 +44,9 @@ class _FakeSession:
         self.flushed += 1
 
 
-def _po(estado: SupplierPurchaseOrderState = SupplierPurchaseOrderState.OPEN) -> SupplierPurchaseOrder:
+def _po(
+    estado: SupplierPurchaseOrderState = SupplierPurchaseOrderState.OPEN,
+) -> SupplierPurchaseOrder:
     po = SupplierPurchaseOrder(
         po_id=1,
         supplier_id=10,
@@ -175,9 +177,7 @@ def test_receive_creates_inventory_row_when_absent():
     session = _FakeSession(inventory_row=None)
     po = _po(SupplierPurchaseOrderState.SENT)
     receive_po(session, po, {"CLV-001": 3})
-    assert any(
-        isinstance(obj, Inventory) and obj.quantity_on_hand == 3 for obj in session.added
-    )
+    assert any(isinstance(obj, Inventory) and obj.quantity_on_hand == 3 for obj in session.added)
     assert po.estado is SupplierPurchaseOrderState.PARTIALLY_RECEIVED
 
 

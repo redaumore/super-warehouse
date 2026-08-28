@@ -103,9 +103,7 @@ def confirm_selection(
     return tuple(pos.values())
 
 
-def format_selection_confirmation(
-    order: Order, pos: tuple[SupplierPurchaseOrder, ...]
-) -> str:
+def format_selection_confirmation(order: Order, pos: tuple[SupplierPurchaseOrder, ...]) -> str:
     """Owner confirmation after the selection is accumulated."""
     po_lines = " ".join(f"PO #{po.po_id} (proveedor {po.supplier_id})" for po in pos)
     return (

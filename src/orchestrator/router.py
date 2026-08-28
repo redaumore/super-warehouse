@@ -82,9 +82,7 @@ class TurnResult:
     reply: str | None = None
 
 
-def route_message(
-    message: InboundMessage, state: ConversationState | None
-) -> RoutingDecision:
+def route_message(message: InboundMessage, state: ConversationState | None) -> RoutingDecision:
     """Decide which agent handles an inbound message."""
     if message.media_type == "voice":
         return RoutingDecision(
@@ -127,9 +125,7 @@ class Orchestrator:
         self.agents: dict[AgentName, Callable[..., AgentOutcome | None]] = agents or {}
         self.parser = parser
 
-    def register(
-        self, agent: AgentName, handler: Callable[..., AgentOutcome | None]
-    ) -> None:
+    def register(self, agent: AgentName, handler: Callable[..., AgentOutcome | None]) -> None:
         """Bind an agent handler to its name."""
         self.agents[agent] = handler
 

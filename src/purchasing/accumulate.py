@@ -36,9 +36,7 @@ def open_or_create_po(session: Session, supplier_id: int) -> SupplierPurchaseOrd
         )
     )
     if po is None:
-        po = SupplierPurchaseOrder(
-            supplier_id=supplier_id, estado=SupplierPurchaseOrderState.OPEN
-        )
+        po = SupplierPurchaseOrder(supplier_id=supplier_id, estado=SupplierPurchaseOrderState.OPEN)
         session.add(po)
         session.flush()
     return po

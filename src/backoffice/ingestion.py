@@ -98,14 +98,10 @@ def confirm_items(
                 inventory_row.quantity_on_hand += cantidad
                 inventory_row.updated_at = datetime.now(UTC)
             else:
-                session.add(
-                    Inventory(sku_id=product.codigo_interno, quantity_on_hand=cantidad)
-                )
+                session.add(Inventory(sku_id=product.codigo_interno, quantity_on_hand=cantidad))
             if costo is not None:
                 product.costo_proveedor = costo
-                product.precio_lista_base = compute_base(
-                    costo, product.margen_aplicado_pct
-                )
+                product.precio_lista_base = compute_base(costo, product.margen_aplicado_pct)
             updated += 1
         else:
             sku = codigo or f"NEW-{len(session.scalars(select(Catalogo)).all()) + 1:04d}"

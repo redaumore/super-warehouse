@@ -72,8 +72,12 @@ def order_ctx(db_session):
             descuento_particular_pct=Decimal(0),
         )
     )
-    db_session.add(Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0)))
-    db_session.add(Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0)))
+    db_session.add(
+        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+    )
+    db_session.add(
+        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
+    )
     order = Order(
         customer_id=1,
         estado=OrderEstado.PENDING_APPROVAL,
@@ -85,8 +89,20 @@ def order_ctx(db_session):
 
 
 CANDIDATES = (
-    SupplierCandidate(supplier_id=1, business_name="Proveedor X", sku="CLV-001", description="Clavos Paris 2 Pulgadas", available_quantity=50),
-    SupplierCandidate(supplier_id=2, business_name="Proveedor Y", sku="CLV-001", description="Clavos Paris 2 Pulgadas", available_quantity=30),
+    SupplierCandidate(
+        supplier_id=1,
+        business_name="Proveedor X",
+        sku="CLV-001",
+        description="Clavos Paris 2 Pulgadas",
+        available_quantity=50,
+    ),
+    SupplierCandidate(
+        supplier_id=2,
+        business_name="Proveedor Y",
+        sku="CLV-001",
+        description="Clavos Paris 2 Pulgadas",
+        available_quantity=30,
+    ),
 )
 
 
@@ -133,7 +149,9 @@ def test_selection_survives_ttl_via_db_rehydration(order_ctx):
         ),
     )
     stale = ConversationState(
-        sender_id="+5491155551234", order_id=order_ctx["order"].order_id, sourcing_selection_pending=True
+        sender_id="+5491155551234",
+        order_id=order_ctx["order"].order_id,
+        sourcing_selection_pending=True,
     )
     stale.updated_at = now - timedelta(minutes=31)
     store.put(stale)

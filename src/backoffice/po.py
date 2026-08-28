@@ -35,9 +35,7 @@ def list_purchase_orders(session: Session) -> list[dict[str, object]]:
     ):
         supplier = po.supplier.razon_social if po.supplier else str(po.supplier_id)
         items = "; ".join(f"{item.sku} × {item.quantity}" for item in po.items)
-        received = "; ".join(
-            f"{item.sku} × {item.received_quantity}" for item in po.items
-        )
+        received = "; ".join(f"{item.sku} × {item.received_quantity}" for item in po.items)
         rows.append(
             {
                 "po_id": po.po_id,

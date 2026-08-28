@@ -232,8 +232,12 @@ def test_sweep_expires_only_past_ttl_among_mixed(order_ctx):
     _reservation(order_ctx, 4, minutes_ago=31)
     _reservation(order_ctx, 2, minutes_ago=5)
     assert sweep_expired(order_ctx["session"]) == 1
-    reservations = order_ctx["session"].scalars(
-        select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
-    ).all()
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
+        )
+        .all()
+    )
     states = sorted(r.estado.value for r in reservations)
     assert states == ["ACTIVE", "EXPIRED"]

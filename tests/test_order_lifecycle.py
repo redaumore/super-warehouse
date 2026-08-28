@@ -303,11 +303,13 @@ def test_reject_releases_reservations_and_restores_stock(order_ctx):
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 6
     reject_order(order_ctx["session"], order_ctx["order"])
     assert order_ctx["order"].estado is OrderEstado.REJECTED
-    reservations = order_ctx["session"].scalars(
-        select(StockReservation).where(
-            StockReservation.order_id == order_ctx["order"].order_id
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
         )
-    ).all()
+        .all()
+    )
     assert all(r.estado is ReservationEstado.RELEASED for r in reservations)
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 10
 

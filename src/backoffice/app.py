@@ -37,8 +37,15 @@ def _catalog_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_products(session)
     return [
-        [r["codigo_interno"], r["codigo_barras"], r["nombre_oficial"], r["costo_proveedor"],
-         r["margen_aplicado_pct"], r["precio_lista_base"], r["stock_disponible"]]
+        [
+            r["codigo_interno"],
+            r["codigo_barras"],
+            r["nombre_oficial"],
+            r["costo_proveedor"],
+            r["margen_aplicado_pct"],
+            r["precio_lista_base"],
+            r["stock_disponible"],
+        ]
         for r in rows
     ]
 
@@ -47,8 +54,13 @@ def _clients_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_clients(session)
     return [
-        [r["customer_id"], r["nombre_comercial"], r["telefono_norm"],
-         r["lista_precios_id"], r["descuento_particular_pct"]]
+        [
+            r["customer_id"],
+            r["nombre_comercial"],
+            r["telefono_norm"],
+            r["lista_precios_id"],
+            r["descuento_particular_pct"],
+        ]
         for r in rows
     ]
 
@@ -57,8 +69,14 @@ def _monitor_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_orders(session, sheets=_SHEETS)
     return [
-        [r["order_id"], r["customer"], r["estado"], r["needs_requote"],
-         r["active_reservations"], r["sheets_synced"]]
+        [
+            r["order_id"],
+            r["customer"],
+            r["estado"],
+            r["needs_requote"],
+            r["active_reservations"],
+            r["sheets_synced"],
+        ]
         for r in rows
     ]
 
@@ -66,10 +84,7 @@ def _monitor_grid() -> list[list[object]]:
 def _po_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_purchase_orders(session)
-    return [
-        [r["po_id"], r["supplier"], r["estado"], r["items"], r["received"]]
-        for r in rows
-    ]
+    return [[r["po_id"], r["supplier"], r["estado"], r["items"], r["received"]] for r in rows]
 
 
 def _po_send(po_id: object) -> str:
@@ -179,7 +194,15 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
         with gr.Tab("Catalog"):
             gr.Markdown("### Catálogo y stock")
             catalog_grid = gr.Dataframe(
-                headers=["SKU", "Código barras", "Nombre", "Costo", "Margen", "Precio lista", "Stock"],
+                headers=[
+                    "SKU",
+                    "Código barras",
+                    "Nombre",
+                    "Costo",
+                    "Margen",
+                    "Precio lista",
+                    "Stock",
+                ],
                 datatype=["str", "str", "str", "str", "str", "str", "number"],
                 value=_catalog_grid,
                 label="Productos",
@@ -259,9 +282,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 po_cancel = gr.Button("Cancelar PO", variant="stop")
             po_status = gr.Textbox(label="Ejecución", interactive=False)
             po_send.click(_po_send, inputs=[po_id], outputs=po_status)
-            po_receive.click(
-                _po_receive, inputs=[po_id, po_sku, po_qty], outputs=po_status
-            )
+            po_receive.click(_po_receive, inputs=[po_id, po_sku, po_qty], outputs=po_status)
             po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
 
         with gr.Tab("Ingestion"):

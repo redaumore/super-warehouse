@@ -57,9 +57,21 @@ def _clean_schema(clean_schema):
 def suppliers(db_session):
     """Two suppliers plus a customer and two orders for the needs."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
-    db_session.add(Cliente(customer_id=1, nombre_comercial="Cliente Test", telefono_norm="+5491155559999", lista_precios_id=1, descuento_particular_pct=Decimal(0)))
-    db_session.add(Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0)))
-    db_session.add(Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0)))
+    db_session.add(
+        Cliente(
+            customer_id=1,
+            nombre_comercial="Cliente Test",
+            telefono_norm="+5491155559999",
+            lista_precios_id=1,
+            descuento_particular_pct=Decimal(0),
+        )
+    )
+    db_session.add(
+        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+    )
+    db_session.add(
+        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
+    )
     db_session.add(Order(order_id=100, customer_id=1))
     db_session.add(Order(order_id=200, customer_id=1))
     db_session.flush()
@@ -106,9 +118,7 @@ def test_second_order_merges_into_existing_open_po(suppliers):
 
     assert po_b.po_id == po_a.po_id  # same supplier → same OPEN PO
     items = suppliers.scalars(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_a.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_a.po_id)
     ).all()
     assert len(items) == 1  # aggregated by SKU, no duplicate rows
     assert items[0].sku == "CLV-001"
@@ -126,9 +136,7 @@ def test_new_sku_appends_a_line_to_the_same_po(suppliers):
     po_b = accumulate_need(suppliers, need_b, supplier_id=1)
     assert po_b.po_id == po_a.po_id
     items = suppliers.scalars(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_a.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_a.po_id)
     ).all()
     assert {i.sku for i in items} == {"CLV-001", "TRN-002"}
 
@@ -145,14 +153,10 @@ def test_multiple_suppliers_produce_multiple_pos(suppliers):
     assert po_x.supplier_id == 1
     assert po_y.supplier_id == 2
     item_x = suppliers.scalar(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_x.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_x.po_id)
     )
     item_y = suppliers.scalar(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_y.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_y.po_id)
     )
     assert item_x.sku == "CLV-001"
     assert item_y.sku == "PINT-001"
@@ -169,15 +173,11 @@ def test_reselection_detaches_from_previous_open_po(suppliers):
     assert po_y.po_id != po_x.po_id
     # The old PO's line lost the quantity (removed → no rows left).
     old_items = suppliers.scalars(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_x.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_x.po_id)
     ).all()
     assert old_items == []
     new_items = suppliers.scalars(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_y.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_y.po_id)
     ).all()
     assert len(new_items) == 1
     assert new_items[0].quantity == 6
@@ -196,9 +196,12 @@ def test_reselection_after_execution_is_refused(suppliers):
         accumulate_need(suppliers, need, supplier_id=2)
     # The need keeps its original (executed) link and no new PO was created.
     assert need.supplier_id == 1
-    assert suppliers.scalar(
-        select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 2)
-    ) is None
+    assert (
+        suppliers.scalar(
+            select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 2)
+        )
+        is None
+    )
 
 
 def test_reselection_same_supplier_is_idempotent(suppliers):
@@ -208,9 +211,7 @@ def test_reselection_same_supplier_is_idempotent(suppliers):
     po_b = accumulate_need(suppliers, need, supplier_id=1)
     assert po_b.po_id == po_a.po_id
     item = suppliers.scalar(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_a.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_a.po_id)
     )
     assert item.quantity == 6  # not 12
 
@@ -226,9 +227,7 @@ def test_reselection_keeps_linked_item_when_quantity_remains(suppliers):
 
     assert po_y.po_id != po_x.po_id
     old_line = suppliers.scalar(
-        select(SupplierPurchaseOrderItem).where(
-            SupplierPurchaseOrderItem.po_id == po_x.po_id
-        )
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po_x.po_id)
     )
     assert old_line is not None
     assert old_line.quantity == 6  # need_a's share remains

@@ -52,9 +52,7 @@ class _ClientHolder:
     def client(self) -> OpenAI:
         if self._client is None:
             if not self._api_key:
-                raise OpenAINotConfiguredError(
-                    "openai api key not configured (set OPENAI_API_KEY)"
-                )
+                raise OpenAINotConfiguredError("openai api key not configured (set OPENAI_API_KEY)")
             self._client = OpenAI(api_key=self._api_key)
         return self._client
 
@@ -95,7 +93,9 @@ class OpenAITranscriber:
         )
         logprobs = [segment.avg_logprob for segment in segments if segment.avg_logprob is not None]
         confidence = _segment_confidence(min(logprobs)) if logprobs else 1.0
-        return TranscriptionResult(text=text, confidence=confidence, low_confidence_fragments=fragments)
+        return TranscriptionResult(
+            text=text, confidence=confidence, low_confidence_fragments=fragments
+        )
 
 
 class OpenAIVisionAnalyzer:

@@ -76,10 +76,15 @@ def test_build_app_catalog_tab_has_product_grid():
 
 # -------------------------------------------------- ingestion logic (no DB)
 
+
 def test_to_grid_rows_renders_editable_preview():
     """Las filas extraídas se renderizan como grilla editable."""
     extraction = DocumentExtraction(
-        items=(ExtractedItem(codigo="CLV-001", descripcion="Clavos", cantidad=10, costo=Decimal("1250.00")),)
+        items=(
+            ExtractedItem(
+                codigo="CLV-001", descripcion="Clavos", cantidad=10, costo=Decimal("1250.00")
+            ),
+        )
     )
     assert to_grid_rows(extraction) == [["CLV-001", "Clavos", "10", "1250.00"]]
 
@@ -88,9 +93,9 @@ def test_extract_document_items_uses_vision_analyzer(tmp_path):
     """La extracción delega en el analizador de visión y parsea las filas."""
     image = tmp_path / "remito.jpg"
     image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(analyze=lambda url, prompt: SimpleNamespace(
-        text="10 x Clavos Paris", confidence=1.0
-    ))
+    analyzer = SimpleNamespace(
+        analyze=lambda url, prompt: SimpleNamespace(text="10 x Clavos Paris", confidence=1.0)
+    )
     extraction = extract_document_items(analyzer, image)  # type: ignore[arg-type]
     assert extraction.items[0].descripcion == "Clavos Paris"
     assert extraction.items[0].cantidad == 10
@@ -100,14 +105,15 @@ def test_extract_document_items_rejects_illegible(tmp_path):
     """Un documento ilegible se rechaza con un error claro."""
     image = tmp_path / "mancha.jpg"
     image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(analyze=lambda url, prompt: SimpleNamespace(
-        text="texto sin filas", confidence=0.2
-    ))
+    analyzer = SimpleNamespace(
+        analyze=lambda url, prompt: SimpleNamespace(text="texto sin filas", confidence=0.2)
+    )
     with pytest.raises(Exception, match="illegible"):
         extract_document_items(analyzer, image)  # type: ignore[arg-type]
 
 
 # -------------------------------------------------- DB-backed module logic
+
 
 def _postgres_up() -> bool:
     try:
@@ -173,9 +179,7 @@ def shop_ctx(db_session):
     db_session.flush()
     # The fixture inserts explicit ids, which does not advance the sequences;
     # bump them so subsequent auto-id inserts do not collide.
-    db_session.execute(
-        text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)")
-    )
+    db_session.execute(text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)"))
     db_session.execute(
         text("SELECT setval(pg_get_serial_sequence('clientes', 'customer_id'), 1, true)")
     )
@@ -246,8 +250,12 @@ def test_clients_update_changes_discount(client_ctx):
         telefono_raw="11 5555 1234",
         lista_precios_id=1,
     )
-    update_client(client_ctx["session"], client.customer_id, descuento_particular_pct=Decimal("0.05"))
-    assert client_ctx["session"].get(Cliente, client.customer_id).descuento_particular_pct == Decimal("0.05")
+    update_client(
+        client_ctx["session"], client.customer_id, descuento_particular_pct=Decimal("0.05")
+    )
+    assert client_ctx["session"].get(
+        Cliente, client.customer_id
+    ).descuento_particular_pct == Decimal("0.05")
 
 
 def test_confirm_items_updates_existing_product_stock(shop_ctx):
@@ -339,9 +347,11 @@ def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
     shop_ctx["session"].commit()
     image = tmp_path / "remito.jpg"
     image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(analyze=lambda url, prompt: SimpleNamespace(
-        text="10 x Clavos Paris 2 Pulgadas", confidence=1.0
-    ))
+    analyzer = SimpleNamespace(
+        analyze=lambda url, prompt: SimpleNamespace(
+            text="10 x Clavos Paris 2 Pulgadas", confidence=1.0
+        )
+    )
     with patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="):
         grid, message = _ingest_preview(analyzer, image)  # type: ignore[arg-type]
     assert len(grid) == 1

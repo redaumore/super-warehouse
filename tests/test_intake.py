@@ -49,6 +49,7 @@ class RecordingTransport(httpx.ASGITransport):
 @pytest.mark.asyncio
 async def test_ack_returns_under_five_seconds_with_slow_handler():
     """El ACK responde en menos de 5 segundos aunque el trabajo pesado duerma."""
+
     def slow_handler(message):
         time.sleep(0.5)
 

@@ -64,14 +64,15 @@ def test_webhook_acks_without_dispatch_when_fase2_disabled():
         handled.append(message)
 
     disabled = Settings(fase2_enabled=False)
-    with patch.object(webhook_module, "ORCHESTRATOR_HANDLER", spy_handler), patch.object(
-        webhook_module, "settings", disabled
+    with (
+        patch.object(webhook_module, "ORCHESTRATOR_HANDLER", spy_handler),
+        patch.object(webhook_module, "settings", disabled),
     ):
         client = TestClient(app)
         body = b'{"message": {"chat": {"id": 1}, "text": "hola"}}'
-        signature = "sha256=" + hmac.new(
-            disabled.webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        signature = (
+            "sha256=" + hmac.new(disabled.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+        )
         response = client.post(
             "/webhook/telegram", content=body, headers={"x-hub-signature-256": signature}
         )

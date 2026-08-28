@@ -325,9 +325,7 @@ class SupplierPurchaseOrderItem(Base):
     __tablename__ = "supplier_purchase_order_items"
 
     po_item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    po_id: Mapped[int] = mapped_column(
-        ForeignKey("supplier_purchase_orders.po_id"), nullable=False
-    )
+    po_id: Mapped[int] = mapped_column(ForeignKey("supplier_purchase_orders.po_id"), nullable=False)
     sku: Mapped[str] = mapped_column(String(64), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     received_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

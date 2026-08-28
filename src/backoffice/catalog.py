@@ -23,9 +23,7 @@ _CENT = Decimal("0.01")
 def list_products(session: Session) -> list[dict[str, object]]:
     """Every product row for the catalog grid: SKU, barcode, name, prices, stock."""
     rows = []
-    for product in session.scalars(
-        select(Catalogo).order_by(Catalogo.codigo_interno)
-    ):
+    for product in session.scalars(select(Catalogo).order_by(Catalogo.codigo_interno)):
         rows.append(
             {
                 "codigo_interno": product.codigo_interno,

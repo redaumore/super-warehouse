@@ -43,9 +43,7 @@ def send_po(
 ) -> SupplierPurchaseOrder:
     """Move an OPEN purchase order to SENT (owner sends it to the supplier)."""
     if po.estado is not SupplierPurchaseOrderState.OPEN:
-        raise InvalidTransitionError(
-            f"cannot send purchase order in state {po.estado.value}"
-        )
+        raise InvalidTransitionError(f"cannot send purchase order in state {po.estado.value}")
     po.estado = SupplierPurchaseOrderState.SENT
     po.sent_at = now or datetime.now(UTC)
     session.flush()
@@ -63,9 +61,7 @@ def cancel_po(
         SupplierPurchaseOrderState.OPEN,
         SupplierPurchaseOrderState.SENT,
     ):
-        raise InvalidTransitionError(
-            f"cannot cancel purchase order in state {po.estado.value}"
-        )
+        raise InvalidTransitionError(f"cannot cancel purchase order in state {po.estado.value}")
     po.estado = SupplierPurchaseOrderState.CANCELLED
     po.cancelled_at = now or datetime.now(UTC)
     session.flush()
@@ -90,9 +86,7 @@ def receive_po(
         SupplierPurchaseOrderState.SENT,
         SupplierPurchaseOrderState.PARTIALLY_RECEIVED,
     ):
-        raise InvalidTransitionError(
-            f"cannot receive purchase order in state {po.estado.value}"
-        )
+        raise InvalidTransitionError(f"cannot receive purchase order in state {po.estado.value}")
     reference = now or datetime.now(UTC)
     by_sku = {item.sku: item for item in po.items}
     for sku, quantity in received.items():
@@ -102,13 +96,9 @@ def receive_po(
         if item is None:
             raise KeyError(f"sku {sku} not in purchase order")
         if item.received_quantity + quantity > item.quantity:
-            raise ValueError(
-                f"received {quantity} exceeds the remaining quantity for {sku}"
-            )
+            raise ValueError(f"received {quantity} exceeds the remaining quantity for {sku}")
         item.received_quantity += quantity
-        inventory_row = session.scalar(
-            select(Inventory).where(Inventory.sku_id == sku)
-        )
+        inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == sku))
         if inventory_row is None:
             inventory_row = Inventory(sku_id=sku, quantity_on_hand=0)
             session.add(inventory_row)

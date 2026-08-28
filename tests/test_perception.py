@@ -112,7 +112,7 @@ def test_transcription_error_is_a_perception_error():
 def test_analyze_image_returns_vision_text():
     """Analizar una imagen devuelve el texto descriptivo con su confianza."""
     provider = FakeVisionAnalyzer(
-        result=VisionResult(text="remito con 3 items: clavos 2\", tornillos M6", confidence=0.9)
+        result=VisionResult(text='remito con 3 items: clavos 2", tornillos M6', confidence=0.9)
     )
     result = analyze_image(provider, "https://cdn/media/remito1.jpg")
     assert "clavos" in result.text

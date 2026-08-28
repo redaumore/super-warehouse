@@ -20,12 +20,18 @@ def _availability(mapping: dict[str, int]):
 
 
 CLAVOS = SupplierCandidate(
-    supplier_id=1, business_name="Proveedor X", sku="CLV-001",
-    description="Clavos Paris 2 Pulgadas", available_quantity=50,
+    supplier_id=1,
+    business_name="Proveedor X",
+    sku="CLV-001",
+    description="Clavos Paris 2 Pulgadas",
+    available_quantity=50,
 )
 PINTURA = SupplierCandidate(
-    supplier_id=2, business_name="Pinturería Y", sku="PINT-001",
-    description="Pintura Látex Blanco", available_quantity=20,
+    supplier_id=2,
+    business_name="Pinturería Y",
+    sku="PINT-001",
+    description="Pintura Látex Blanco",
+    available_quantity=20,
 )
 
 
@@ -82,7 +88,9 @@ def test_mixed_items_any_no_supplier_forces_case_c():
 
 def test_search_by_description_finds_candidates_for_unknown_sku():
     """La búsqueda por descripción encuentra proveedores para SKU desconocido."""
-    items = (ResolvedItem(sku="pintura latex blanco", cantidad=2, description="pintura latex blanco"),)
+    items = (
+        ResolvedItem(sku="pintura latex blanco", cantidad=2, description="pintura latex blanco"),
+    )
     searcher = FakeSupplierCatalogSearcher((PINTURA,))
     decision = classify_case(items, _availability({}), searcher)
     assert decision.case is SourcingCase.B

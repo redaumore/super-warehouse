@@ -23,9 +23,7 @@ def upsert_sourcing_need(
 ) -> SourcingNeed:
     """Create or update the order's need for one missing SKU."""
     need = session.scalar(
-        select(SourcingNeed).where(
-            SourcingNeed.order_id == order_id, SourcingNeed.sku == sku
-        )
+        select(SourcingNeed).where(SourcingNeed.order_id == order_id, SourcingNeed.sku == sku)
     )
     if need is None:
         need = SourcingNeed(order_id=order_id, sku=sku, missing_quantity=missing_quantity)
@@ -54,8 +52,6 @@ def sourcing_needs_for_order(session: Session, order_id: int) -> list[SourcingNe
     """The order's needs ordered by SKU (stable for replies and accumulation)."""
     return list(
         session.scalars(
-            select(SourcingNeed)
-            .where(SourcingNeed.order_id == order_id)
-            .order_by(SourcingNeed.sku)
+            select(SourcingNeed).where(SourcingNeed.order_id == order_id).order_by(SourcingNeed.sku)
         )
     )

@@ -110,9 +110,7 @@ def adjust_line(quote: Quote, sku: str, extra_discount_pct: Decimal | float) -> 
             updated.append(line)
             continue
         found = True
-        new_final = (line.final_price * (Decimal(1) - pct)).quantize(
-            _CENT, rounding=ROUND_HALF_UP
-        )
+        new_final = (line.final_price * (Decimal(1) - pct)).quantize(_CENT, rounding=ROUND_HALF_UP)
         updated.append(
             QuoteLine(
                 sku=line.sku,
