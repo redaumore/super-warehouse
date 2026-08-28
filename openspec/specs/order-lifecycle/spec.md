@@ -91,7 +91,7 @@ The system MUST, on approval, write the order to Google Sheets, deduct stock def
 
 ### Requirement: Track order state machine
 
-The system MUST track each order through exactly one of the states: Pending Approval, Approved, In Dispatch, or Rejected.
+The system MUST track each order through exactly one of the four approval states: Pending Approval, Approved, In Dispatch, or Rejected. Sourcing/fulfillment status is a separate axis (`SourcingState`: PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) stored in its own column and MUST NOT change or replace the four approval states. The system MUST also store a `delivery_date` on the order.
 
 #### Scenario: State transitions on the happy path
 
@@ -107,6 +107,13 @@ The system MUST track each order through exactly one of the states: Pending Appr
 - WHEN the owner rejects it
 - THEN it moves to Rejected
 - AND its reservations are released
+
+#### Scenario: Sourcing axis is independent of approval
+
+- GIVEN an order whose sourcing is PENDING_ASSEMBLY, IN_PREPARATION, or CANCELLED
+- WHEN the approval flow runs
+- THEN the four approval states progress independently
+- AND the sourcing value does not alter the approval state
 
 ### Requirement: Quote response SLA
 

@@ -1,10 +1,6 @@
-# whatsapp-order-intake Specification
+# Delta for whatsapp-order-intake
 
-## Purpose
-
-Receive owner orders as WhatsApp text messages or voice notes and acknowledge receipt immediately so the owner is not left waiting while heavy processing runs.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Ingest text and voice orders
 
@@ -46,57 +42,7 @@ The system MUST send an ephemeral acknowledgement to the owner within 5 seconds 
 - THEN the ACK is still delivered within 5 seconds
 - AND heavy processing continues asynchronously in the background
 
-### Requirement: Transcribe voice notes
-
-The system MUST transcribe voice-note audio into text using speech-to-text before order parsing.
-
-#### Scenario: Clean audio transcribed
-
-- GIVEN a voice note with clearly spoken product requests
-- WHEN the audio is processed
-- THEN the system produces a text transcript of the spoken order
-- AND the transcript is passed to order parsing
-
-#### Scenario: Noisy audio still yields a usable transcript
-
-- GIVEN a voice note with background noise or dialect variance
-- WHEN the audio is processed
-- THEN the system produces a best-effort transcript
-- AND any low-confidence fragments are flagged for disambiguation downstream rather than silently dropped
-
-### Requirement: Handle transcription failure
-
-The system MUST detect transcription failure and recover without losing the customer.
-
-#### Scenario: Transcription fails outright
-
-- GIVEN a voice note cannot be transcribed (silent, corrupted, or unsupported audio)
-- WHEN the transcription step errors
-- THEN the system notifies the customer that the audio could not be understood
-- AND asks the customer to resend as text or a new voice note
-
-#### Scenario: Partial transcription is confirmed
-
-- GIVEN only part of an audio could be transcribed with confidence
-- WHEN ambiguity remains
-- THEN the system does not proceed to quotation on guessed items
-- AND prompts the customer to confirm or correct the unclear items
-
-### Requirement: Extract structured order fields
-
-The system MUST, after transcription, extract structured order fields from the message: customer name, a list of items with quantities, and an optional delivery date.
-
-#### Scenario: Order message extracted
-
-- GIVEN a transcribed or text order message
-- WHEN the message is parsed
-- THEN the system produces customer name, item lines (description + quantity), and a delivery date when present
-
-#### Scenario: Missing delivery date
-
-- GIVEN a message with no delivery date
-- WHEN the message is parsed
-- THEN the delivery date is left empty without failing extraction
+## ADDED Requirements
 
 ### Requirement: Restrict senders to the owner
 
