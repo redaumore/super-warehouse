@@ -1,15 +1,17 @@
-"""Pure unit tests for the supplier validation/codegen helpers.
+"""Pure unit tests for the supplier validation/codegen helpers and searcher seam.
 
 No DB, no network: CUIT mod-11, strict E.164 vs WhatsApp phone forms, RFC 5322
-email, and the deterministic 3-char code suggestion/collision loop. The code
-collision tests use a stub session whose ``scalar`` answers whether a code is
-already taken.
+email, the deterministic 3-char code suggestion/collision loop, and the
+``FakeSupplierCatalogSearcher`` INACTIVO exclusion contract. The code collision
+tests use a stub session whose ``scalar`` answers whether a code is already
+taken.
 """
 
 from __future__ import annotations
 
 import pytest
 
+from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
 from src.supplier.validation import (
     CodeCollisionError,
     normalize_e164_phone,
@@ -176,3 +178,30 @@ def test_resolve_code_empty_raises_collision_error():
     session = _FakeSession(set())
     with pytest.raises(CodeCollisionError):
         resolve_code(session, "  ")
+
+
+# ------------------------------------------------------------ searcher seam
+
+
+def test_fake_searcher_excludes_inactive_candidates():
+    """INACTIVO candidates never surface, even when they match the SKU."""
+    activo = SupplierCandidate(
+        supplier_id=1,
+        business_name="Ferretería Activa SA",
+        sku="CLV-001",
+        description="Clavos Paris 2 Pulgadas",
+    )
+    inactivo = SupplierCandidate(
+        supplier_id=2,
+        business_name="Ferretería Dada de Baja SRL",
+        sku="CLV-001",
+        description="Clavos Paris 2 Pulgadas",
+        status="INACTIVO",
+    )
+    searcher = FakeSupplierCatalogSearcher((activo, inactivo))
+
+    assert searcher.search(sku="CLV-001") == (activo,)
+    assert searcher.search(description="clavos") == (activo,)
+
+    inactive_only = FakeSupplierCatalogSearcher((inactivo,))
+    assert inactive_only.search(sku="CLV-001") == ()
