@@ -1,0 +1,2807 @@
+[
+  {
+    "node_id": "node_prod_100001",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 00, apertura 9/13 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, con fleje de 13 mm de ancho, artículo 00 y rango de apertura de 9/13 mm. Se comercializa por unidad con paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 00\napertura: 9/13 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 547,
+    "text_length_tokens": 183,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100001",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "00",
+      "apertura": "9/13 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100002",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 0, apertura 9/20 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, con fleje de 13 mm de ancho, artículo 0 y rango de apertura de 9/20 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 0\napertura: 9/20 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 531,
+    "text_length_tokens": 182,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100002",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "0",
+      "apertura": "9/20 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100003",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 1, apertura 12/26 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 1 y apertura de 12/26 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 1\napertura: 12/26 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100003",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "1",
+      "apertura": "12/26 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100004",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 2, apertura 13/29 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 2 y apertura de 13/29 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 2\napertura: 13/29 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100004",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "2",
+      "apertura": "13/29 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100005",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 3, apertura 14/36 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 3 y apertura de 14/36 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 3\napertura: 14/36 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100005",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "3",
+      "apertura": "14/36 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100006",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 4, apertura 21/42 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 4 y apertura de 21/42 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 4\napertura: 21/42 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100006",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "4",
+      "apertura": "21/42 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100007",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 5, apertura 26/49 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 5 y apertura de 26/49 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 5\napertura: 26/49 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100007",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "5",
+      "apertura": "26/49 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100008",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 6, apertura 32/55 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 6 y apertura de 32/55 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 6\napertura: 32/55 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100008",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "6",
+      "apertura": "32/55 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100009",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 7, apertura 40/63 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 7 y apertura de 40/63 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 7\napertura: 40/63 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100009",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "7",
+      "apertura": "40/63 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100010",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 8, apertura 45/68 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 8 y apertura de 45/68 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 8\napertura: 45/68 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100010",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "8",
+      "apertura": "45/68 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100016",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 9, apertura 53/77 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 9 y apertura de 53/77 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 9\napertura: 53/77 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 521,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100016",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "9",
+      "apertura": "53/77 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100017",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 10, apertura 59/81 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 10 y apertura de 59/81 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 10\napertura: 59/81 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 524,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100017",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "10",
+      "apertura": "59/81 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100018",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 11, apertura 65/88 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 11 y apertura de 65/88 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 11\napertura: 65/88 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 524,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100018",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "11",
+      "apertura": "65/88 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100019",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 12, apertura 72/94 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 12 y apertura de 72/94 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 12\napertura: 72/94 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 524,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100019",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "12",
+      "apertura": "72/94 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100020",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 13, apertura 78/101 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 13 y apertura de 78/101 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 13\napertura: 78/101 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 527,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100020",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "13",
+      "apertura": "78/101 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100021",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 14, apertura 88/111 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 14 y apertura de 88/111 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 14\napertura: 88/111 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 527,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100021",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "14",
+      "apertura": "88/111 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100022",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 15, apertura 98/119 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 15 y apertura de 98/119 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 15\napertura: 98/119 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 527,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100022",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "15",
+      "apertura": "98/119 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100025",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Americana a Cremallera artículo 20, apertura 144/167 mm\ndescripcion: Abrazadera de acero CARBIZ Americana a Cremallera, fleje de 13 mm de ancho, artículo 20 y apertura de 144/167 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Americana a Cremallera\nfleje_ancho: 13 mm\narticulo: 20\napertura: 144/167 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 530,
+    "text_length_tokens": 178,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100025",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a cremallera",
+      "tipo": "Americana a Cremallera",
+      "fleje_ancho": "13 mm",
+      "articulo": "20",
+      "apertura": "144/167 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100027",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 402, apertura 6/16 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, con fleje de 8 mm de ancho, artículo 402 y apertura de 6/16 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 402\napertura: 6/16 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 563,
+    "text_length_tokens": 190,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100027",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "402",
+      "apertura": "6/16 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100028",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 403, apertura 8/22 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 403 y apertura de 8/22 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 403\napertura: 8/22 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 559,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100028",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "403",
+      "apertura": "8/22 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100029",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 404, apertura 13/25 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 404 y apertura de 13/25 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 404\napertura: 13/25 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100029",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "404",
+      "apertura": "13/25 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100030",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 405, apertura 16/32 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 405 y apertura de 16/32 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 405\napertura: 16/32 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100030",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "405",
+      "apertura": "16/32 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100031",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 406, apertura 16/38 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 406 y apertura de 16/38 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 406\napertura: 16/38 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100031",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "406",
+      "apertura": "16/38 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100032",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 407, apertura 19/45 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 407 y apertura de 19/45 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 407\napertura: 19/45 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100032",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "407",
+      "apertura": "19/45 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100033",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 408, apertura 25/50 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 408 y apertura de 25/50 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 408\napertura: 25/50 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100033",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "408",
+      "apertura": "25/50 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100034",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 409, apertura 36/60 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 409 y apertura de 36/60 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 409\napertura: 36/60 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100034",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "409",
+      "apertura": "36/60 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100035",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 410, apertura 45/70 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 410 y apertura de 45/70 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 410\napertura: 45/70 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 562,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100035",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "410",
+      "apertura": "45/70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100036",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero angostas a cremallera\nmarca: CARBIZ\nnombre: Abrazadera de acero Angosta Americana a Cremallera artículo 413, apertura 77/100 mm\ndescripcion: Abrazadera de acero CARBIZ Angosta - Americana a Cremallera, fleje de 8 mm de ancho, artículo 413 y apertura de 77/100 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Angosta - Americana a Cremallera\nfleje_ancho: 8 mm\narticulo: 413\napertura: 77/100 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 565,
+    "text_length_tokens": 189,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100036",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero angostas a cremallera",
+      "tipo": "Angosta - Americana a Cremallera",
+      "fleje_ancho": "8 mm",
+      "articulo": "413",
+      "apertura": "77/100 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100011",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero mini tipo europea\nmarca: CARBIZ\nnombre: Abrazadera de acero Mini a Tornillo tipo Europea artículo A - 3/8, apertura 8/10 mm\ndescripcion: Abrazadera de acero CARBIZ Mini a Tornillo tipo Europea, con fleje de 10 mm de ancho, artículo A - 3/8 y apertura de 8/10 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Mini a Tornillo - Tipo Europea\nfleje_ancho: 10 mm\narticulo: A - 3/8\"\napertura: 8/10 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 566,
+    "text_length_tokens": 195,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100011",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero mini tipo europea",
+      "tipo": "Mini a Tornillo - Tipo Europea",
+      "fleje_ancho": "10 mm",
+      "articulo": "A - 3/8\"",
+      "apertura": "8/10 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100012",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero mini tipo europea\nmarca: CARBIZ\nnombre: Abrazadera de acero Mini a Tornillo tipo Europea artículo B - 1/2, apertura 9/12 mm\ndescripcion: Abrazadera de acero CARBIZ Mini a Tornillo tipo Europea, con fleje de 10 mm de ancho, artículo B - 1/2 y apertura de 9/12 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Mini a Tornillo - Tipo Europea\nfleje_ancho: 10 mm\narticulo: B - 1/2\"\napertura: 9/12 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 566,
+    "text_length_tokens": 195,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100012",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero mini tipo europea",
+      "tipo": "Mini a Tornillo - Tipo Europea",
+      "fleje_ancho": "10 mm",
+      "articulo": "B - 1/2\"",
+      "apertura": "9/12 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100013",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero mini tipo europea\nmarca: CARBIZ\nnombre: Abrazadera de acero Mini a Tornillo tipo Europea artículo C - 5/8, apertura 11/14 mm\ndescripcion: Abrazadera de acero CARBIZ Mini a Tornillo tipo Europea, con fleje de 10 mm de ancho, artículo C - 5/8 y apertura de 11/14 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Mini a Tornillo - Tipo Europea\nfleje_ancho: 10 mm\narticulo: C - 5/8\"\napertura: 11/14 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 569,
+    "text_length_tokens": 195,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100013",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero mini tipo europea",
+      "tipo": "Mini a Tornillo - Tipo Europea",
+      "fleje_ancho": "10 mm",
+      "articulo": "C - 5/8\"",
+      "apertura": "11/14 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100014",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas para manguera de gas\nmarca: CARBIZ\nnombre: Abrazadera de acero para manguera de gas, artículo Gas, apertura 12/17 mm\ndescripcion: Abrazadera de acero CARBIZ para manguera de gas, fabricada con fleje de 10 mm de ancho, artículo Gas y apertura de 12/17 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Para Manguera de Gas\nfleje_ancho: 10 mm\narticulo: Gas\napertura: 12/17 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 535,
+    "text_length_tokens": 175,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100014",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas para manguera de gas",
+      "tipo": "Para Manguera de Gas",
+      "fleje_ancho": "10 mm",
+      "articulo": "Gas",
+      "apertura": "12/17 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100026",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas para fuelle sanitario\nmarca: CARBIZ\nnombre: Abrazadera de acero para fuelle de sanitario artículo 215, apertura 50/58 mm\ndescripcion: Abrazadera de acero CARBIZ para fuelle de sanitario, con fleje de 8 mm de ancho, artículo 215 y apertura de 50/58 mm. Venta por unidad, paquete de 10 unidades.\ntipo: Para Fuelle de Sanitario\nfleje_ancho: 8 mm\narticulo: 215\napertura: 50/58 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 535,
+    "text_length_tokens": 175,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100026",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas para fuelle sanitario",
+      "tipo": "Para Fuelle de Sanitario",
+      "fleje_ancho": "8 mm",
+      "articulo": "215",
+      "apertura": "50/58 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100101",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-101, apertura 25/30 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, con fleje de 22 mm de ancho, artículo S-101 y apertura de 25/30 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-101\napertura: 25/30 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 550,
+    "text_length_tokens": 193,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100101",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-101",
+      "apertura": "25/30 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100102",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-102, apertura 28/34 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-102 y apertura de 28/34 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-102\napertura: 28/34 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100102",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-102",
+      "apertura": "28/34 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100103",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-103, apertura 33/39 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-103 y apertura de 33/39 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-103\napertura: 33/39 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100103",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-103",
+      "apertura": "33/39 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100104",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-104, apertura 37/46 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-104 y apertura de 37/46 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-104\napertura: 37/46 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100104",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-104",
+      "apertura": "37/46 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100105",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-105, apertura 44/43 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-105 y apertura consignada en catálogo de 44/43 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-105\napertura: 44/43 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 569,
+    "text_length_tokens": 199,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100105",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-105",
+      "apertura": "44/43 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100106",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-106, apertura 50/59 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-106 y apertura de 50/59 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-106\napertura: 50/59 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100106",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-106",
+      "apertura": "50/59 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100107",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-107, apertura 55/64 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-107 y apertura de 55/64 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-107\napertura: 55/64 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100107",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-107",
+      "apertura": "55/64 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100108",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-108, apertura 61/71 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-108 y apertura de 61/71 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-108\napertura: 61/71 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100108",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-108",
+      "apertura": "61/71 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100109",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-109, apertura 68/78 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-109 y apertura de 68/78 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-109\napertura: 68/78 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100109",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-109",
+      "apertura": "68/78 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100110",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-110, apertura 76/87 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-110 y apertura de 76/87 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-110\napertura: 76/87 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100110",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-110",
+      "apertura": "76/87 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100111",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-111, apertura 85/95 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-111 y apertura de 85/95 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-111\napertura: 85/95 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 546,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100111",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-111",
+      "apertura": "85/95 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100112",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-112, apertura 93/103 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-112 y apertura de 93/103 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-112\napertura: 93/103 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 549,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100112",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-112",
+      "apertura": "93/103 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100113",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-113, apertura 100/111 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-113 y apertura de 100/111 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-113\napertura: 100/111 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100113",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-113",
+      "apertura": "100/111 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100114",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-114, apertura 108/119 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-114 y apertura de 108/119 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-114\napertura: 108/119 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100114",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-114",
+      "apertura": "108/119 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100115",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-115, apertura 116/128 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-115 y apertura de 116/128 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-115\napertura: 116/128 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100115",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-115",
+      "apertura": "116/128 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100116",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-116, apertura 125/136 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-116 y apertura de 125/136 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-116\napertura: 125/136 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100116",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-116",
+      "apertura": "125/136 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100117",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-117, apertura 135/145 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-117 y apertura de 135/145 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-117\napertura: 135/145 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100117",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-117",
+      "apertura": "135/145 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100118",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-118, apertura 143/153 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-118 y apertura de 143/153 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-118\napertura: 143/153 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100118",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-118",
+      "apertura": "143/153 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100119",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-119, apertura 151/161 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-119 y apertura de 151/161 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-119\napertura: 151/161 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100119",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-119",
+      "apertura": "151/161 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100120",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-120, apertura 159/169 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-120 y apertura de 159/169 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-120\napertura: 159/169 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100120",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-120",
+      "apertura": "159/169 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100121",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-121, apertura 167/177 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-121 y apertura de 167/177 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-121\napertura: 167/177 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100121",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-121",
+      "apertura": "167/177 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100122",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Abrazaderas de acero a tornillo súper presión\nmarca: CARBIZ\nnombre: Abrazadera de acero A Tornillo Súper Presión S-122, apertura 175/185 mm\ndescripcion: Abrazadera de acero CARBIZ A Tornillo - Súper Presión, fleje de 22 mm de ancho, artículo S-122 y apertura de 175/185 mm. Venta por unidad, paquete de 10 unidades.\ntipo: A Tornillo - Súper Presión\nfleje_ancho: 22 mm\narticulo: S-122\napertura: 175/185 mm\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 552,
+    "text_length_tokens": 192,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100122",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Abrazaderas de acero a tornillo súper presión",
+      "tipo": "A Tornillo - Súper Presión",
+      "fleje_ancho": "22 mm",
+      "articulo": "S-122",
+      "apertura": "175/185 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_100015",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Expositores y muestrarios\nmarca: CARBIZ\nnombre: Display muestrario de abrazaderas de acero CARBIZ\ndescripcion: Display muestrario CARBIZ para exhibición de abrazaderas de acero. Se comercializa por unidad; el catálogo no indica cantidad de paquete.\ntipo: Display Muestrario\nunidad_venta: c/u",
+    "text_length_char": 400,
+    "text_length_tokens": 114,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100015",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Expositores y muestrarios",
+      "tipo": "Display Muestrario"
+    }
+  },
+  {
+    "node_id": "node_prod_100023",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Fijaciones y sujeciones\ncategoria: Abrazaderas\nsubcategoria: Expositores y accesorios de exhibición\nmarca: CARBIZ\nnombre: Expendedor de alambre CARBIZ para 236 unidades\ndescripcion: Expendedor de alambre CARBIZ con capacidad indicada para 236 unidades. Se comercializa por unidad; el catálogo no especifica paquete.\ntipo: Expendedor Alambre\ncapacidad: 236 unidades\nunidad_venta: c/u",
+    "text_length_char": 430,
+    "text_length_tokens": 117,
+    "metadata": {
+      "pagina": 4,
+      "codigo": "100023",
+      "proveedor": "Ferretera del Norte",
+      "marca": "CARBIZ",
+      "categoria": "Abrazaderas",
+      "subcategoria": "Expositores y accesorios de exhibición",
+      "tipo": "Expendedor Alambre"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta aisladora de PVC autoextinguible TACSA FLEX-PRO 180, 0,18 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas aisladoras\nsubcategoria: Cintas de PVC autoextinguibles\nmarca: TACSA\nnombre: Cinta aisladora de PVC autoextinguible TACSA FLEX-PRO 180, 0,18 mm\ndescripcion: Cinta aisladora de PVC autoextinguible TACSA FLEX-PRO 180, de 0,18 mm de espesor, disponible en negro, blanco, rojo, amarillo, azul y marrón. Ofrece rigidez dieléctrica mínima de 40 kV/mm, adhesión al dorso y al acero de al menos 1,80 N/cm, resistencia a la tracción mínima de 150 N/cm/mm, elongación mínima del 125% y temperatura de trabajo de 90 °C.\nmodelo: FLEX-PRO 180\nespesor: 0,18 mm\nmaterial: PVC\ntipo: Autoextinguible\ncolores_disponibles: Negro, blanco, rojo, amarillo, azul y marrón\nrigidez_dieléctrica_minima: 40 kV/mm\nadhesion_al_dorso_minima: 1,80 N/cm\nadhesion_al_acero_minima: 1,80 N/cm\nresistencia_a_la_traccion_minima: 150 N/cm/mm\nelongacion_minima: 125%\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 930,
+    "text_length_tokens": 335,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta aisladora de PVC autoextinguible TACSA FLEX-PRO 180, 0,18 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas aisladoras",
+      "subcategoria": "Cintas de PVC autoextinguibles",
+      "tipo": "Autoextinguible"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta aisladora de PVC autoextinguible TACSA 15PLUS, 0,15 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas aisladoras\nsubcategoria: Cintas de PVC autoextinguibles\nmarca: TACSA\nnombre: Cinta aisladora de PVC autoextinguible TACSA 15PLUS, 0,15 mm\ndescripcion: Cinta aisladora de PVC autoextinguible TACSA 15PLUS, de 0,15 mm de espesor, disponible en negro, blanco, rojo, azul, amarillo y verde. Sus características de desempeño indicadas en la tabla incluyen rigidez dieléctrica mínima de 40 kV/mm, adhesión mínima de 1,80 N/cm, resistencia a la tracción mínima de 150 N/cm/mm, elongación mínima del 125% y temperatura de trabajo de 90 °C.\nmodelo: 15PLUS\nespesor: 0,15 mm\nmaterial: PVC\ntipo: Autoextinguible\ncolores_disponibles: Negro, blanco, rojo, azul, amarillo y verde\nrigidez_dieléctrica_minima: 40 kV/mm\nadhesion_al_dorso_minima: 1,80 N/cm\nadhesion_al_acero_minima: 1,80 N/cm\nresistencia_a_la_traccion_minima: 150 N/cm/mm\nelongacion_minima: 125%\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 945,
+    "text_length_tokens": 327,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta aisladora de PVC autoextinguible TACSA 15PLUS, 0,15 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas aisladoras",
+      "subcategoria": "Cintas de PVC autoextinguibles",
+      "tipo": "Autoextinguible"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta de PVC autoextinguible TACSA SILO-BOLSA, 70 mm x 9 m, 0,13 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas de reparación\nsubcategoria: Cintas de PVC para bolsas de silo\nmarca: TACSA\nnombre: Cinta de PVC autoextinguible TACSA SILO-BOLSA, 70 mm x 9 m, 0,13 mm\ndescripcion: Cinta de PVC autoextinguible TACSA SILO-BOLSA, de 0,13 mm de espesor, para reparación de bolsas de almacenaje de granos. Proporciona alta absorción de radiación UV y excelente resistencia frente a condiciones ambientales severas. Presentación de 70 mm x 9 m, en color blanco, con elongación del 125% y adhesión al acero de 3 N/cm.\nmodelo: SILO-BOLSA\nespesor: 0,13 mm\nmaterial: PVC\naplicacion: Reparación de bolsas de almacenaje de granos\npresentacion: 70 mm x 9 m\ncolor: Blanco\nelongacion: 125%\nadhesion_al_acero: 3 N/cm\nresistencia_a_la_radiacion_uv: Alta",
+    "text_length_char": 793,
+    "text_length_tokens": 260,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta de PVC autoextinguible TACSA SILO-BOLSA, 70 mm x 9 m, 0,13 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas de reparación",
+      "subcategoria": "Cintas de PVC para bolsas de silo"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta de protección TACSA SIN ADHESIVO, 19 mm x 20 m, 0,10 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas de protección\nsubcategoria: Cintas de PVC sin adhesivo\nmarca: TACSA\nnombre: Cinta de protección TACSA SIN ADHESIVO, 19 mm x 20 m, 0,10 mm\ndescripcion: Cinta de PVC sin adhesivo TACSA, de 0,10 mm de espesor, destinada a la protección y terminación de cables o espumas de polietileno. Se presenta en 19 mm x 20 m, con elongación del 125%, rigidez dieléctrica de 40 kV/mm y temperatura de trabajo de 90 °C. Disponible en negro, blanco, rojo y gris.\nmodelo: SIN ADHESIVO\nespesor: 0,10 mm\nmaterial: PVC\nadhesivo: Sin adhesivo\naplicacion: Terminación y protección de cables o espumas de polietileno\npresentacion: 19 mm x 20 m\ncolores_disponibles: Negro, blanco, rojo y gris\nelongacion: 125%\nrigidez_dieléctrica: 40 kV/mm\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 817,
+    "text_length_tokens": 282,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta de protección TACSA SIN ADHESIVO, 19 mm x 20 m, 0,10 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas de protección",
+      "subcategoria": "Cintas de PVC sin adhesivo"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta para revestimiento de conductos de refrigeración TACSA, con adhesivo, 70 mm x 20 m, 0,13 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas para refrigeración\nsubcategoria: Cintas de PVC con adhesivo\nmarca: TACSA\nnombre: Cinta para revestimiento de conductos de refrigeración TACSA, con adhesivo, 70 mm x 20 m, 0,13 mm\ndescripcion: Cinta de PVC TACSA con adhesivo para el revestimiento de conductos de refrigeración. Tiene 0,13 mm de espesor, presentación de 70 mm x 20 m, elongación del 125%, adhesión al dorso de 1,80 N/cm y temperatura de trabajo de 90 °C. Disponible en negro, blanco y gris.\nmodelo: REFRIGERACIÓN CON ADHESIVO\nespesor: 0,13 mm\nmaterial: PVC\nadhesivo: Con adhesivo\naplicacion: Revestimiento de conductos de refrigeración\npresentacion: 70 mm x 20 m\ncolores_disponibles: Negro, blanco y gris\nelongacion: 125%\nadhesion_al_dorso: 1,80 N/cm\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 818,
+    "text_length_tokens": 271,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta para revestimiento de conductos de refrigeración TACSA, con adhesivo, 70 mm x 20 m, 0,13 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas para refrigeración",
+      "subcategoria": "Cintas de PVC con adhesivo"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta para revestimiento de conductos de refrigeración TACSA, sin adhesivo, 70 mm x 20 m, 0,10 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas para refrigeración\nsubcategoria: Cintas de PVC sin adhesivo\nmarca: TACSA\nnombre: Cinta para revestimiento de conductos de refrigeración TACSA, sin adhesivo, 70 mm x 20 m, 0,10 mm\ndescripcion: Cinta de PVC TACSA sin adhesivo para el revestimiento de conductos de refrigeración. Tiene 0,10 mm de espesor y se presenta en 70 mm x 20 m. Ofrece elongación del 125% y temperatura de trabajo de 90 °C. Disponible en negro, blanco y gris.\nmodelo: REFRIGERACIÓN SIN ADHESIVO\nespesor: 0,10 mm\nmaterial: PVC\nadhesivo: Sin adhesivo\naplicacion: Revestimiento de conductos de refrigeración\npresentacion: 70 mm x 20 m\ncolores_disponibles: Negro, blanco y gris\nelongacion: 125%\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 764,
+    "text_length_tokens": 246,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta para revestimiento de conductos de refrigeración TACSA, sin adhesivo, 70 mm x 20 m, 0,10 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas para refrigeración",
+      "subcategoria": "Cintas de PVC sin adhesivo"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta de caucho autosoldable TACSA para alta tensión, 19 mm x 2 m / 4,57 m / 9,14 m, 0,76 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas autosoldables\nsubcategoria: Cintas de caucho EPR para alta tensión\nmarca: TACSA\nnombre: Cinta de caucho autosoldable TACSA para alta tensión, 19 mm x 2 m / 4,57 m / 9,14 m, 0,76 mm\ndescripcion: Cinta de caucho EPR autosoldable TACSA para aplicaciones de alta tensión, de 0,76 mm de espesor. Se suelda sobre sí misma formando un solo bloque. Cumple ASTM D-4388 y está disponible en presentaciones de 19 mm x 2 m, 19 mm x 4,57 m y 19 mm x 9,14 m, en color negro.\nmodelo: PARA ALTA TENSIÓN\nespesor: 0,76 mm\nmaterial: Caucho EPR (etileno-propileno)\ntipo: Autosoldable\naplicacion: Alta tensión\npresentaciones: 19 mm x 2 m; 19 mm x 4,57 m; 19 mm x 9,14 m\ncolor: Negro\nnorma: ASTM D-4388\nrigidez_dieléctrica_minima_alta_tension: 40 kV/mm\ntemperatura_maxima_de_trabajo_alta_tension: ≤ 90 °C\ntemperatura_de_emergencia_alta_tension: ≤ 130 °C\nresistencia_a_la_traccion_minima: ≥ 1,7 MPa\nelongacion_minima: ≥ 1000%\nfusion: < 0,2",
+    "text_length_char": 989,
+    "text_length_tokens": 370,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta de caucho autosoldable TACSA para alta tensión, 19 mm x 2 m / 4,57 m / 9,14 m, 0,76 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas autosoldables",
+      "subcategoria": "Cintas de caucho EPR para alta tensión",
+      "tipo": "Autosoldable"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta de caucho autosoldable TACSA para telecomunicaciones, 19 mm x 5 m, 0,76 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas autosoldables\nsubcategoria: Cintas de caucho para telecomunicaciones\nmarca: TACSA\nnombre: Cinta de caucho autosoldable TACSA para telecomunicaciones, 19 mm x 5 m, 0,76 mm\ndescripcion: Cinta de caucho elástica y tenaz TACSA para telecomunicaciones, de 0,76 mm de espesor. Se suelda sobre sí misma formando un solo bloque. Cumple ASTM D-4388 Tipo 1 y se presenta en 19 mm x 5 m, color negro.\nmodelo: PARA TELECOMUNICACIONES\nespesor: 0,76 mm\nmaterial: Caucho\ntipo: Autosoldable\naplicacion: Telecomunicaciones\npresentacion: 19 mm x 5 m\ncolor: Negro\nnorma: ASTM D-4388 Tipo 1",
+    "text_length_char": 643,
+    "text_length_tokens": 215,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta de caucho autosoldable TACSA para telecomunicaciones, 19 mm x 5 m, 0,76 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas autosoldables",
+      "subcategoria": "Cintas de caucho para telecomunicaciones",
+      "tipo": "Autosoldable"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta multipropósito reforzada TACSA DUCTAC, 48 mm x 9 m / 27 m / 54 m, 0,26 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas multiuso\nsubcategoria: Cintas multipropósito reforzadas con hilado textil\nmarca: TACSA\nnombre: Cinta multipropósito reforzada TACSA DUCTAC, 48 mm x 9 m / 27 m / 54 m, 0,26 mm\ndescripcion: Cinta multipropósito reforzada TACSA DUCTAC, de 0,26 mm de espesor, con dorso de polietileno reforzado con hilado textil. Sirve para sellar, reparar, reforzar y emendar. Se ofrece en 48 mm x 9 m, 27 m y 54 m, con resistencia a la tracción de 30 N/cm y adhesión al acero de 3,1 N/cm. Colores disponibles: blanco, negro, azul, verde, rojo, gris, amarillo y rosa.\nmodelo: DUCTAC\nespesor: 0,26 mm\nmaterial: Polietileno reforzado con hilado textil\ntipo: Multipropósito\naplicaciones: Sella, repara, refuerza y enmienda\npresentaciones: 48 mm x 9 m; 48 mm x 27 m; 48 mm x 54 m\ncolores_disponibles: Blanco, negro, azul, verde, rojo, gris, amarillo y rosa\nresistencia_a_la_traccion: 30 N/cm\nadhesion_al_acero: 3,1 N/cm",
+    "text_length_char": 969,
+    "text_length_tokens": 355,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta multipropósito reforzada TACSA DUCTAC, 48 mm x 9 m / 27 m / 54 m, 0,26 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas multiuso",
+      "subcategoria": "Cintas multipropósito reforzadas con hilado textil",
+      "tipo": "Multipropósito"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta para empaque TACSA de polipropileno con adhesivo acrílico, 48 mm x 40 m / 100 m, 0,040 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas de embalaje\nsubcategoria: Cintas de polipropileno para empaque\nmarca: TACSA\nnombre: Cinta para empaque TACSA de polipropileno con adhesivo acrílico, 48 mm x 40 m / 100 m, 0,040 mm\ndescripcion: Cinta de empaque TACSA de polipropileno, con adhesivo acrílico sensible a la presión. Tiene 0,040 mm de espesor y está disponible en presentaciones de 48 mm x 40 m y 48 mm x 100 m. Presenta adhesión al acero de 200 g/cm y color beige/natural.\nmodelo: PARA EMPAQUE\nespesor: 0,040 mm\nmaterial: Polipropileno\nadhesivo: Acrílico sensible a la presión\naplicacion: Empaque\npresentaciones: 48 mm x 40 m; 48 mm x 100 m\ncolor: Beige/natural\nadhesion_al_acero: 200 g/cm",
+    "text_length_char": 725,
+    "text_length_tokens": 257,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta para empaque TACSA de polipropileno con adhesivo acrílico, 48 mm x 40 m / 100 m, 0,040 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas de embalaje",
+      "subcategoria": "Cintas de polipropileno para empaque"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta de papel TACSA para usos generales, anchos de 12 / 18 / 24 / 36 / 48 mm x 50 m, 0,12 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas de papel\nsubcategoria: Cintas de enmascarar y uso general\nmarca: TACSA\nnombre: Cinta de papel TACSA para usos generales, anchos de 12 / 18 / 24 / 36 / 48 mm x 50 m, 0,12 mm\ndescripcion: Cinta sensible a la presión de papel engomado TACSA, de 0,12 mm de espesor, diseñada para usos generales. Disponible en anchos de 12, 18, 24, 36 y 48 mm, todos en rollos de 50 m. Tiene resistencia mínima a la tracción de 3,5 kg/cm y adhesión al acero a 180 °C de 180–280 g/cm. Color blanco.\nmodelo: DE PAPEL\nespesor: 0,12 mm\nmaterial: Papel engomado\ntipo: Sensible a la presión\naplicacion: Usos generales\nanchos_disponibles: 12 mm, 18 mm, 24 mm, 36 mm y 48 mm\nlongitud: 50 m\ncolor: Blanco\nresistencia_a_la_traccion_minima: 3,5 kg/cm\nadhesion_al_acero_a_180_c: 180–280 g/cm",
+    "text_length_char": 831,
+    "text_length_tokens": 309,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta de papel TACSA para usos generales, anchos de 12 / 18 / 24 / 36 / 48 mm x 50 m, 0,12 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas de papel",
+      "subcategoria": "Cintas de enmascarar y uso general",
+      "tipo": "Sensible a la presión"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta doble faz TACSA con adhesivo acrílico, 12 mm x 5 m / 18 mm x 2 m / 24 mm x 2 m, 1,05 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas doble faz\nsubcategoria: Cintas doble faz con adhesivo acrílico\nmarca: TACSA\nnombre: Cinta doble faz TACSA con adhesivo acrílico, 12 mm x 5 m / 18 mm x 2 m / 24 mm x 2 m, 1,05 mm\ndescripcion: Cinta doble faz TACSA con adhesivo acrílico, de 1,05 mm de espesor. Ofrece buena cohesión interna y adherencia sobre superficies rugosas e irregulares. Se presenta en 12 mm x 5 m, 18 mm x 2 m y 24 mm x 2 m, con fuerza de despegue de 600–1260 g/25 mm y resistencia a la temperatura de 100 °C. Color blanco.\nmodelo: DOBLE FAZ\nespesor: 1,05 mm\nadhesivo: Acrílico\naplicacion: Adhesión sobre superficies rugosas e irregulares\npresentaciones: 12 mm x 5 m; 18 mm x 2 m; 24 mm x 2 m\ncolor: Blanco\nfuerza_de_despegue: 600–1260 g/25 mm\nresistencia_a_la_temperatura: 100 °C",
+    "text_length_char": 826,
+    "text_length_tokens": 312,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta doble faz TACSA con adhesivo acrílico, 12 mm x 5 m / 18 mm x 2 m / 24 mm x 2 m, 1,05 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas doble faz",
+      "subcategoria": "Cintas doble faz con adhesivo acrílico"
+    }
+  },
+  {
+    "node_id": "node_prod_Ferretera del Norte_Cinta aisladora de tela TACSA con dorso plastificado, 19 mm x 4,5 m / 9 m / 18 m, 0,36 mm",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas aisladoras\nsubcategoria: Cintas de tela con dorso plastificado\nmarca: TACSA\nnombre: Cinta aisladora de tela TACSA con dorso plastificado, 19 mm x 4,5 m / 9 m / 18 m, 0,36 mm\ndescripcion: Cinta aisladora TACSA de tela de algodón con dorso plastificado, de 0,36 mm de espesor. Es atóxica, impermeable por el dorso y ofrece buena resistencia a la tracción, adhesión al dorso y al cable. Cumple IRAM 2241 y está disponible en rollos de 19 mm x 4,5 m, 9 m y 18 m, en negro o blanco. Temperatura de trabajo de 90 °C.\nmodelo: TELA\nespesor: 0,36 mm\nmaterial: Tela de algodón\ndorso: Plastificado\ntipo: Cinta aisladora\naplicacion: Aislamiento y protección de cables\npresentaciones: 19 mm x 4,5 m; 19 mm x 9 m; 19 mm x 18 m\ncolores_disponibles: Negro y blanco\npropiedades: Atóxica, impermeable por el dorso, resistente a la tracción\nnorma: IRAM 2241\nadhesion_al_dorso_y_al_acero: 1,8 N/cm\ntemperatura_de_trabajo: 90 °C",
+    "text_length_char": 980,
+    "text_length_tokens": 354,
+    "metadata": {
+      "pagina": 5,
+      "codigo": "Ferretera del Norte_Cinta aisladora de tela TACSA con dorso plastificado, 19 mm x 4,5 m / 9 m / 18 m, 0,36 mm",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas aisladoras",
+      "subcategoria": "Cintas de tela con dorso plastificado",
+      "tipo": "Cinta aisladora"
+    }
+  },
+  {
+    "node_id": "node_prod_115001",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 5 metros negra\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 5 metros en color negro, ideal para aislamiento y protección de conductores eléctricos.\nlinea: 15 PLUS\nmedida: 5 metros\ncolor: Negra\nunidad_venta: c/u\npaquete_cantidad: 1 rollo",
+    "text_length_char": 437,
+    "text_length_tokens": 142,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115001",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "5 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115010",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 5 metros surtida, caja\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS de 5 metros, presentación surtida en caja para aplicaciones de aislamiento y protección de conductores.\nlinea: 15 PLUS\nmedida: 5 metros\ncolor: Surtido\nunidad_venta: Caja\nunidades_por_caja: 200",
+    "text_length_char": 451,
+    "text_length_tokens": 146,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115010",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "5 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115003",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 10 metros negra\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 10 metros en color negro para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 10 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 150",
+    "text_length_char": 427,
+    "text_length_tokens": 137,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115003",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115004",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 10 metros blanca\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 10 metros en color blanco para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 10 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 150",
+    "text_length_char": 430,
+    "text_length_tokens": 137,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115004",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115008",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 10 metros verde\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 10 metros en color verde para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 10 metros\ncolor: Verde\nunidad_venta: c/u\nunidades_por_caja: 150",
+    "text_length_char": 427,
+    "text_length_tokens": 135,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115008",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115009",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 10 metros roja\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 10 metros en color rojo para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 10 metros\ncolor: Roja\nunidad_venta: c/u\nunidades_por_caja: 150",
+    "text_length_char": 424,
+    "text_length_tokens": 138,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115009",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115011",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 10 metros surtida, caja\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS de 10 metros, presentación surtida en caja para aislamiento y protección de conductores.\nlinea: 15 PLUS\nmedida: 10 metros\ncolor: Surtido\nunidad_venta: Caja\nunidades_por_caja: 150",
+    "text_length_char": 438,
+    "text_length_tokens": 143,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115011",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115005",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 20 metros negra\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 20 metros en color negro para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 20 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 100",
+    "text_length_char": 427,
+    "text_length_tokens": 137,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115005",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115006",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 20 metros blanca\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 20 metros en color blanco para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 20 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 100",
+    "text_length_char": 430,
+    "text_length_tokens": 137,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115006",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115007",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 20 metros roja\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS, rollo de 20 metros en color rojo para aislamiento y protección de cables y conexiones.\nlinea: 15 PLUS\nmedida: 20 metros\ncolor: Roja\nunidad_venta: c/u\nunidades_por_caja: 100",
+    "text_length_char": 424,
+    "text_length_tokens": 138,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115007",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115047",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora TACSA 15 PLUS de 20 metros surtida, caja\ndescripcion: Cinta aisladora eléctrica TACSA 15 PLUS de 20 metros, presentación surtida en caja para aislamiento y protección de conductores.\nlinea: 15 PLUS\nmedida: 20 metros\ncolor: Surtido\nunidad_venta: Caja\nunidades_por_caja: 100",
+    "text_length_char": 438,
+    "text_length_tokens": 143,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115047",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115015",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora profesional\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora profesional TACSA FLEX-PRO 180 de 10 metros negra\ndescripcion: Cinta aisladora profesional TACSA FLEX-PRO 180, rollo de 10 metros en color negro para aislamiento eléctrico y protección de conductores.\nlinea: FLEX-PRO 180\nmedida: 10 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 120",
+    "text_length_char": 470,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115015",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora profesional",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115017",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora profesional\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora profesional TACSA FLEX-PRO 180 de 10 metros blanca\ndescripcion: Cinta aisladora profesional TACSA FLEX-PRO 180, rollo de 10 metros en color blanco para aislamiento eléctrico y protección de conductores.\nlinea: FLEX-PRO 180\nmedida: 10 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 120",
+    "text_length_char": 473,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115017",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora profesional",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115016",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora profesional\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora profesional TACSA FLEX-PRO 180 de 20 metros negra\ndescripcion: Cinta aisladora profesional TACSA FLEX-PRO 180, rollo de 20 metros en color negro para aislamiento eléctrico y protección de conductores.\nlinea: FLEX-PRO 180\nmedida: 20 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 90",
+    "text_length_char": 469,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115016",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora profesional",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115018",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora profesional\nsubcategoria: Cinta aisladora eléctrica de PVC\nmarca: TACSA\nnombre: Cinta aisladora profesional TACSA FLEX-PRO 180 de 20 metros blanca\ndescripcion: Cinta aisladora profesional TACSA FLEX-PRO 180, rollo de 20 metros en color blanco para aislamiento eléctrico y protección de conductores.\nlinea: FLEX-PRO 180\nmedida: 20 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 90",
+    "text_length_char": 472,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115018",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora profesional",
+      "subcategoria": "Cinta aisladora eléctrica de PVC",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115030",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta aisladora sin adhesivo\nsubcategoria: Cinta aisladora eléctrica sin adhesivo\nmarca: TACSA\nnombre: Cinta aisladora TACSA sin adhesivo de 20 metros negra\ndescripcion: Cinta aisladora TACSA sin adhesivo, rollo de 20 metros en color negro para aplicaciones de aislamiento eléctrico sin adhesivo incorporado.\ntipo: Sin adhesivo\nmedida: 20 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 10",
+    "text_length_char": 464,
+    "text_length_tokens": 146,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115030",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta aisladora sin adhesivo",
+      "subcategoria": "Cinta aisladora eléctrica sin adhesivo",
+      "tipo": "Sin adhesivo",
+      "medida": "20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115064",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 1/2 pulgada x 10 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 1/2 pulgada por 10 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 1/2\" x 10 metros\nunidad_venta: Caja\nunidades_por_caja: 25",
+    "text_length_char": 417,
+    "text_length_tokens": 156,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115064",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "1/2\" x 10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115065",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 1/2 pulgada x 20 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 1/2 pulgada por 20 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 1/2\" x 20 metros\nunidad_venta: Caja\nunidades_por_caja: 25",
+    "text_length_char": 417,
+    "text_length_tokens": 156,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115065",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "1/2\" x 20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115066",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 3/4 pulgada x 10 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 3/4 de pulgada por 10 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 3/4\" x 10 metros\nunidad_venta: Caja\nunidades_por_caja: 24",
+    "text_length_char": 420,
+    "text_length_tokens": 157,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115066",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "3/4\" x 10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115067",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 3/4 pulgada x 20 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 3/4 de pulgada por 20 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 3/4\" x 20 metros\nunidad_venta: Caja\nunidades_por_caja: 24",
+    "text_length_char": 420,
+    "text_length_tokens": 157,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115067",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "3/4\" x 20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115068",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 1 pulgada x 10 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 1 pulgada por 10 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 1\" x 10 metros\nunidad_venta: Caja\nunidades_por_caja: 18",
+    "text_length_char": 411,
+    "text_length_tokens": 150,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115068",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "1\" x 10 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115069",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta de teflón\nsubcategoria: Cinta PTFE para roscas\nmarca: TACSA\nnombre: Cinta de teflón TACSA TACFLON de 1 pulgada x 20 metros\ndescripcion: Cinta selladora de teflón TACSA TACFLON de 1 pulgada por 20 metros, comercializada en caja para sellado de uniones roscadas.\nlinea: TACFLON\nmedida: 1\" x 20 metros\nunidad_venta: Caja\nunidades_por_caja: 12",
+    "text_length_char": 411,
+    "text_length_tokens": 150,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115069",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta de teflón",
+      "subcategoria": "Cinta PTFE para roscas",
+      "medida": "1\" x 20 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115027",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros amarilla\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color amarillo para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Amarilla\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 440,
+    "text_length_tokens": 138,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115027",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115025",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros azul\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color azul para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Azul\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 428,
+    "text_length_tokens": 136,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115025",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115021",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros blanca\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color blanco para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 434,
+    "text_length_tokens": 135,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115021",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115022",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros gris\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color gris para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Gris\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 428,
+    "text_length_tokens": 134,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115022",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115020",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros negra\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color negro para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Negra\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 431,
+    "text_length_tokens": 135,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115020",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115026",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros roja\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color rojo para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Roja\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 428,
+    "text_length_tokens": 136,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115026",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115023",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros verde\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color verde para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Verde\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 431,
+    "text_length_tokens": 133,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115023",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115024",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta multipropósito\nsubcategoria: Cinta adhesiva multipropósito\nmarca: TACSA\nnombre: Cinta multipropósito TACSA DUCTAC de 9 metros violeta\ndescripcion: Cinta adhesiva multipropósito TACSA DUCTAC, rollo de 9 metros en color violeta para reparaciones, unión y protección de superficies.\nlinea: DUCTAC\nmedida: 9 metros\ncolor: Violeta\nunidad_venta: c/u\nunidades_por_caja: 48",
+    "text_length_char": 437,
+    "text_length_tokens": 136,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115024",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta multipropósito",
+      "subcategoria": "Cinta adhesiva multipropósito",
+      "medida": "9 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115040",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta para embalar\nsubcategoria: Cinta adhesiva de embalaje\nmarca: TACSA\nnombre: Cinta para embalar TACSA de 40 metros transparente\ndescripcion: Cinta adhesiva TACSA para embalaje, rollo de 40 metros en color transparente, presentada en caja.\nmedida: 40 metros\ncolor: Transparente\nunidad_venta: Caja\nunidades_por_caja: 1\npresentacion: Caja x 36 rollos",
+    "text_length_char": 417,
+    "text_length_tokens": 130,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115040",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta para embalar",
+      "subcategoria": "Cinta adhesiva de embalaje",
+      "medida": "40 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115041",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta para embalar\nsubcategoria: Cinta adhesiva de embalaje\nmarca: TACSA\nnombre: Cinta para embalar TACSA de 40 metros marrón\ndescripcion: Cinta adhesiva TACSA para embalaje, rollo de 40 metros en color marrón, presentada en caja.\nmedida: 40 metros\ncolor: Marrón\nunidad_venta: Caja\nunidades_por_caja: 1\npresentacion: Caja x 36 rollos",
+    "text_length_char": 399,
+    "text_length_tokens": 132,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115041",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta para embalar",
+      "subcategoria": "Cinta adhesiva de embalaje",
+      "medida": "40 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115046",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta para embalar\nsubcategoria: Cinta adhesiva de embalaje\nmarca: TACSA\nnombre: Cinta para embalar TACSA de 100 metros transparente\ndescripcion: Cinta adhesiva TACSA para embalaje, rollo de 100 metros en color transparente, presentada en caja.\nmedida: 100 metros\ncolor: Transparente\nunidad_venta: Caja\nunidades_por_caja: 1\npresentacion: Caja x 36 rollos",
+    "text_length_char": 420,
+    "text_length_tokens": 130,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115046",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta para embalar",
+      "subcategoria": "Cinta adhesiva de embalaje",
+      "medida": "100 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115048",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta enmascarar\nsubcategoria: Cinta adhesiva de enmascarar\nmarca: TACSA\nnombre: Cinta enmascarar TACSA de 12 mm x 50 metros blanca\ndescripcion: Cinta adhesiva de enmascarar TACSA de 12 mm de ancho por 50 metros de largo, color blanco, en rollo individual.\nmedida: 12 mm x 50 metros\nancho: 12 mm\nlargo: 50 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 72\npresentacion: Rollo x 50 metros",
+    "text_length_char": 464,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115048",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta enmascarar",
+      "subcategoria": "Cinta adhesiva de enmascarar",
+      "medida": "12 mm x 50 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115043",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta enmascarar\nsubcategoria: Cinta adhesiva de enmascarar\nmarca: TACSA\nnombre: Cinta enmascarar TACSA de 18 mm x 50 metros blanca\ndescripcion: Cinta adhesiva de enmascarar TACSA de 18 mm de ancho por 50 metros de largo, color blanco, en rollo individual.\nmedida: 18 mm x 50 metros\nancho: 18 mm\nlargo: 50 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 48\npresentacion: Rollo x 50 metros",
+    "text_length_char": 464,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115043",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta enmascarar",
+      "subcategoria": "Cinta adhesiva de enmascarar",
+      "medida": "18 mm x 50 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115044",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta enmascarar\nsubcategoria: Cinta adhesiva de enmascarar\nmarca: TACSA\nnombre: Cinta enmascarar TACSA de 24 mm x 50 metros blanca\ndescripcion: Cinta adhesiva de enmascarar TACSA de 24 mm de ancho por 50 metros de largo, color blanco, en rollo individual.\nmedida: 24 mm x 50 metros\nancho: 24 mm\nlargo: 50 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 36\npresentacion: Rollo x 50 metros",
+    "text_length_char": 464,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115044",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta enmascarar",
+      "subcategoria": "Cinta adhesiva de enmascarar",
+      "medida": "24 mm x 50 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115049",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta enmascarar\nsubcategoria: Cinta adhesiva de enmascarar\nmarca: TACSA\nnombre: Cinta enmascarar TACSA de 36 mm x 50 metros blanca\ndescripcion: Cinta adhesiva de enmascarar TACSA de 36 mm de ancho por 50 metros de largo, color blanco, en rollo individual.\nmedida: 36 mm x 50 metros\nancho: 36 mm\nlargo: 50 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 24\npresentacion: Rollo x 50 metros",
+    "text_length_char": 464,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115049",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta enmascarar",
+      "subcategoria": "Cinta adhesiva de enmascarar",
+      "medida": "36 mm x 50 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115045",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cinta enmascarar\nsubcategoria: Cinta adhesiva de enmascarar\nmarca: TACSA\nnombre: Cinta enmascarar TACSA de 48 mm x 50 metros blanca\ndescripcion: Cinta adhesiva de enmascarar TACSA de 48 mm de ancho por 50 metros de largo, color blanco, en rollo individual.\nmedida: 48 mm x 50 metros\nancho: 48 mm\nlargo: 50 metros\ncolor: Blanca\nunidad_venta: c/u\nunidades_por_caja: 18\npresentacion: Rollo x 50 metros",
+    "text_length_char": 464,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 6,
+      "codigo": "115045",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cinta enmascarar",
+      "subcategoria": "Cinta adhesiva de enmascarar",
+      "medida": "48 mm x 50 metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115039",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Refrigeración Sin Adhesivo\nmarca: TACSA\nnombre: Cinta TACSA para refrigeración sin adhesivo blanca 70 mm x 20 m\ndescripcion: Cinta TACSA para refrigeración sin adhesivo, color blanco, de 70 mm de medida y rollo de 20 metros. Presentación de venta por unidad, con 45 unidades por caja.\nmedida: 70 mm\ncolor: Blanca\nlargo: 20 Metros\nunidad_venta: c/u\ncaja_cantidad: 45",
+    "text_length_char": 473,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115039",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Refrigeración Sin Adhesivo",
+      "medida": "70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115059",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Refrigeración Sin Adhesivo\nmarca: TACSA\nnombre: Cinta TACSA para refrigeración sin adhesivo negra 70 mm x 20 m\ndescripcion: Cinta TACSA para refrigeración sin adhesivo, color negro, de 70 mm de medida y rollo de 20 metros. Presentación de venta por unidad, con 20 unidades por caja.\nmedida: 70 mm\ncolor: Negra\nlargo: 20 Metros\nunidad_venta: c/u\ncaja_cantidad: 20",
+    "text_length_char": 470,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115059",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Refrigeración Sin Adhesivo",
+      "medida": "70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115038",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Refrigeración Con Adhesivo\nmarca: TACSA\nnombre: Cinta TACSA para refrigeración con adhesivo blanca 70 mm x 20 m\ndescripcion: Cinta TACSA para refrigeración con adhesivo, color blanco, de 70 mm de medida y rollo de 20 metros. Presentación de venta por unidad, con 45 unidades por caja.\nmedida: 70 mm\ncolor: Blanca\nlargo: 20 Metros\nunidad_venta: c/u\ncaja_cantidad: 45",
+    "text_length_char": 473,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115038",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Refrigeración Con Adhesivo",
+      "medida": "70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115058",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Refrigeración Con Adhesivo\nmarca: TACSA\nnombre: Cinta TACSA para refrigeración con adhesivo negra 70 mm x 20 m\ndescripcion: Cinta TACSA para refrigeración con adhesivo, color negro, de 70 mm de medida y rollo de 20 metros. Presentación de venta por unidad, con 20 unidades por caja.\nmedida: 70 mm\ncolor: Negra\nlargo: 20 Metros\nunidad_venta: c/u\ncaja_cantidad: 20",
+    "text_length_char": 470,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115058",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Refrigeración Con Adhesivo",
+      "medida": "70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115071",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta de Aluminio para Refrigeración\nmarca: TACSA\nnombre: Cinta TACSA de aluminio para refrigeración 48 mm x 25 m\ndescripcion: Cinta TACSA de aluminio para refrigeración, de 48 mm de medida y 25 metros de largo. Presentación de venta por unidad, con 90 unidades por caja.\nmedida: 48 mm\nlargo: 25 Metros\nunidad_venta: c/u\ncaja_cantidad: 90\nmaterial: Aluminio",
+    "text_length_char": 454,
+    "text_length_tokens": 144,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115071",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta de Aluminio para Refrigeración",
+      "medida": "48 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115072",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta de Aluminio para Refrigeración\nmarca: TACSA\nnombre: Cinta TACSA de aluminio para refrigeración 48 mm x 50 m\ndescripcion: Cinta TACSA de aluminio para refrigeración, de 48 mm de medida y 50 metros de largo. Presentación de venta por unidad, con 30 unidades por caja.\nmedida: 48 mm\nlargo: 50 Metros\nunidad_venta: c/u\ncaja_cantidad: 30\nmaterial: Aluminio",
+    "text_length_char": 454,
+    "text_length_tokens": 144,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115072",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta de Aluminio para Refrigeración",
+      "medida": "48 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115061",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Doble Faz\nmarca: TACSA\nnombre: Cinta TACSA doble faz 12 mm x 5 m\ndescripcion: Cinta TACSA doble faz de 12 mm de ancho y 5 metros de largo. Presentación de venta por unidad, con 45 unidades por caja.\nmedida: 12 mm x 5 Metros\nancho: 12 mm\nlargo: 5 Metros\nunidad_venta: c/u\ncaja_cantidad: 45",
+    "text_length_char": 391,
+    "text_length_tokens": 139,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115061",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Doble Faz",
+      "medida": "12 mm x 5 Metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115062",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Doble Faz\nmarca: TACSA\nnombre: Cinta TACSA doble faz 18 mm x 2 m\ndescripcion: Cinta TACSA doble faz de 18 mm de ancho y 2 metros de largo. Presentación de venta por unidad, con 54 unidades por caja.\nmedida: 18 mm x 2 Metros\nancho: 18 mm\nlargo: 2 Metros\nunidad_venta: c/u\ncaja_cantidad: 54",
+    "text_length_char": 391,
+    "text_length_tokens": 139,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115062",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Doble Faz",
+      "medida": "18 mm x 2 Metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115063",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Doble Faz\nmarca: TACSA\nnombre: Cinta TACSA doble faz 24 mm x 2 m\ndescripcion: Cinta TACSA doble faz de 24 mm de ancho y 2 metros de largo. Presentación de venta por unidad, con 36 unidades por caja.\nmedida: 24 mm x 2 Metros\nancho: 24 mm\nlargo: 2 Metros\nunidad_venta: c/u\ncaja_cantidad: 36",
+    "text_length_char": 391,
+    "text_length_tokens": 139,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115063",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Doble Faz",
+      "medida": "24 mm x 2 Metros"
+    }
+  },
+  {
+    "node_id": "node_prod_115031",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Auto-Soldable\nmarca: TACSA\nnombre: Cinta TACSA auto-soldable blanca 2 m\ndescripcion: Cinta TACSA auto-soldable color blanco, de 2 metros de largo. Presentación de venta por unidad, con 120 unidades por caja.\nlargo: 2 Metros\ncolor: Blanca\nunidad_venta: c/u\ncaja_cantidad: 120",
+    "text_length_char": 377,
+    "text_length_tokens": 121,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115031",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Auto-Soldable"
+    }
+  },
+  {
+    "node_id": "node_prod_115032",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Auto-Soldable\nmarca: TACSA\nnombre: Cinta TACSA auto-soldable blanca 4,57 m\ndescripcion: Cinta TACSA auto-soldable color blanco, de 4,57 metros de largo. Presentación de venta por unidad, con 26 unidades por caja.\nlargo: 4,57 Mts\ncolor: Blanca\nunidad_venta: c/u\ncaja_cantidad: 26",
+    "text_length_char": 381,
+    "text_length_tokens": 127,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115032",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Auto-Soldable"
+    }
+  },
+  {
+    "node_id": "node_prod_115033",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Auto-Soldable\nmarca: TACSA\nnombre: Cinta TACSA auto-soldable blanca 9,14 m\ndescripcion: Cinta TACSA auto-soldable color blanco, de 9,14 metros de largo. Presentación de venta por unidad, con 12 unidades por caja.\nlargo: 9,14 Mts\ncolor: Blanca\nunidad_venta: c/u\ncaja_cantidad: 12",
+    "text_length_char": 381,
+    "text_length_tokens": 127,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115033",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Auto-Soldable"
+    }
+  },
+  {
+    "node_id": "node_prod_115073",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta Antideslizante\nmarca: TACSA\nnombre: Cinta TACSA antideslizante 25 mm x 5 m\ndescripcion: Cinta TACSA antideslizante de 25 mm de ancho y 5 metros de largo. Presentación de venta por unidad, con 24 unidades por caja.\nancho: 25 mm\nlargo: 5 Metros\nunidad_venta: c/u\ncaja_cantidad: 24",
+    "text_length_char": 381,
+    "text_length_tokens": 132,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115073",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta Antideslizante"
+    }
+  },
+  {
+    "node_id": "node_prod_115074",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Demarcación\nmarca: TACSA\nnombre: Cinta TACSA para demarcación amarilla 50 mm x 33 m\ndescripcion: Cinta TACSA para demarcación color amarillo, de 50 mm de ancho y 33 metros de largo. Presentación de venta por unidad, con 24 unidades por caja.\nancho: 50 mm\nlargo: 33 Metros\ncolor: Amarilla\nunidad_venta: c/u\ncaja_cantidad: 24",
+    "text_length_char": 431,
+    "text_length_tokens": 142,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115074",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Demarcación"
+    }
+  },
+  {
+    "node_id": "node_prod_115029",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Cintas Adhesivas\nsubcategoria: Cinta para Silo-Bolsa\nmarca: TACSA\nnombre: Cinta TACSA para silo-bolsa 70 mm x 9 m\ndescripcion: Cinta TACSA para reparación y sellado de silo-bolsa, de 70 mm de medida y 9 metros de largo. Presentación de venta por unidad, con 24 unidades por caja.\nmedida: 70 mm\nlargo: 9 Metros\nunidad_venta: c/u\ncaja_cantidad: 24",
+    "text_length_char": 411,
+    "text_length_tokens": 141,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115029",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Cintas Adhesivas",
+      "subcategoria": "Cinta para Silo-Bolsa",
+      "medida": "70 mm"
+    }
+  },
+  {
+    "node_id": "node_prod_115075",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 3/32 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 3/32 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 3/32\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 501,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115075",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "3/32\""
+    }
+  },
+  {
+    "node_id": "node_prod_115076",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 1/8 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 1/8 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 1/8\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 498,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115076",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "1/8\""
+    }
+  },
+  {
+    "node_id": "node_prod_115077",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 3/16 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 3/16 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 3/16\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 501,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115077",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "3/16\""
+    }
+  },
+  {
+    "node_id": "node_prod_115078",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 1/4 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 1/4 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 1/4\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 498,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115078",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "1/4\""
+    }
+  },
+  {
+    "node_id": "node_prod_115079",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 5/16 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 5/16 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 5/16\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 501,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115079",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "5/16\""
+    }
+  },
+  {
+    "node_id": "node_prod_115080",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 3/8 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 3/8 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 3/8\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 498,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115080",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "3/8\""
+    }
+  },
+  {
+    "node_id": "node_prod_115081",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro 1/2 pulg.\ndescripcion: Tubo termocontraíble TACSA color negro, medida 1/2 de pulgada. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: 1/2\"\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 498,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115081",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro",
+      "medida": "1/2\""
+    }
+  },
+  {
+    "node_id": "node_prod_115082",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Cintas\ncategoria: Tubos Termocontraíbles\nsubcategoria: Tubo Termocontraíble Negro Surtido\nmarca: TACSA\nnombre: Tubo termocontraíble TACSA negro surtido\ndescripcion: Tubo termocontraíble TACSA color negro, presentación surtida. Se comercializa en caja de 8 rollos de 10 metros; la tabla indica una unidad de venta por caja y una caja por presentación.\nmedida: Surtido\ncolor: Negra\npresentacion: Caja x 8 rollos de 10 Metros\nunidad_venta: Caja\ncaja_cantidad: 1",
+    "text_length_char": 506,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 7,
+      "codigo": "115082",
+      "proveedor": "Ferretera del Norte",
+      "marca": "TACSA",
+      "categoria": "Tubos Termocontraíbles",
+      "subcategoria": "Tubo Termocontraíble Negro Surtido",
+      "medida": "Surtido"
+    }
+  },
+  {
+    "node_id": "node_prod_253011",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Indumentaria de protección\nsubcategoria: Delantales de descarne\nmarca: De Pascale\nnombre: Delantal de descarne estándar\ndescripcion: Delantal de descarne estándar para protección industrial, confeccionado en cuero descarne. Se comercializa por unidad y se presenta en paquetes de 10 unidades.\ntipo: Standard\nmaterial: Cuero descarne\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 451,
+    "text_length_tokens": 124,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253011",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Indumentaria de protección",
+      "subcategoria": "Delantales de descarne",
+      "tipo": "Standard"
+    }
+  },
+  {
+    "node_id": "node_prod_253012",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Indumentaria de protección\nsubcategoria: Delantales de descarne\nmarca: De Pascale\nnombre: Delantal de descarne reforzado\ndescripcion: Delantal de descarne reforzado para protección industrial, confeccionado en cuero descarne. Se comercializa por unidad y se presenta en paquetes de 10 unidades.\ntipo: Reforzado\nmaterial: Cuero descarne\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 454,
+    "text_length_tokens": 128,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253012",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Indumentaria de protección",
+      "subcategoria": "Delantales de descarne",
+      "tipo": "Reforzado"
+    }
+  },
+  {
+    "node_id": "node_prod_253009",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Indumentaria de protección\nsubcategoria: Delantales de descarne reforzados\nmarca: De Pascale\nnombre: Delantal de descarne reforzado con placa de plomo\ndescripcion: Delantal de descarne reforzado con placa de plomo para protección industrial frente a tareas que requieren protección adicional. Se comercializa por unidad y se presenta en paquetes de 10 unidades.\ntipo: Con Placa de Plomo\nmaterial: Cuero descarne\nrefuerzo: Placa de plomo\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 555,
+    "text_length_tokens": 157,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253009",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Indumentaria de protección",
+      "subcategoria": "Delantales de descarne reforzados",
+      "tipo": "Con Placa de Plomo"
+    }
+  },
+  {
+    "node_id": "node_prod_253008",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Indumentaria de protección\nsubcategoria: Delantales de descarne reforzados\nmarca: De Pascale\nnombre: Delantal de descarne reforzado con goma plomada\ndescripcion: Delantal de descarne reforzado con goma plomada para protección industrial. Se comercializa por unidad y se presenta en paquetes de 10 unidades.\ntipo: Con Goma Plomada\nmaterial: Cuero descarne\nrefuerzo: Goma plomada\nunidad_venta: c/u\npaquete_cantidad: 10",
+    "text_length_char": 496,
+    "text_length_tokens": 146,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253008",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Indumentaria de protección",
+      "subcategoria": "Delantales de descarne reforzados",
+      "tipo": "Con Goma Plomada"
+    }
+  },
+  {
+    "node_id": "node_prod_253000",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de descarne\nmarca: De Pascale\nnombre: Guantes de descarne con puño corto de descarne\ndescripcion: Guantes de protección industrial confeccionados en cuero descarne, con puño corto de descarne. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Corto / Puño Descarne\nmaterial: Cuero descarne\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 492,
+    "text_length_tokens": 150,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253000",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de descarne"
+    }
+  },
+  {
+    "node_id": "node_prod_253002",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de descarne\nmarca: De Pascale\nnombre: Guantes de descarne con puño largo\ndescripcion: Guantes de protección industrial confeccionados en cuero descarne, con puño largo de descarne para mayor cobertura de la muñeca y el antebrazo. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Largo / Puño Descarne\nmaterial: Cuero descarne\nlongitud_puño: Largo\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 529,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253002",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de descarne"
+    }
+  },
+  {
+    "node_id": "node_prod_253001",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de descarne\nmarca: De Pascale\nnombre: Guantes de descarne con puño corto de lona\ndescripcion: Guantes de protección industrial de cuero descarne con puño corto de lona. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Corto Con Puño d Lona\nmaterial_guante: Cuero descarne\nmaterial_puño: Lona\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 495,
+    "text_length_tokens": 154,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253001",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de descarne"
+    }
+  },
+  {
+    "node_id": "node_prod_253019",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de soldador\nmarca: De Pascale\nnombre: Guantes de descarne para soldador con puño largo\ndescripcion: Guantes de descarne para soldador, con diseño soldador y puño largo para protección de manos y antebrazos durante trabajos de soldadura. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Soldador / Largo\nmaterial: Cuero descarne\naplicacion: Soldadura\nlongitud_puño: Largo\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 553,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253019",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de soldador"
+    }
+  },
+  {
+    "node_id": "node_prod_253025",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de descarne\nmarca: De Pascale\nnombre: Guantes de descarne con puño corto de jeans\ndescripcion: Guantes de protección industrial de cuero descarne con puño corto de jeans. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Corto / Puño Jeans\nmaterial_guante: Cuero descarne\nmaterial_puño: Jeans\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 495,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253025",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de descarne"
+    }
+  },
+  {
+    "node_id": "node_prod_253018",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes combinados de descarne\nmarca: De Pascale\nnombre: Guantes de descarne combinados con puño corto de jeans\ndescripcion: Guantes de protección industrial de descarne combinado, con puño corto de jeans. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Corto Combinado Con Jeans\nmaterial: Descarne combinado\nmaterial_puño: Jeans\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 526,
+    "text_length_tokens": 152,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253018",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes combinados de descarne"
+    }
+  },
+  {
+    "node_id": "node_prod_253003",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de vaqueta\nmarca: De Pascale\nnombre: Guantes de vaqueta elastizados Lincoln con puño corto\ndescripcion: Guantes de vaqueta elastizados tipo Lincoln, con puño corto, para protección industrial y tareas generales. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Lincoln Puño Corto\nmaterial: Vaqueta\ndiseño: Elastizado\ntipo: Lincoln - 222025\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 543,
+    "text_length_tokens": 160,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253003",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de vaqueta",
+      "tipo": "Lincoln - 222025"
+    }
+  },
+  {
+    "node_id": "node_prod_253010",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes dieléctricos\nmarca: De Pascale\nnombre: Guantes protectores dieléctricos de vaqueta\ndescripcion: Guantes protectores dieléctricos con cobertura de vaqueta para trabajos eléctricos y protección industrial. Se venden por par y se presentan en paquetes de 12 pares.\ntipo: Protector Dieléctrico\nmaterial: Vaqueta\nproteccion: Dieléctrica\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 494,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253010",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes dieléctricos",
+      "tipo": "Protector Dieléctrico"
+    }
+  },
+  {
+    "node_id": "node_prod_253017",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes combinados de vaqueta\nmarca: De Pascale\nnombre: Guantes combinados de media vaqueta con puño corto\ndescripcion: Guantes combinados de media vaqueta, con puño corto, para protección industrial y tareas generales. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: ½ Vaqueta Puño Corto\nmaterial: ½ Vaqueta\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 505,
+    "text_length_tokens": 151,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253017",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes combinados de vaqueta"
+    }
+  },
+  {
+    "node_id": "node_prod_253005",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de vaqueta\nmarca: De Pascale\nnombre: Guantes de vaqueta con puño corto\ndescripcion: Guantes de protección industrial confeccionados en vaqueta, con puño corto. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Vaqueta Puño Corto\nmaterial: Vaqueta\nlongitud_puño: Corto\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 449,
+    "text_length_tokens": 137,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253005",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de vaqueta"
+    }
+  },
+  {
+    "node_id": "node_prod_253004",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes combinados de vaqueta\nmarca: De Pascale\nnombre: Guantes combinados de media vaqueta con puño largo\ndescripcion: Guantes combinados de media vaqueta, con puño largo para mayor cobertura de la muñeca y el antebrazo. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: ½ Vaqueta Puño Largo\nmaterial: ½ Vaqueta\nlongitud_puño: Largo\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 507,
+    "text_length_tokens": 154,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253004",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes combinados de vaqueta"
+    }
+  },
+  {
+    "node_id": "node_prod_253006",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes de vaqueta\nmarca: De Pascale\nnombre: Guantes de vaqueta con puño largo\ndescripcion: Guantes de protección industrial confeccionados en vaqueta, con puño largo para mayor cobertura del antebrazo. Se venden por par y se presentan en paquetes de 12 pares.\ntipo_puño: Vaqueta Puño Largo\nmaterial: Vaqueta\nlongitud_puño: Largo\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 484,
+    "text_length_tokens": 144,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253006",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes de vaqueta"
+    }
+  },
+  {
+    "node_id": "node_prod_253014",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes tejidos de algodón\nmarca: De Pascale\nnombre: Guantes tejidos de algodón moteado blanco con mote naranja\ndescripcion: Guantes tejidos de algodón moteado, color blanco con mote naranja, para protección y manipulación general. Se venden por par y se presentan en paquetes de 12 pares.\ntipo: Blanco Mote Naranja\nmaterial: Algodón tejido\ncolor: Blanco con mote naranja\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 526,
+    "text_length_tokens": 149,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253014",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes tejidos de algodón",
+      "tipo": "Blanco Mote Naranja"
+    }
+  },
+  {
+    "node_id": "node_prod_253015",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes tejidos\nmarca: De Pascale\nnombre: Guantes tejidos de terrycloth\ndescripcion: Guantes tejidos de terrycloth para protección y manipulación general. Se venden por par y se presentan en paquetes de 12 pares.\ntipo: Tejido de Terrycloth\nmaterial: Terrycloth tejido\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 422,
+    "text_length_tokens": 118,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "253015",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes tejidos",
+      "tipo": "Tejido de Terrycloth"
+    }
+  },
+  {
+    "node_id": "node_prod_118026",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de protección\nsubcategoria: Guantes tejidos de algodón\nmarca: De Pascale\nnombre: Guantes tejidos de algodón gris moteado negro\ndescripcion: Guantes tejidos de algodón gris moteado con negro, para protección y manipulación general. Se venden por par y se presentan en paquetes de 12 pares.\ntipo: Gris Mote Negro\nmaterial: Algodón tejido\ncolor: Gris moteado con negro\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 492,
+    "text_length_tokens": 139,
+    "metadata": {
+      "pagina": 9,
+      "codigo": "118026",
+      "proveedor": "Ferretera del Norte",
+      "marca": "De Pascale",
+      "categoria": "Guantes de protección",
+      "subcategoria": "Guantes tejidos de algodón",
+      "tipo": "Gris Mote Negro"
+    }
+  },
+  {
+    "node_id": "node_prod_102053",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de PVC\nmarca: DPS\nnombre: Guante sintético de PVC DPS, puño de 30 cm\ndescripcion: Guante sintético de PVC DPS con largo de puño de 30 cm, comercializado por par y embalado en paquetes de 12 unidades de venta. Diseñado para protección de manos y antebrazos en tareas industriales y de manipulación.\nmaterial: PVC\nlargo_puño: 30 cm\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 492,
+    "text_length_tokens": 142,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102053",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de PVC"
+    }
+  },
+  {
+    "node_id": "node_prod_102054",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de PVC\nmarca: DPS\nnombre: Guante sintético de PVC DPS, puño de 35 cm\ndescripcion: Guante sintético de PVC DPS con largo de puño de 35 cm, comercializado por par y embalado en paquetes de 12 unidades de venta. Aporta protección extendida de manos y antebrazos.\nmaterial: PVC\nlargo_puño: 35 cm\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 454,
+    "text_length_tokens": 133,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102054",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de PVC"
+    }
+  },
+  {
+    "node_id": "node_prod_102055",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de PVC\nmarca: DPS\nnombre: Guante sintético de PVC DPS, puño de 40 cm\ndescripcion: Guante sintético de PVC DPS con largo de puño de 40 cm, comercializado por par y embalado en paquetes de 12 unidades de venta. Ofrece cobertura extendida para aplicaciones industriales.\nmaterial: PVC\nlargo_puño: 40 cm\nunidad_venta: Par\npaquete_cantidad: 12",
+    "text_length_char": 462,
+    "text_length_tokens": 130,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102055",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de PVC"
+    }
+  },
+  {
+    "node_id": "node_prod_102052",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de PVC con puño elastizado\nmarca: DPS\nnombre: Guante de PVC DPS con puño elastizado\ndescripcion: Guante de PVC DPS con puño elastizado para ajuste en la muñeca. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: PVC\ntipo_puño: Puño Elastizado\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS31145",
+    "text_length_char": 458,
+    "text_length_tokens": 129,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102052",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de PVC con puño elastizado"
+    }
+  },
+  {
+    "node_id": "node_prod_102051",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de nitrilo con puño elastizado\nmarca: DPS\nnombre: Guante de nitrilo DPS con puño elastizado\ndescripcion: Guante de nitrilo DPS con puño elastizado para un ajuste firme y protección en tareas de manipulación. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Nitrilo\ntipo_puño: Puño Elastizado\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS12155",
+    "text_length_char": 509,
+    "text_length_tokens": 145,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102051",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de nitrilo con puño elastizado"
+    }
+  },
+  {
+    "node_id": "node_prod_102049",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de nitrilo de baño completo\nmarca: DPS\nnombre: Guante de nitrilo DPS de baño completo con puño elastizado\ndescripcion: Guante de nitrilo DPS con recubrimiento de baño completo y puño elastizado. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Nitrilo\nrecubrimiento: Baño completo\ntipo_puño: Puño Elastizado\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS11155",
+    "text_length_char": 525,
+    "text_length_tokens": 150,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102049",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de nitrilo de baño completo"
+    }
+  },
+  {
+    "node_id": "node_prod_102050",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de nitrilo con puño de lona\nmarca: DPS\nnombre: Guante de nitrilo DPS con puño de lona\ndescripcion: Guante de nitrilo DPS con puño de lona, identificado para protección durante tareas de manipulación y uso industrial. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Nitrilo\ntipo_puño: Nitrilo Puño Lona\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS11255",
+    "text_length_char": 520,
+    "text_length_tokens": 150,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102050",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de nitrilo con puño de lona"
+    }
+  },
+  {
+    "node_id": "node_prod_102081",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de nitrilo\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de nitrilo, talle 8\ndescripcion: Guante tejido DPS con recubrimiento de nitrilo, sin costura, en talle 8. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Nitrilo\ncosturas: Sin Costura\ntalle: 8\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS88113",
+    "text_length_char": 521,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102081",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de nitrilo"
+    }
+  },
+  {
+    "node_id": "node_prod_102082",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de nitrilo\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de nitrilo, talle 9\ndescripcion: Guante tejido DPS con recubrimiento de nitrilo, sin costura, en talle 9. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Nitrilo\ncosturas: Sin Costura\ntalle: 9\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS88114",
+    "text_length_char": 521,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102082",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de nitrilo"
+    }
+  },
+  {
+    "node_id": "node_prod_102083",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de nitrilo\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de nitrilo, talle 10\ndescripcion: Guante tejido DPS con recubrimiento de nitrilo, sin costura, en talle 10. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Nitrilo\ncosturas: Sin Costura\ntalle: 10\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS88115",
+    "text_length_char": 524,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102083",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de nitrilo"
+    }
+  },
+  {
+    "node_id": "node_prod_102056",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex industrial\nmarca: DPS\nnombre: Guante de látex industrial DPS, talle S\ndescripcion: Guante de látex industrial DPS en talle S, diseñado para protección y manipulación en aplicaciones industriales. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Industrial\ntalle: S\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS71392",
+    "text_length_char": 509,
+    "text_length_tokens": 140,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102056",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex industrial"
+    }
+  },
+  {
+    "node_id": "node_prod_102057",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex industrial\nmarca: DPS\nnombre: Guante de látex industrial DPS, talle M\ndescripcion: Guante de látex industrial DPS en talle M, diseñado para protección y manipulación en aplicaciones industriales. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Industrial\ntalle: M\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS71393",
+    "text_length_char": 509,
+    "text_length_tokens": 140,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102057",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex industrial"
+    }
+  },
+  {
+    "node_id": "node_prod_102058",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex industrial\nmarca: DPS\nnombre: Guante de látex industrial DPS, talle L\ndescripcion: Guante de látex industrial DPS en talle L, diseñado para protección y manipulación en aplicaciones industriales. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Industrial\ntalle: L\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS71394",
+    "text_length_char": 509,
+    "text_length_tokens": 140,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102058",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex industrial"
+    }
+  },
+  {
+    "node_id": "node_prod_102059",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex industrial\nmarca: DPS\nnombre: Guante de látex industrial DPS, talle XL\ndescripcion: Guante de látex industrial DPS en talle XL, diseñado para protección y manipulación en aplicaciones industriales. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Industrial\ntalle: XL\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS71395",
+    "text_length_char": 512,
+    "text_length_tokens": 140,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102059",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex industrial"
+    }
+  },
+  {
+    "node_id": "node_prod_102060",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex doméstico\nmarca: DPS\nnombre: Guante doméstico de látex DPS, talle S\ndescripcion: Guante doméstico de látex DPS en talle S, apropiado para tareas de limpieza y uso general. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Doméstica\ntalle: S\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS61322",
+    "text_length_char": 484,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102060",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex doméstico"
+    }
+  },
+  {
+    "node_id": "node_prod_102061",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex doméstico\nmarca: DPS\nnombre: Guante doméstico de látex DPS, talle M\ndescripcion: Guante doméstico de látex DPS en talle M, apropiado para tareas de limpieza y uso general. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Doméstica\ntalle: M\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS61323",
+    "text_length_char": 484,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102061",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex doméstico"
+    }
+  },
+  {
+    "node_id": "node_prod_102062",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex doméstico\nmarca: DPS\nnombre: Guante doméstico de látex DPS, talle L\ndescripcion: Guante doméstico de látex DPS en talle L, apropiado para tareas de limpieza y uso general. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Doméstica\ntalle: L\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS61324",
+    "text_length_char": 484,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102062",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex doméstico"
+    }
+  },
+  {
+    "node_id": "node_prod_102063",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes de látex doméstico\nmarca: DPS\nnombre: Guante doméstico de látex DPS, talle XL\ndescripcion: Guante doméstico de látex DPS en talle XL, apropiado para tareas de limpieza y uso general. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nmaterial: Látex\naplicación: Doméstica\ntalle: XL\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS61325",
+    "text_length_char": 487,
+    "text_length_tokens": 147,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102063",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes de látex doméstico"
+    }
+  },
+  {
+    "node_id": "node_prod_102073",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes descartables de látex\nmarca: DPS\nnombre: Guante descartable de látex DPS, talle S, caja por 100 unidades\ndescripcion: Guante descartable de látex DPS en talle S. Se presenta en caja de 100 unidades; la tabla indica una unidad de venta tipo caja y un embalaje de cajón por 10 cajas.\nmaterial: Látex\ntipo: Descartable\ntalle: S\npresentación: Caja x 100 unidades\nunidad_venta: Caja\ncajón_cantidad: 10\nartículo: DPS71011",
+    "text_length_char": 539,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102073",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes descartables de látex",
+      "tipo": "Descartable"
+    }
+  },
+  {
+    "node_id": "node_prod_102074",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes descartables de látex\nmarca: DPS\nnombre: Guante descartable de látex DPS, talle M, caja por 100 unidades\ndescripcion: Guante descartable de látex DPS en talle M. Se presenta en caja de 100 unidades; la tabla indica una unidad de venta tipo caja y un embalaje de cajón por 10 cajas.\nmaterial: Látex\ntipo: Descartable\ntalle: M\npresentación: Caja x 100 unidades\nunidad_venta: Caja\ncajón_cantidad: 10\nartículo: DPS71012",
+    "text_length_char": 539,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102074",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes descartables de látex",
+      "tipo": "Descartable"
+    }
+  },
+  {
+    "node_id": "node_prod_102075",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes descartables de látex\nmarca: DPS\nnombre: Guante descartable de látex DPS, talle L, caja por 100 unidades\ndescripcion: Guante descartable de látex DPS en talle L. Se presenta en caja de 100 unidades; la tabla indica una unidad de venta tipo caja y un embalaje de cajón por 10 cajas.\nmaterial: Látex\ntipo: Descartable\ntalle: L\npresentación: Caja x 100 unidades\nunidad_venta: Caja\ncajón_cantidad: 10\nartículo: DPS71013",
+    "text_length_char": 539,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102075",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes descartables de látex",
+      "tipo": "Descartable"
+    }
+  },
+  {
+    "node_id": "node_prod_102076",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes descartables de látex\nmarca: DPS\nnombre: Guante descartable de látex DPS, talle XL, caja por 100 unidades\ndescripcion: Guante descartable de látex DPS en talle XL. Se presenta en caja de 100 unidades; la tabla indica una unidad de venta tipo caja y un embalaje de cajón por 10 cajas.\nmaterial: Látex\ntipo: Descartable\ntalle: XL\npresentación: Caja x 100 unidades\nunidad_venta: Caja\ncajón_cantidad: 10\nartículo: DPS71014",
+    "text_length_char": 542,
+    "text_length_tokens": 166,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102076",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes descartables de látex",
+      "tipo": "Descartable"
+    }
+  },
+  {
+    "node_id": "node_prod_102078",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de látex\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de látex, talle 8\ndescripcion: Guante tejido DPS con recubrimiento de látex, sin costura, en talle 8. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Látex\ncosturas: Sin Costura\ntalle: 8\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS89153",
+    "text_length_char": 513,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102078",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de látex"
+    }
+  },
+  {
+    "node_id": "node_prod_102079",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de látex\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de látex, talle 9\ndescripcion: Guante tejido DPS con recubrimiento de látex, sin costura, en talle 9. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Látex\ncosturas: Sin Costura\ntalle: 9\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS89154",
+    "text_length_char": 513,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102079",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de látex"
+    }
+  },
+  {
+    "node_id": "node_prod_102080",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de látex\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de látex, talle 10\ndescripcion: Guante tejido DPS con recubrimiento de látex, sin costura, en talle 10. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: Látex\ncosturas: Sin Costura\ntalle: 10\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS89155",
+    "text_length_char": 516,
+    "text_length_tokens": 161,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102080",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de látex"
+    }
+  },
+  {
+    "node_id": "node_prod_102065",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de PU\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de PU, talle 7\ndescripcion: Guante tejido DPS con recubrimiento de poliuretano (PU), sin costura, en talle 7. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: PU\ncosturas: Sin Costura\ntalle: 7\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS85192",
+    "text_length_char": 515,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102065",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de PU"
+    }
+  },
+  {
+    "node_id": "node_prod_102066",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de PU\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de PU, talle 8\ndescripcion: Guante tejido DPS con recubrimiento de poliuretano (PU), sin costura, en talle 8. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: PU\ncosturas: Sin Costura\ntalle: 8\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS85193",
+    "text_length_char": 515,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102066",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de PU"
+    }
+  },
+  {
+    "node_id": "node_prod_102067",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de PU\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de PU, talle 9\ndescripcion: Guante tejido DPS con recubrimiento de poliuretano (PU), sin costura, en talle 9. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: PU\ncosturas: Sin Costura\ntalle: 9\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS85194",
+    "text_length_char": 515,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102067",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de PU"
+    }
+  },
+  {
+    "node_id": "node_prod_102068",
+    "text_to_embed": "proveedor: Ferretera del Norte\ncategoria_padre: Seguridad Industrial\ncategoria: Guantes de Protección\nsubcategoria: Guantes tejidos con recubrimiento de PU\nmarca: DPS\nnombre: Guante tejido DPS con recubrimiento de PU, talle 10\ndescripcion: Guante tejido DPS con recubrimiento de poliuretano (PU), sin costura, en talle 10. Se comercializa por par y se presenta en paquetes de 12 unidades de venta.\nbase: Tejido\nrecubrimiento: PU\ncosturas: Sin Costura\ntalle: 10\nunidad_venta: Par\npaquete_cantidad: 12\nartículo: DPS85195",
+    "text_length_char": 518,
+    "text_length_tokens": 159,
+    "metadata": {
+      "pagina": 10,
+      "codigo": "102068",
+      "proveedor": "Ferretera del Norte",
+      "marca": "DPS",
+      "categoria": "Guantes de Protección",
+      "subcategoria": "Guantes tejidos con recubrimiento de PU"
+    }
+  }
+]
