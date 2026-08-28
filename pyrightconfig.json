@@ -1,0 +1,10 @@
+{
+  "venvPath": "/Users/rolandodaumas/Development/projects/super-warehouse-data-processing/fase-0-pdf-parsing",
+  "venv": ".venv",
+  "include": [
+    "."
+  ],
+  "extraPaths": [
+    "/Users/rolandodaumas/Development/projects/super-warehouse-data-processing/fase-0-pdf-parsing/.venv/lib/python3.12/site-packages"
+  ]
+}

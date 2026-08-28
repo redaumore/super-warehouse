@@ -109,7 +109,7 @@ class DirectLunaCatalogProcessor:
             "5. Conserva las especificaciones originales de la tabla en especificaciones_tabla."
         )
 
-        user_content = [
+        user_content: List[Dict[str, Any]] = [
             {
                 "type": "text",
                 "text": f"--- INFORMACIÓN DE LA PÁGINA {page_num} ---\n\nTEXTO EXTRAÍDO POR CAPA VECTORIAL:\n{page_text or '[Página puramente visual/escaneada]'}"
@@ -132,7 +132,7 @@ class DirectLunaCatalogProcessor:
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": user_content}  # type: ignore[arg-type]
             ],
             response_format=PageExtractionResult
         )
@@ -145,6 +145,9 @@ class DirectLunaCatalogProcessor:
         logger.info(f"Página {page_num} completada en {elapsed:.2f}s (Tokens: Prompt={prompt_tokens}, Completion={completion_tokens}, Total={total_tokens})")
 
         parsed_res = response.choices[0].message.parsed
+        if parsed_res is None:
+            raise ValueError(f"Fallo al parsear la respuesta estructurada para la página {page_num}")
+
         parsed_res.pagina = page_num
         parsed_res.metrics = PageUsageMetrics(
             prompt_tokens=prompt_tokens,
@@ -215,7 +218,7 @@ class DirectLunaCatalogProcessor:
 
             page_idx = pno - 1
             page = doc[page_idx]
-            page_text = page.get_text()
+            page_text = str(page.get_text() or "")
             image_b64 = self.render_page_to_base64(page) if use_vision else None
 
             try:
