@@ -8,7 +8,7 @@ Expose a seam to query which suppliers can offer a missing item, consuming the e
 
 ### Requirement: Supplier catalog searcher seam
 
-The system MUST expose a `SupplierCatalogSearcher` protocol whose search takes a missing SKU or free-text description and returns candidate suppliers with their offered item and quantity.
+The system MUST expose a `SupplierCatalogSearcher` protocol whose search takes a missing SKU or free-text description and returns candidate suppliers with their offered item and quantity. Candidate results MUST exclude INACTIVO suppliers.
 
 #### Scenario: Candidates returned for a missing item
 
@@ -21,6 +21,12 @@ The system MUST expose a `SupplierCatalogSearcher` protocol whose search takes a
 - GIVEN a missing item no supplier offers
 - WHEN the searcher is queried
 - THEN it returns an empty candidate list
+
+#### Scenario: Inactive supplier excluded
+
+- GIVEN an INACTIVO supplier that offers the item
+- WHEN the searcher is queried
+- THEN the INACTIVO supplier is not returned as a candidate
 
 #### Scenario: Seam decouples the external RAG
 
