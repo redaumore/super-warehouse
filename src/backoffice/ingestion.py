@@ -23,8 +23,9 @@ from sqlalchemy.orm import Session
 
 from src.agents.disambiguation import normalize_text
 from src.agents.perception import VisionAnalyzer
-from src.db.models import Catalogo, Inventory, Proveedor
+from src.db.models import Catalogo, Inventory, Supplier
 from src.pricing.engine import compute_base
+from src.supplier.guards import ensure_active_supplier
 from src.supplier.ocr import DocumentExtraction, extract_document
 
 _CENT = Decimal("0.01")
@@ -67,12 +68,14 @@ def _find_existing_product(session: Session, codigo: str, descripcion: str) -> C
 def confirm_items(
     session: Session,
     rows: list[list[object]],
-    proveedor_id: int,
+    supplier_id: int,
 ) -> ConfirmedIngest:
-    """Write the confirmed grid into inventory/catalog; never on empty rows."""
-    proveedor = session.get(Proveedor, proveedor_id)
-    if proveedor is None:
-        raise KeyError(f"unknown supplier: {proveedor_id}")
+    """Write the confirmed grid into inventory/catalog; never on empty rows.
+
+    Refuses INACTIVO suppliers (ACTIVO guard) before any write; unknown
+    suppliers raise ``KeyError``.
+    """
+    supplier = ensure_active_supplier(session, supplier_id)
     updated = 0
     created = 0
     for row in rows:
@@ -105,12 +108,12 @@ def confirm_items(
             updated += 1
         else:
             sku = codigo or f"NEW-{len(session.scalars(select(Catalogo)).all()) + 1:04d}"
-            margen = proveedor.margen_predeterminado
+            margen = supplier.default_margin_pct
             costo_final = costo or Decimal(0)
             session.add(
                 Catalogo(
                     codigo_interno=sku,
-                    proveedor_id=proveedor_id,
+                    supplier_id=supplier_id,
                     nombre_oficial=descripcion,
                     costo_proveedor=costo_final,
                     margen_aplicado_pct=margen,

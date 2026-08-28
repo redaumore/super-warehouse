@@ -21,7 +21,7 @@ from src.db.models import (
     ListaPrecios,
     Order,
     OrderEstado,
-    Proveedor,
+    Supplier,
     SourcingNeed,
     SourcingState,
 )
@@ -73,10 +73,10 @@ def order_ctx(db_session):
         )
     )
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+        Supplier(id=1, code="SUP", business_name="Supplier X", default_margin_pct=Decimal(0))
     )
     db_session.add(
-        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
+        Supplier(id=2, code="SUY", business_name="Supplier Y", default_margin_pct=Decimal(0))
     )
     order = Order(
         customer_id=1,
@@ -91,14 +91,14 @@ def order_ctx(db_session):
 CANDIDATES = (
     SupplierCandidate(
         supplier_id=1,
-        business_name="Proveedor X",
+        business_name="Supplier X",
         sku="CLV-001",
         description="Clavos Paris 2 Pulgadas",
         available_quantity=50,
     ),
     SupplierCandidate(
         supplier_id=2,
-        business_name="Proveedor Y",
+        business_name="Supplier Y",
         sku="CLV-001",
         description="Clavos Paris 2 Pulgadas",
         available_quantity=30,
@@ -118,7 +118,7 @@ def test_upsert_creates_and_updates_need(order_ctx):
 
 
 def test_record_supplier_selection_updates_in_place(order_ctx):
-    """La selección de proveedor se persiste y puede re-elegirse antes de ejecutar."""
+    """The supplier selection persists and can be re-chosen before execution."""
     session = order_ctx["session"]
     need = upsert_sourcing_need(session, order_ctx["order"].order_id, "CLV-001", 6)
     record_supplier_selection(session, need.need_id, 1)

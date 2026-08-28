@@ -30,7 +30,7 @@ from src.db.models import (
     ListaPrecios,
     Order,
     OrderEstado,
-    Proveedor,
+    Supplier,
 )
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.owner import rejection_reply
@@ -100,7 +100,7 @@ def shop(db_session):
     """Catalog with 50 units, customer, supplier; committed for the pipeline."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
+        Supplier(supplier_id=1, razon_social="Supplier Test", margen_predeterminado=Decimal(0))
     )
     db_session.add(
         Cliente(
@@ -115,7 +115,7 @@ def shop(db_session):
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),

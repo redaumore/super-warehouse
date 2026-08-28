@@ -105,10 +105,10 @@ def confirm_selection(
 
 def format_selection_confirmation(order: Order, pos: tuple[SupplierPurchaseOrder, ...]) -> str:
     """Owner confirmation after the selection is accumulated."""
-    po_lines = " ".join(f"PO #{po.po_id} (proveedor {po.supplier_id})" for po in pos)
+    po_lines = " ".join(f"PO #{po.po_id} (supplier {po.supplier_id})" for po in pos)
     return (
         f"Listo: pedido #{order.order_id} en preparación. "
-        f"{po_lines}. El envío al proveedor se ejecuta desde el backoffice."
+        f"{po_lines}. El envío al supplier se ejecuta desde el backoffice."
     )
 
 
@@ -140,14 +140,14 @@ def build_sourcing_handler(
         _decision: RoutingDecision,
     ) -> AgentOutcome:
         if state is None or not state.sourcing_selection_pending:
-            return AgentOutcome(state=state, reply="¿Sobre qué pedido querés elegir proveedor?")
+            return AgentOutcome(state=state, reply="¿Sobre qué pedido querés elegir supplier?")
         selections = parse_supplier_selections(
             (message.text or "").strip(), state.sourcing_candidates
         )
         if not selections:
             return AgentOutcome(
                 state=state,
-                reply="Respondé el número del proveedor que elegís para cada artículo, ej: '1 y 3'.",
+                reply="Respondé el número del supplier que elegís para cada artículo, ej: '1 y 3'.",
             )
         with session_factory() as session:
             order = session.get(Order, state.order_id)

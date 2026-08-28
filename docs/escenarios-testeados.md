@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 241, agrupados en 26 dominios.
+**Total de escenarios:** 242, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -33,7 +33,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 21
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 3
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
 
 ## Motor de precios
 
@@ -183,12 +183,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 - Audio limpio se transcribe a texto utilizable sin fragmentos marcados. _(`test_transcribe_clean_audio_returns_text`)_
 - Audio ruidoso se transcribe igual y marca los fragmentos de baja confianza. _(`test_transcribe_noisy_audio_flags_fragments_not_dropped`)_
-- Un fallo del proveedor de transcripción lanza TranscriptionError. _(`test_transcribe_provider_error_raises_transcription_error`)_
+- A transcription provider failure raises TranscriptionError. _(`test_transcribe_provider_error_raises_transcription_error`)_
 - Una transcripción vacía es un fallo, no un éxito silencioso. _(`test_transcribe_empty_transcript_raises`)_
 - TranscriptionError es un subtipo de PerceptionError. _(`test_transcription_error_is_a_perception_error`)_
 - Analizar una imagen devuelve el texto descriptivo con su confianza. _(`test_analyze_image_returns_vision_text`)_
-- Un prompt personalizado se reenvía al proveedor de visión. _(`test_analyze_image_custom_prompt_forwarded`)_
-- Un fallo del proveedor de visión lanza VisionError. _(`test_analyze_image_provider_error_raises_vision_error`)_
+- A custom prompt is forwarded to the vision provider. _(`test_analyze_image_custom_prompt_forwarded`)_
+- A vision provider failure raises VisionError. _(`test_analyze_image_provider_error_raises_vision_error`)_
 - Una imagen sin descripción lanza VisionError. _(`test_analyze_image_empty_description_raises`)_
 
 ## Integración con OpenAI
@@ -197,10 +197,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un audio limpio transcribe con texto y confianza alta sin fragmentos. _(`test_transcribe_clean_audio_returns_text_and_high_confidence`)_
 - Un audio ruidoso marca los fragmentos de baja confianza, nunca los descarta. _(`test_transcribe_noisy_audio_flags_low_confidence_fragments`)_
 - Sin segmentos disponibles la confianza es plena (1.0). _(`test_transcribe_without_segments_has_full_confidence`)_
-- Un error del proveedor se propaga como TranscriptionError por percepción. _(`test_transcribe_propagates_provider_errors_as_transcription_error`)_
+- A provider error propagates as TranscriptionError through perception. _(`test_transcribe_propagates_provider_errors_as_transcription_error`)_
 - Una imagen analizada devuelve el texto con confianza plena al finalizar normal. _(`test_analyze_image_returns_text_with_stop_finish`)_
 - Un cierre anómalo (length) baja la confianza del análisis. _(`test_analyze_image_suspect_finish_lowers_confidence`)_
-- Un fallo del proveedor de visión se propaga como VisionError por percepción. _(`test_analyze_image_raises_vision_error_on_provider_failure`)_
+- A vision provider failure propagates as VisionError through perception. _(`test_analyze_image_raises_vision_error_on_provider_failure`)_
 - El embedder conserva el orden de entrada y pasa modelo y dimensiones. _(`test_embed_preserves_input_order_and_passes_model_dimensions`)_
 
 ## Búsqueda en catálogo
@@ -320,7 +320,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un texto vacío no produce filas ni líneas pendientes. _(`test_parse_line_items_empty_text_has_no_items`)_
 - Extraer un documento legible devuelve las filas parseadas. _(`test_extract_document_returns_parsed_items`)_
 - Un documento ilegible se rechaza con un error claro, sin escribir nada. _(`test_extract_document_rejects_illegible_with_clear_error`)_
-- Un fallo del proveedor de visión se propaga como VisionError. _(`test_extract_document_vision_failure_propagates`)_
+- A vision provider failure propagates as VisionError. _(`test_extract_document_vision_failure_propagates`)_
 - Una lista de precios se parsea en código, descripción y costo. _(`test_parse_price_list_extracts_code_description_cost`)_
 - Una imagen local se codifica como data URL con su MIME. _(`test_image_to_data_url_embeds_file_bytes`)_
 - La lista de precios mapea SKU existentes y sugiere nuevos. _(`test_ingest_price_list_maps_and_suggests`)_
@@ -329,7 +329,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Construir la app genera cinco pestañas con los títulos esperados. _(`test_build_app_creates_five_tabs_with_expected_labels`)_
+- Construir la app genera seis pestañas con los títulos esperados. _(`test_build_app_creates_six_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
@@ -342,7 +342,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un teléfono inválido impide registrar el cliente. _(`test_clients_create_rejects_invalid_phone`)_
 - Editar un cliente cambia su descuento particular. _(`test_clients_update_changes_discount`)_
 - Confirmar filas con SKU existente aumenta el stock y el costo. _(`test_confirm_items_updates_existing_product_stock`)_
-- Una fila sin SKU existente crea un producto nuevo con margen del proveedor. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
+- Una fila sin SKU existente crea un producto nuevo con margen del supplier. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
 - La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente desde la UI devuelve un mensaje de éxito. _(`test_app_register_client_returns_success_message`)_
@@ -373,3 +373,4 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un remito subido se previsualiza y al confirmar actualiza el inventario. _(`test_e2e_remito_upload_previews_and_confirms_inventory`)_
 - Correcciones del dueño en la grilla reemplazan la extracción cruda. _(`test_e2e_owner_corrections_override_raw_extraction`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
+- confirm_items rechaza un supplier INACTIVO sin escribir inventario. _(`test_confirm_items_refuses_inactive_supplier_and_writes_nothing`)_

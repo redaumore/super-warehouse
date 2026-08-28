@@ -21,7 +21,7 @@ def _availability(mapping: dict[str, int]):
 
 CLAVOS = SupplierCandidate(
     supplier_id=1,
-    business_name="Proveedor X",
+    business_name="Supplier X",
     sku="CLV-001",
     description="Clavos Paris 2 Pulgadas",
     available_quantity=50,
@@ -45,7 +45,7 @@ def test_full_stock_is_case_a():
 
 
 def test_partial_stock_with_supplier_is_case_b():
-    """Falta stock pero hay proveedor → Caso B."""
+    """Missing stock but a supplier exists → Case B."""
     items = (ResolvedItem(sku="CLV-001", cantidad=10),)
     searcher = FakeSupplierCatalogSearcher((CLAVOS,))
     decision = classify_case(items, _availability({"CLV-001": 4}), searcher)
@@ -58,7 +58,7 @@ def test_partial_stock_with_supplier_is_case_b():
 
 
 def test_missing_item_with_no_supplier_is_case_c():
-    """Falta stock y no hay proveedor → Caso C."""
+    """Missing stock and no supplier → Case C."""
     items = (ResolvedItem(sku="CLV-001", cantidad=10),)
     decision = classify_case(items, _availability({"CLV-001": 4}), FakeSupplierCatalogSearcher())
     assert decision.case is SourcingCase.C
@@ -75,7 +75,7 @@ def test_unknown_sku_is_treated_as_missing():
 
 
 def test_mixed_items_any_no_supplier_forces_case_c():
-    """Si un faltante no tiene proveedor, el pedido entero es Caso C."""
+    """If a missing item has no supplier, the whole order is Case C."""
     items = (
         ResolvedItem(sku="CLV-001", cantidad=10),  # supplier exists
         ResolvedItem(sku="PINT-001", cantidad=5),  # no supplier
@@ -87,7 +87,7 @@ def test_mixed_items_any_no_supplier_forces_case_c():
 
 
 def test_search_by_description_finds_candidates_for_unknown_sku():
-    """La búsqueda por descripción encuentra proveedores para SKU desconocido."""
+    """Description search finds suppliers for an unknown SKU."""
     items = (
         ResolvedItem(sku="pintura latex blanco", cantidad=2, description="pintura latex blanco"),
     )

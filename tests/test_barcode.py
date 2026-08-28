@@ -29,7 +29,7 @@ from src.barcode.decoder import (
     lookup_barcode,
 )
 from src.config import get_settings
-from src.db.models import Catalogo, Proveedor, StockAdjustment
+from src.db.models import Catalogo, Supplier, StockAdjustment
 
 
 def _real_png(path: Path) -> None:
@@ -93,16 +93,16 @@ def _clean_schema(db_engine):
         conn.execute(
             text(
                 "TRUNCATE order_items, orders, stock_reservations, stock_adjustments, catalogo, "
-                "proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
 
 def _seed_catalog(db_session, *, barcodes: list[str], skus: list[str]) -> None:
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Test",
+        Supplier(
+            supplier_id=1,
+            razon_social="Supplier Test",
             margen_predeterminado=Decimal(0),
         )
     )
@@ -111,7 +111,7 @@ def _seed_catalog(db_session, *, barcodes: list[str], skus: list[str]) -> None:
             Catalogo(
                 id=index + 1,
                 codigo_interno=sku,
-                proveedor_id=1,
+                supplier_id=1,
                 nombre_oficial=f"Producto {sku}",
                 costo_proveedor=Decimal("100.00"),
                 margen_aplicado_pct=Decimal(0),

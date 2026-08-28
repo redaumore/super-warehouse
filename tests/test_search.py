@@ -16,7 +16,7 @@ from sqlalchemy.exc import OperationalError
 
 from src.agents.disambiguation import ResolutionKind, resolve_item, search_catalog
 from src.config import get_settings
-from src.db.models import Catalogo, Proveedor
+from src.db.models import Catalogo, Supplier
 
 EMBED_DIMS = 1536
 
@@ -51,7 +51,7 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
+                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
                 "clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
@@ -61,10 +61,11 @@ def _clean_schema(db_engine):
 def catalog(db_session):
     """Seed the fixture catalog: two 2\" nails (Paris vs Espiralado) + cement."""
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Test",
-            margen_predeterminado=Decimal(0),
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
         )
     )
     db_session.add_all(
@@ -72,7 +73,7 @@ def catalog(db_session):
             Catalogo(
                 id=1,
                 codigo_interno="CLV-PRS-2",
-                proveedor_id=1,
+                supplier_id=1,
                 nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
                 costo_proveedor=Decimal("100.00"),
                 margen_aplicado_pct=Decimal("0.35"),
@@ -83,7 +84,7 @@ def catalog(db_session):
             Catalogo(
                 id=2,
                 codigo_interno="CLV-ESP-2",
-                proveedor_id=1,
+                supplier_id=1,
                 nombre_oficial="Clavos Espiralados 2 Pulgadas",
                 costo_proveedor=Decimal("80.00"),
                 margen_aplicado_pct=Decimal("0.30"),
@@ -94,7 +95,7 @@ def catalog(db_session):
             Catalogo(
                 id=3,
                 codigo_interno="CMT-PRT-50",
-                proveedor_id=1,
+                supplier_id=1,
                 nombre_oficial="Cemento Portland 50kg",
                 costo_proveedor=Decimal("1200.00"),
                 margen_aplicado_pct=Decimal("0.25"),

@@ -35,7 +35,7 @@ from src.db.models import (
     Cliente,
     ListaPrecios,
     Order,
-    Proveedor,
+    Supplier,
 )
 from src.orchestrator.router import AgentName, RoutingDecision
 from src.orchestrator.session import ConversationState
@@ -171,7 +171,7 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -283,13 +283,13 @@ def shop_with_catalog(shop):
     """Extends ``shop`` with a catalog product (50 units) for the Case A flow."""
     db_session = shop["session"]
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
+        Supplier(supplier_id=1, razon_social="Supplier Test", margen_predeterminado=Decimal(0))
     )
     db_session.add(
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),

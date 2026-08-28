@@ -123,7 +123,7 @@ def test_validate_email_rejects_malformed(email: str):
 
 
 def test_suggest_code_three_tokens_first_letters():
-    assert suggest_code("Proveedor Mayorista SA") == "PMS"
+    assert suggest_code("Comercial Mayorista SA") == "CMS"
 
 
 def test_suggest_code_two_tokens_pads_from_first():

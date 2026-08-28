@@ -48,20 +48,20 @@ Chain strategy: size-exception (approved)
 
 ## Phase 3: Backoffice CRUD + Sixth Tab UI
 
-- [ ] 3.1 `src/backoffice/suppliers.py`: `InvalidSupplierDataError`, `list_suppliers(query=None, status=None)`, `create_supplier`, `update_supplier`, `toggle_status`; create/update re-validate CUIT/email/phone; `_assert_code_not_linked` counts the 4 linked models and blocks `code` change when any > 0.
-- [ ] 3.2 Add sixth `gr.Tab("Suppliers")` in `src/backoffice/app.py`: grid (ID, Code, Name, CUIT, Contact, Phone, Margin, IVA, Status) fed by `_suppliers_grid(query, status)`; search + status filter; row select stores `supplier_id` in `gr.State`; create/edit form with `gr.Dropdown(iva_condition)` + `gr.Number(margin)`; code reactive to `business_name.change`; errors in status `gr.Textbox` (clients.py pattern).
-- [ ] 3.3 `tests/test_suppliers_backoffice.py` (DB-skipping pytestmark): create, list with query/status filters, toggle, code-blocked when linked, code-allowed when unlinked, margin edit does NOT re-price existing catalog rows, invalid CUIT/email/phone rejected.
-- [ ] 3.4 `tests/test_backoffice.py`: rename `Proveedor`→`Supplier` in `shop_ctx`; update seed; rename `..._five_tabs_...`→`..._six_tabs_...`; add `"Suppliers"` label assertion.
+- [x] 3.1 `src/backoffice/suppliers.py`: `InvalidSupplierDataError`, `list_suppliers(query=None, status=None)`, `create_supplier`, `update_supplier`, `toggle_status`; create/update re-validate CUIT/email/phone; `_assert_code_not_linked` counts the 4 linked models and blocks `code` change when any > 0.
+- [x] 3.2 Add sixth `gr.Tab("Suppliers")` in `src/backoffice/app.py`: grid (ID, Code, Name, CUIT, Contact, Phone, Margin, IVA, Status) fed by `_suppliers_grid(query, status)`; search + status filter; row select stores `supplier_id` in `gr.State`; create/edit form with `gr.Dropdown(iva_condition)` + `gr.Number(margin)`; code reactive to `business_name.change`; errors in status `gr.Textbox` (clients.py pattern).
+- [x] 3.3 `tests/test_suppliers_backoffice.py` (DB-skipping pytestmark): create, list with query/status filters, toggle, code-blocked when linked, code-allowed when unlinked, margin edit does NOT re-price existing catalog rows, invalid CUIT/email/phone rejected.
+- [x] 3.4 `tests/test_backoffice.py`: rename `Proveedor`→`Supplier` in `shop_ctx`; update seed; rename `..._five_tabs_...`→`..._six_tabs_...`; add `"Suppliers"` label assertion.
 
 ## Phase 4: Sourcing / Purchasing / Ingestion Rename + ACTIVO Guards
 
-- [ ] 4.1 `src/backoffice/ingestion.py`: rename `proveedor`→`supplier`, `margen_predeterminado`→`default_margin_pct`; call `ensure_active_supplier` as first line in `confirm_items`; new `Catalogo` rows use `supplier.default_margin_pct`.
-- [ ] 4.2 `src/purchasing/accumulate.py`: call `ensure_active_supplier` at start of `open_or_create_po` and `accumulate_need`.
-- [ ] 4.3 `src/supplier/ocr.py`: rename `ProveedorSkuMapping`→`SupplierSkuMapping` + columns (`proveedor_id`→`supplier_id`, `codigo_proveedor`→`supplier_sku_code`, `descripcion_raw`→`raw_description`, `sku_interno`→`internal_sku`, `confianza`→`confidence`).
-- [ ] 4.4 `src/backoffice/po.py`: `po.supplier.razon_social`→`po.supplier.business_name`.
-- [ ] 4.5 `src/sourcing/case_b.py`: reply string `"proveedor {po.supplier_id}"`→`"supplier {po.supplier_id}"`.
-- [ ] 4.6 `tests/test_purchasing_accumulate.py`: rename `Proveedor`→`Supplier`; add guard test asserting `SupplierInactiveError` for INACTIVO supplier in both `open_or_create_po` and `accumulate_need`.
-- [ ] 4.7 `tests/test_e2e_ingestion.py`: rename `Proveedor`→`Supplier`, update seed; add test: `confirm_items` raises `SupplierInactiveError` for INACTIVO supplier and writes no `Catalogo`/`Inventory`.
+- [x] 4.1 `src/backoffice/ingestion.py`: rename `proveedor`→`supplier`, `margen_predeterminado`→`default_margin_pct`; call `ensure_active_supplier` as first line in `confirm_items`; new `Catalogo` rows use `supplier.default_margin_pct`.
+- [x] 4.2 `src/purchasing/accumulate.py`: call `ensure_active_supplier` at start of `open_or_create_po` and `accumulate_need`.
+- [x] 4.3 `src/supplier/ocr.py`: rename `ProveedorSkuMapping`→`SupplierSkuMapping` + columns (`proveedor_id`→`supplier_id`, `codigo_proveedor`→`supplier_sku_code`, `descripcion_raw`→`raw_description`, `sku_interno`→`internal_sku`, `confianza`→`confidence`).
+- [x] 4.4 `src/backoffice/po.py`: `po.supplier.razon_social`→`po.supplier.business_name`.
+- [x] 4.5 `src/sourcing/case_b.py`: reply string `"proveedor {po.supplier_id}"`→`"supplier {po.supplier_id}"`.
+- [x] 4.6 `tests/test_purchasing_accumulate.py`: rename `Proveedor`→`Supplier`; add guard test asserting `SupplierInactiveError` for INACTIVO supplier in both `open_or_create_po` and `accumulate_need`.
+- [x] 4.7 `tests/test_e2e_ingestion.py`: rename `Proveedor`→`Supplier`, update seed; add test: `confirm_items` raises `SupplierInactiveError` for INACTIVO supplier and writes no `Catalogo`/`Inventory`.
 
 ## Phase 5: Test Updates Across the Suite
 

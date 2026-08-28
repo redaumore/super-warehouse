@@ -28,9 +28,9 @@ from src.db.models import (
     Cliente,
     ListaPrecios,
     Order,
-    Proveedor,
     SourcingNeed,
     SourcingState,
+    Supplier,
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
@@ -47,14 +47,14 @@ ORDER_MESSAGE = f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas"
 CANDIDATES = (
     SupplierCandidate(
         supplier_id=1,
-        business_name="Proveedor X",
+        business_name="Supplier X",
         sku="CLV-PRS-2",
         description="Clavos Paris 2 Pulgadas",
         available_quantity=50,
     ),
     SupplierCandidate(
         supplier_id=2,
-        business_name="Proveedor Y",
+        business_name="Supplier Y",
         sku="CLV-PRS-2",
         description="Clavos Paris 2 Pulgadas",
         available_quantity=30,
@@ -95,10 +95,10 @@ def shop(db_session):
     """Catalog with only 4 units on hand → 10 requested leaves 6 missing."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+        Supplier(id=1, code="SUP", business_name="Supplier X", default_margin_pct=Decimal(0))
     )
     db_session.add(
-        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
+        Supplier(id=2, code="SUY", business_name="Supplier Y", default_margin_pct=Decimal(0))
     )
     db_session.add(
         Cliente(
@@ -113,7 +113,7 @@ def shop(db_session):
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
@@ -149,7 +149,7 @@ def _message(text: str) -> InboundMessage:
 
 
 def test_partial_order_lists_missing_items_and_suppliers(shop):
-    """Un pedido parcial lista los faltantes y los proveedores numerados."""
+    """A partial order lists the missing items and the numbered suppliers."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
 
@@ -158,8 +158,8 @@ def test_partial_order_lists_missing_items_and_suppliers(shop):
     assert result.decision.parsed is True
     reply = result.reply
     assert "faltan 6" in reply  # type: ignore[operator]
-    assert "1) Proveedor X" in reply  # type: ignore[operator]
-    assert "2) Proveedor Y" in reply  # type: ignore[operator]
+    assert "1) Supplier X" in reply  # type: ignore[operator]
+    assert "2) Supplier Y" in reply  # type: ignore[operator]
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
     assert order.sourcing_state is SourcingState.IN_PREPARATION  # set at detection
@@ -174,7 +174,7 @@ def test_partial_order_lists_missing_items_and_suppliers(shop):
 
 
 def test_owner_selection_accumulates_open_po(shop):
-    """La elección del dueño acumula un PO abierto para el proveedor elegido."""
+    """The owner's choice accumulates an OPEN PO for the picked supplier."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
     orchestrator.handle_inbound(_message(ORDER_MESSAGE))
@@ -201,7 +201,7 @@ def test_owner_selection_accumulates_open_po(shop):
 
 
 def test_reselection_before_execution_moves_need_between_pos(shop):
-    """Re-elegir proveedor antes de ejecutar mueve la necesidad entre POs."""
+    """Re-selecting a supplier before execution moves the need between POs."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
     orchestrator.handle_inbound(_message(ORDER_MESSAGE))

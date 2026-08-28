@@ -23,7 +23,7 @@ from src.config import get_settings
 from src.db.models import (
     Inventory,
     ListaPrecios,
-    Proveedor,
+    Supplier,
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
@@ -56,8 +56,8 @@ def po_ctx(db_session):
     """A supplier and an OPEN purchase order with one line of 10 units."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1, razon_social="Proveedor Mayorista", margen_predeterminado=Decimal(0)
+        Supplier(
+            supplier_id=1, razon_social="Supplier Mayorista", margen_predeterminado=Decimal(0)
         )
     )
     po = SupplierPurchaseOrder(supplier_id=1, estado=SupplierPurchaseOrderState.OPEN)
@@ -75,12 +75,12 @@ def _po(session, po_id: int) -> SupplierPurchaseOrder:
 
 
 def test_list_purchase_orders_renders_state_and_items(po_ctx):
-    """El listado muestra PO, proveedor, estado y artículos."""
+    """The listing shows PO, supplier, state and items."""
     session = po_ctx["session"]
     rows = list_purchase_orders(session)
     assert len(rows) == 1
     assert rows[0]["po_id"] == po_ctx["po_id"]
-    assert rows[0]["supplier"] == "Proveedor Mayorista"
+    assert rows[0]["supplier"] == "Supplier Mayorista"
     assert rows[0]["estado"] == "OPEN"
     assert "CLV-001 × 10" in rows[0]["items"]
 
