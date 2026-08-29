@@ -22,7 +22,8 @@ from sqlalchemy.exc import OperationalError
 from src.backoffice.ingestion import confirm_items, extract_document_items, to_grid_rows
 from src.barcode.decoder import BarcodeLookupKind, decode_image, lookup_barcode
 from src.config import get_settings
-from src.db.models import Catalogo, Proveedor
+from src.db.models import Catalogo, Inventory, Supplier, SupplierStatus
+from src.supplier.guards import SupplierInactiveError
 
 REMITO_TEXT = """REMITO 55
 10 x Clavos Paris 2 Pulgadas
@@ -51,8 +52,8 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios, proveedor_sku_mapping RESTART IDENTITY CASCADE"
+                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
+                "clientes, lista_precios, supplier_sku_mappings RESTART IDENTITY CASCADE"
             )
         )
 
@@ -60,17 +61,18 @@ def _clean_schema(db_engine):
 @pytest.fixture
 def supplier(db_session):
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Mayorista",
-            margen_predeterminado=Decimal("0.10"),
+        Supplier(
+            id=1,
+            code="MSA",
+            business_name="Mayorista SA",
+            default_margin_pct=Decimal("0.10"),
         )
     )
     db_session.add(
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
@@ -105,7 +107,7 @@ def test_e2e_remito_upload_previews_and_confirms_inventory(supplier, tmp_path):
     ]
 
     # Owner confirms (grid editable — no corrections needed here).
-    result = confirm_items(session, grid, proveedor_id=1)
+    result = confirm_items(session, grid, supplier_id=1)
     assert result.updated == 1
     assert result.created == 1
 
@@ -126,7 +128,7 @@ def test_e2e_owner_corrections_override_raw_extraction(supplier, tmp_path):
     grid = to_grid_rows(extraction)
     # Owner fixes quantity and cost before confirming.
     grid[1] = ["PINT-001", "Pintura Látex Blanco", "6", "3100.00"]
-    confirm_items(session, grid, proveedor_id=1)
+    confirm_items(session, grid, supplier_id=1)
     created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "PINT-001"))
     assert created.stock_disponible == 6
     assert created.costo_proveedor == Decimal("3100.00")
@@ -153,3 +155,15 @@ def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     assert lookup.kind is BarcodeLookupKind.SINGLE
     assert lookup.candidates[0].codigo_interno == "CLV-PRS-2"
     assert lookup.candidates[0].stock_disponible == 50
+
+
+def test_confirm_items_refuses_inactive_supplier_and_writes_nothing(supplier):
+    """confirm_items rechaza un supplier INACTIVO sin escribir inventario."""
+    session = supplier["session"]
+    session.get(Supplier, 1).status = SupplierStatus.INACTIVO
+    session.flush()
+    grid = [["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]]
+    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
+        confirm_items(session, grid, supplier_id=1)
+    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "NEW-001")) is None
+    assert session.scalar(select(Inventory)) is None

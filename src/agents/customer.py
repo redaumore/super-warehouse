@@ -187,7 +187,7 @@ def format_case_b_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
     lines = [
         (
             f"Pedido #{order.order_id}: hay artículos sin stock. "
-            "Elegí proveedor para cada uno (respondé los números):"
+            "Elegí supplier para cada uno (respondé los números):"
         )
     ]
     number = 1

@@ -23,7 +23,7 @@ from src.config import get_settings
 from src.db.models import (
     Inventory,
     ListaPrecios,
-    Proveedor,
+    Supplier,
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
@@ -56,9 +56,7 @@ def po_ctx(db_session):
     """A supplier and an OPEN purchase order with one line of 10 units."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1, razon_social="Proveedor Mayorista", margen_predeterminado=Decimal(0)
-        )
+        Supplier(id=1, code="MAY", business_name="Mayorista SA", default_margin_pct=Decimal(0))
     )
     po = SupplierPurchaseOrder(supplier_id=1, estado=SupplierPurchaseOrderState.OPEN)
     db_session.add(po)
@@ -75,26 +73,26 @@ def _po(session, po_id: int) -> SupplierPurchaseOrder:
 
 
 def test_list_purchase_orders_renders_state_and_items(po_ctx):
-    """El listado muestra PO, proveedor, estado y artículos."""
+    """The listing shows PO, supplier, state and items."""
     session = po_ctx["session"]
     rows = list_purchase_orders(session)
     assert len(rows) == 1
     assert rows[0]["po_id"] == po_ctx["po_id"]
-    assert rows[0]["supplier"] == "Proveedor Mayorista"
+    assert rows[0]["supplier"] == "Mayorista SA"
     assert rows[0]["estado"] == "OPEN"
     assert "CLV-001 × 10" in rows[0]["items"]
 
 
 def test_send_open_po_moves_to_sent(po_ctx):
-    """Enviar desde OPEN mueve el PO a SENT."""
+    """Sending from OPEN moves the PO to SENT."""
     session = po_ctx["session"]
     result = send_po_action(session, po_ctx["po_id"])
-    assert "enviado" in result
+    assert "sent to the supplier" in result
     assert _po(session, po_ctx["po_id"]).estado is SupplierPurchaseOrderState.SENT
 
 
 def test_partial_then_full_receipt(po_ctx):
-    """Recibir parcial y luego el resto: PARTIALLY_RECEIVED → FULLY_RECEIVED."""
+    """Receive partially then the rest: PARTIALLY_RECEIVED → FULLY_RECEIVED."""
     session = po_ctx["session"]
     send_po_action(session, po_ctx["po_id"])
 
@@ -115,7 +113,7 @@ def test_partial_then_full_receipt(po_ctx):
 
 
 def test_receive_more_than_remaining_is_rejected(po_ctx):
-    """Recibir de más se rechaza y el PO no muta."""
+    """Over-receiving is rejected and the PO does not mutate."""
     session = po_ctx["session"]
     send_po_action(session, po_ctx["po_id"])
     with pytest.raises(ValueError, match="exceeds"):
@@ -124,7 +122,7 @@ def test_receive_more_than_remaining_is_rejected(po_ctx):
 
 
 def test_cancel_from_open(po_ctx):
-    """Cancelar desde OPEN mueve el PO a CANCELLED."""
+    """Cancelling from OPEN moves the PO to CANCELLED."""
     session = po_ctx["session"]
     result = cancel_po_action(session, po_ctx["po_id"])
     assert "cancelado" in result
@@ -132,7 +130,7 @@ def test_cancel_from_open(po_ctx):
 
 
 def test_cancel_from_sent(po_ctx):
-    """Cancelar desde SENT también es válido."""
+    """Cancelling from SENT is also valid."""
     session = po_ctx["session"]
     send_po_action(session, po_ctx["po_id"])
     cancel_po_action(session, po_ctx["po_id"])
@@ -140,7 +138,7 @@ def test_cancel_from_sent(po_ctx):
 
 
 def test_cancel_terminal_po_is_rejected(po_ctx):
-    """Cancelar un PO terminal (FULLY_RECEIVED) se rechaza."""
+    """Cancelling a terminal PO (FULLY_RECEIVED) is rejected."""
     session = po_ctx["session"]
     send_po_action(session, po_ctx["po_id"])
     receive_po_action(session, po_ctx["po_id"], "CLV-001", 10)
@@ -149,7 +147,7 @@ def test_cancel_terminal_po_is_rejected(po_ctx):
 
 
 def test_send_after_receiving_is_rejected(po_ctx):
-    """Enviar un PO ya recibido se rechaza (máquina de estados)."""
+    """Sending an already-received PO is rejected (state machine)."""
     session = po_ctx["session"]
     send_po_action(session, po_ctx["po_id"])
     receive_po_action(session, po_ctx["po_id"], "CLV-001", 10)

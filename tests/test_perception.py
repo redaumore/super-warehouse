@@ -85,7 +85,7 @@ def test_transcribe_noisy_audio_flags_fragments_not_dropped():
 
 
 def test_transcribe_provider_error_raises_transcription_error():
-    """Un fallo del proveedor de transcripción lanza TranscriptionError.
+    """A transcription provider failure raises TranscriptionError.
 
     Spec: transcription fails outright → TranscriptionError, not a guess.
     """
@@ -123,14 +123,14 @@ def test_analyze_image_returns_vision_text():
 
 
 def test_analyze_image_custom_prompt_forwarded():
-    """Un prompt personalizado se reenvía al proveedor de visión."""
+    """A custom prompt is forwarded to the vision provider."""
     provider = FakeVisionAnalyzer(result=VisionResult(text="un taladro", confidence=0.8))
     analyze_image(provider, "https://cdn/media/barcode.jpg", prompt="read the barcode number")
     assert provider.called_with[1] == "read the barcode number"
 
 
 def test_analyze_image_provider_error_raises_vision_error():
-    """Un fallo del proveedor de visión lanza VisionError."""
+    """A vision provider failure raises VisionError."""
     provider = FakeVisionAnalyzer(error=RuntimeError("invalid image"))
     with pytest.raises(VisionError, match="could not be analyzed"):
         analyze_image(provider, "https://cdn/media/broken.jpg")

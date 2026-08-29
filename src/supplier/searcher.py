@@ -17,17 +17,28 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class SupplierCandidate:
-    """One supplier offer for a missing item."""
+    """One supplier offer for a missing item.
+
+    ``status`` mirrors the supplier master-data lifecycle: candidates MUST
+    carry it and searchers MUST exclude INACTIVO suppliers (spec:
+    supplier-catalog-search). The default keeps hand-built candidates usable.
+    """
 
     supplier_id: int
     business_name: str
     sku: str
     description: str
     available_quantity: int | None = None
+    status: str = "ACTIVO"
 
 
 class SupplierCatalogSearcher(Protocol):
-    """Query which suppliers can offer a missing item (SKU or free text)."""
+    """Query which suppliers can offer a missing item (SKU or free text).
+
+    Seam contract: search results MUST exclude INACTIVO suppliers. The DB-backed
+    implementation is out of scope; every real/fake implementation stands in
+    behind this protocol.
+    """
 
     def search(
         self,
@@ -50,7 +61,9 @@ class FakeSupplierCatalogSearcher:
 
     A candidate matches when its ``sku`` equals the requested SKU, or — when no
     SKU is given — when the folded description needle appears in the
-    candidate's folded description or SKU. No external RAG is involved.
+    candidate's folded description or SKU. INACTIVO candidates are excluded
+    (seam contract), mirroring what the DB-backed searcher must do. No external
+    RAG is involved.
     """
 
     def __init__(self, candidates: Sequence[SupplierCandidate] = ()) -> None:
@@ -65,6 +78,8 @@ class FakeSupplierCatalogSearcher:
         needle = _fold(description) if description else None
         matches: list[SupplierCandidate] = []
         for candidate in self.candidates:
+            if candidate.status == "INACTIVO":
+                continue
             sku_hit = sku is not None and candidate.sku == sku
             desc_hit = needle is not None and (
                 needle in _fold(candidate.description) or needle in _fold(candidate.sku)

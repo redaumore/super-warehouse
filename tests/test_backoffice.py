@@ -39,7 +39,7 @@ from src.backoffice.ingestion import (
 )
 from src.backoffice.monitor import list_orders
 from src.config import get_settings
-from src.db.models import Catalogo, Cliente, ListaPrecios, Order, OrderEstado, Proveedor
+from src.db.models import Catalogo, Cliente, ListaPrecios, Order, OrderEstado, Supplier
 from src.integrations.sheets import SheetsWriter
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
@@ -51,11 +51,18 @@ def _tabs_block(demo) -> object:
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
 
 
-def test_build_app_creates_five_tabs_with_expected_labels():
-    """Construir la app genera cinco pestañas con los títulos esperados."""
+def test_build_app_creates_six_tabs_with_expected_labels():
+    """Construir la app genera seis pestañas con los títulos esperados."""
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
-    assert labels == ["Catalog", "Clients", "Orders/Monitor", "Purchase Orders", "Ingestion"]
+    assert labels == [
+        "Catalog",
+        "Clients",
+        "Orders/Monitor",
+        "Purchase Orders",
+        "Ingestion",
+        "Suppliers",
+    ]
 
 
 def test_build_app_ingestion_tab_has_preview_and_confirm():
@@ -137,8 +144,8 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios, proveedor_sku_mapping RESTART IDENTITY CASCADE"
+                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
+                "clientes, lista_precios, supplier_sku_mappings RESTART IDENTITY CASCADE"
             )
         )
 
@@ -157,17 +164,18 @@ def shop_ctx(db_session):
         )
     )
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Mayorista",
-            margen_predeterminado=Decimal("0.10"),
+        Supplier(
+            id=1,
+            code="MSA",
+            business_name="Mayorista SA",
+            default_margin_pct=Decimal("0.10"),
         )
     )
     db_session.add(
         Catalogo(
             id=1,
             codigo_interno="CLV-001",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
@@ -263,7 +271,7 @@ def test_confirm_items_updates_existing_product_stock(shop_ctx):
     result = confirm_items(
         shop_ctx["session"],
         [["CLV-001", "Clavos Paris 2 Pulgadas", 5, "95.00"]],
-        proveedor_id=1,
+        supplier_id=1,
     )
     assert result == ConfirmedIngest(updated=1, created=0)
     product = shop_ctx["session"].get(Catalogo, 1)
@@ -273,11 +281,11 @@ def test_confirm_items_updates_existing_product_stock(shop_ctx):
 
 
 def test_confirm_items_creates_new_product_for_unknown_sku(shop_ctx):
-    """Una fila sin SKU existente crea un producto nuevo con margen del proveedor."""
+    """Una fila sin SKU existente crea un producto nuevo con margen del supplier."""
     result = confirm_items(
         shop_ctx["session"],
         [["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]],
-        proveedor_id=1,
+        supplier_id=1,
     )
     assert result == ConfirmedIngest(updated=0, created=1)
     product = shop_ctx["session"].scalar(

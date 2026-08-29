@@ -25,10 +25,10 @@ from src.db.models import (
     ListaPrecios,
     Order,
     OrderEstado,
-    Proveedor,
     ReservationEstado,
     SourcingState,
     StockReservation,
+    Supplier,
 )
 from src.orchestrator.router import AgentName, Orchestrator
 from src.orchestrator.session import ConversationStore
@@ -72,7 +72,12 @@ def shop(db_session):
     """Catalog with only 2 units on hand and NO supplier candidates."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
+        )
     )
     db_session.add(
         Cliente(
@@ -87,7 +92,7 @@ def shop(db_session):
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
@@ -120,7 +125,7 @@ def _message(text: str) -> InboundMessage:
 
 
 def test_no_supplier_order_is_cancelled_and_reported_in_chat(shop):
-    """Sin proveedor: pedido rechazado, sourcing CANCELLED y aviso en el chat."""
+    """Without a supplier: order rejected, sourcing CANCELLED, chat notice."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
 
