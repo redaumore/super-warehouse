@@ -127,31 +127,38 @@ def normalize_code(raw: str) -> str:
     return "".join(ch for ch in folded if ch.isalnum())[:3]
 
 
-def _code_free(session: Session, code: str) -> bool:
-    return session.scalar(select(Supplier.id).where(Supplier.code == code)) is None
+def _code_free(session: Session, code: str, *, exclude_id: int | None = None) -> bool:
+    stmt = select(Supplier.id).where(Supplier.code == code)
+    if exclude_id is not None:
+        stmt = stmt.where(Supplier.id != exclude_id)
+    return session.scalar(stmt) is None
 
 
-def resolve_code(session: Session, raw: str) -> str:
+def resolve_code(session: Session, raw: str, *, exclude_id: int | None = None) -> str:
     """Resolve a requested code to a free 3-char variant, rotating over A-Z0-9.
 
     Tries the code itself, then rotations of the third character (fixed
     two-char prefix), then two-character rotations (fixed first char). Raises
     ``CodeCollisionError`` when every variant is taken — the owner types the
     code manually. The DB unique index is the backstop for concurrent races.
+
+    ``exclude_id`` lets an edit keep the supplier's own current code (the UI
+    always resubmits the full form, so the row itself must not count as a
+    collision).
     """
     code = normalize_code(raw)
     if not code:
         raise CodeCollisionError("cannot derive a code from an empty value")
-    if _code_free(session, code):
+    if _code_free(session, code, exclude_id=exclude_id):
         return code
     prefix = code[:2]
     for char in _CODE_ALPHABET:
         candidate = prefix + char
-        if candidate != code and _code_free(session, candidate):
+        if candidate != code and _code_free(session, candidate, exclude_id=exclude_id):
             return candidate
     for second in _CODE_ALPHABET:
         for third in _CODE_ALPHABET:
             candidate = code[0] + second + third
-            if candidate != code and _code_free(session, candidate):
+            if candidate != code and _code_free(session, candidate, exclude_id=exclude_id):
                 return candidate
     raise CodeCollisionError(f"no free 3-char code variant for {code}")

@@ -11,11 +11,14 @@ through direct ORM inserts.
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 
+from src.backoffice.app import _save_supplier, _supplier_row_selected, _supplier_toggle
 from src.backoffice.suppliers import (
     InvalidSupplierDataError,
     create_supplier,
@@ -29,6 +32,7 @@ from src.db.models import (
     Supplier,
     SupplierStatus,
 )
+from src.db.session import SessionLocal
 
 
 def _postgres_up() -> bool:
@@ -216,6 +220,14 @@ def test_update_supplier_code_allowed_when_unlinked(db_session):
     assert db_session.get(Supplier, supplier.id).code == "ABC"
 
 
+def test_update_supplier_keeps_own_code_when_resubmitted(db_session):
+    """Reenviar el mismo código (como hace la UI) no lo rota."""
+    supplier = create_supplier(db_session, business_name="Mayorista SA")
+    assert supplier.code == "MSA"
+    update_supplier(db_session, supplier.id, code="MSA", contact_name="Juan")
+    assert db_session.get(Supplier, supplier.id).code == "MSA"
+
+
 def test_update_supplier_revalidates_contact_fields(db_session):
     """Editar revalida CUIT/email/teléfono."""
     supplier = create_supplier(db_session, business_name="Mayorista SA")
@@ -249,3 +261,67 @@ def test_multiple_suppliers_with_null_cuit_allowed(db_session):
     db_session.add(Supplier(business_name="B", code="BBB"))
     db_session.flush()
     assert len(db_session.scalars(select(Supplier)).all()) == 2
+
+
+# ------------------------------------------------ app handler functions (DB)
+# NOTE: the app handlers open their own SessionLocal, which only sees COMMITTED
+# rows — so these tests seed via SessionLocal + explicit commit.
+
+
+def test_save_supplier_handler_persists_new_row():
+    """Guardar un supplier nuevo desde la UI persiste la fila con su código."""
+    message, _ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
+    assert message == "Supplier created (code MSA)"
+    with SessionLocal() as session:
+        suppliers = session.scalars(select(Supplier)).all()
+    assert len(suppliers) == 1
+    assert suppliers[0].code == "MSA"
+    assert suppliers[0].status is SupplierStatus.ACTIVO
+
+
+def test_save_supplier_handler_updates_existing_row():
+    """Guardar desde la UI edita el supplier ya existente."""
+    with SessionLocal() as session:
+        supplier = create_supplier(session, business_name="Mayorista SA", code="MSA")
+        session.commit()
+        supplier_id = supplier.id
+    message, _ = _save_supplier(
+        supplier_id, "Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, ""
+    )
+    assert message == "Supplier saved"
+    with SessionLocal() as session:
+        assert session.get(Supplier, supplier_id).business_name == "Mayorista SA Renovada"
+
+
+def test_supplier_toggle_without_selection_returns_hint():
+    """Alternar estado sin fila seleccionada devuelve un aviso y no crea nada."""
+    assert _supplier_toggle(0) == "Select a supplier row first"
+    with SessionLocal() as session:
+        assert session.scalars(select(Supplier)).all() == []
+
+
+def test_supplier_toggle_handler_flips_status_and_persists():
+    """Alternar estado desde la UI persiste el nuevo estado del supplier."""
+    with SessionLocal() as session:
+        supplier = create_supplier(session, business_name="Mayorista SA", code="MSA")
+        session.commit()
+        supplier_id = supplier.id
+    message = _supplier_toggle(supplier_id)
+    assert "is now INACTIVO" in message
+    with SessionLocal() as session:
+        assert session.get(Supplier, supplier_id).status is SupplierStatus.INACTIVO
+
+
+def test_supplier_row_selected_reads_dataframe_with_headers():
+    """La selección de fila lee la grilla DataFrame con headers por posición."""
+    with SessionLocal() as session:
+        supplier = create_supplier(session, business_name="Mayorista SA", code="MSA")
+        session.commit()
+        supplier_id = supplier.id
+    df = pd.DataFrame(
+        [[supplier_id, "MSA", "Mayorista SA", "", "", "", "", "", ""]],
+        columns=["ID", "Code", "Name", "CUIT", "Contact", "Phone", "Margin", "IVA", "Status"],
+    )
+    row = _supplier_row_selected(SimpleNamespace(index=[0]), df)
+    assert row[0] == supplier_id
+    assert row[2] == "Mayorista SA"

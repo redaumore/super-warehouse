@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 242, agrupados en 26 dominios.
+**Total de escenarios:** 244, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -30,7 +30,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 21
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 23
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -346,9 +346,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
 - La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente desde la UI devuelve un mensaje de éxito. _(`test_app_register_client_returns_success_message`)_
+- Editar stock desde la UI persiste el cambio en el catálogo. _(`test_app_catalog_edit_persists_stock_change`)_
 - Un teléfono inválido desde la UI devuelve el error en pantalla. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
 - Confirmar la ingesta desde la UI reporta actualizados y creados. _(`test_app_ingest_confirm_reports_counts`)_
 - Confirmar una fila nueva desde la UI la crea en el catálogo. _(`test_app_ingest_confirm_creates_new_product`)_
+- La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
 - La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
 
 ## Feature flags por fase

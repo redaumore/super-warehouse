@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import cast
 
 import gradio as gr
+import pandas as pd
 
 from src.agents.perception import VisionAnalyzer
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
@@ -133,6 +134,7 @@ def _register_client(nombre: str, telefono: str, lista_id: object, descuento: fl
                 lista_precios_id=int(str(lista_id)),
                 descuento_particular_pct=descuento,
             )
+            session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error: {exc}"
     return "Cliente registrado"
@@ -147,6 +149,7 @@ def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: floa
                 update_price(session, sku, price)
             if margin is not None:
                 update_margin(session, sku, margin)
+            session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error: {exc}"
     return f"Guardado: {sku}"
@@ -173,10 +176,16 @@ def _ingest_preview(analyzer: VisionAnalyzer, image_path: object) -> tuple[list[
     return grid, message
 
 
-def _ingest_confirm(rows: list[list[object]], supplier_id: object) -> str:
+def _ingest_confirm(rows: object, supplier_id: object) -> str:
+    if hasattr(rows, "iloc"):  # Gradio hands a pandas DataFrame when headers are set
+        rows = [
+            [None if pd.isna(cell) else cell for cell in row]
+            for row in rows.itertuples(index=False, name=None)
+        ]
     with SessionLocal() as session:
         try:
             result = confirm_items(session, rows or [], int(str(supplier_id)))
+            session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error al ingresar: {exc}"
     return f"Ingresado: {result.updated} actualizados, {result.created} creados."
@@ -205,10 +214,15 @@ def _suppliers_grid(query: str, status: str) -> list[list[object]]:
     ]
 
 
-def _supplier_row_selected(evt: gr.SelectData, grid: list[list[object]]) -> tuple[object, ...]:
-    """Populate the edit form + state from the selected grid row."""
+def _supplier_row_selected(evt: gr.SelectData, grid: pd.DataFrame) -> tuple[object, ...]:
+    """Populate the edit form + state from the selected grid row.
+
+    Gradio delivers a pandas DataFrame when ``headers`` are set, so the row is
+    read via iloc — positional, the header labels never matter.
+    """
     row_index = evt.index[0]
-    supplier_id = int(str(grid[row_index][0]))
+    row = grid.iloc[row_index]
+    supplier_id = int(row.iloc[0])  # "ID" column — positional, labels never matter
     with SessionLocal() as session:
         supplier = session.get(Supplier, supplier_id)
     if supplier is None:
@@ -247,7 +261,7 @@ def _save_supplier(
     iva_condition: str,
     margin: float,
     terms: str,
-) -> str:
+) -> tuple[str, list[list[object]]]:
     with SessionLocal() as session:
         try:
             if int(str(supplier_id or 0)):
@@ -283,15 +297,20 @@ def _save_supplier(
                     terms=terms,
                 )
                 message = f"Supplier created (code {created.code})"
+            session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
-            return f"Error: {exc}"
-    return message
+            return f"Error: {exc}", _suppliers_grid("", "All")
+    return message, _suppliers_grid("", "All")
 
 
 def _supplier_toggle(supplier_id: object) -> str:
+    target_id = int(str(supplier_id or 0))
+    if not target_id:
+        return "Select a supplier row first"
     with SessionLocal() as session:
         try:
-            supplier = toggle_status(session, int(str(supplier_id)))
+            supplier = toggle_status(session, target_id)
+            session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error: {exc}"
     return f"Supplier {supplier.id} is now {supplier.status.value}"
@@ -526,7 +545,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_margin,
                     supplier_terms,
                 ],
-                outputs=supplier_status,
+                outputs=[supplier_status, suppliers_grid],
             )
             supplier_toggle.click(
                 _supplier_toggle, inputs=[supplier_state], outputs=supplier_status

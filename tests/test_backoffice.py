@@ -13,11 +13,13 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.backoffice.app import (
+    _catalog_edit,
     _catalog_grid,
     _ingest_confirm,
     _ingest_preview,
@@ -40,6 +42,7 @@ from src.backoffice.ingestion import (
 from src.backoffice.monitor import list_orders
 from src.config import get_settings
 from src.db.models import Catalogo, Cliente, ListaPrecios, Order, OrderEstado, Supplier
+from src.db.session import SessionLocal
 from src.integrations.sheets import SheetsWriter
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
@@ -327,6 +330,20 @@ def test_app_register_client_returns_success_message(shop_ctx):
     shop_ctx["session"].commit()
     message = _register_client("Nueva Ferretería", "11 6666 7777", 1, 0.0)
     assert message == "Cliente registrado"
+    with SessionLocal() as session:
+        assert (
+            session.scalar(select(Cliente).where(Cliente.nombre_comercial == "Nueva Ferretería"))
+            is not None
+        )
+
+
+def test_app_catalog_edit_persists_stock_change(shop_ctx):
+    """Editar stock desde la UI persiste el cambio en el catálogo."""
+    shop_ctx["session"].commit()
+    message = _catalog_edit("CLV-001", 25, None, None)
+    assert message == "Guardado: CLV-001"
+    with SessionLocal() as session:
+        assert session.get(Catalogo, 1).stock_disponible == 25
 
 
 def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
@@ -341,6 +358,10 @@ def test_app_ingest_confirm_reports_counts(shop_ctx):
     shop_ctx["session"].commit()
     message = _ingest_confirm([["CLV-001", "Clavos Paris 2 Pulgadas", 3, "95.00"]], 1)
     assert message == "Ingresado: 1 actualizados, 0 creados."
+    with SessionLocal() as session:
+        product = session.get(Catalogo, 1)
+    assert product.stock_disponible == 13  # 10 sembrados + 3 ingresados
+    assert product.costo_proveedor == Decimal("95.00")
 
 
 def test_app_ingest_confirm_creates_new_product(shop_ctx):
@@ -348,6 +369,23 @@ def test_app_ingest_confirm_creates_new_product(shop_ctx):
     shop_ctx["session"].commit()
     message = _ingest_confirm([["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]], 1)
     assert message == "Ingresado: 0 actualizados, 1 creados."
+    with SessionLocal() as session:
+        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "NEW-001"))
+    assert product is not None
+    assert product.stock_disponible == 4
+
+
+def test_app_ingest_confirm_accepts_dataframe_with_headers(shop_ctx):
+    """La grilla con headers llega como DataFrame y se confirma igual."""
+    shop_ctx["session"].commit()
+    df = pd.DataFrame(
+        [["CLV-001", "Clavos Paris 2 Pulgadas", 3, "95.00"]],
+        columns=["Código", "Descripción", "Cantidad", "Supplier cost"],
+    )
+    message = _ingest_confirm(df, 1)
+    assert message == "Ingresado: 1 actualizados, 0 creados."
+    with SessionLocal() as session:
+        assert session.get(Catalogo, 1).stock_disponible == 13  # 10 sembrados + 3 ingresados
 
 
 def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
