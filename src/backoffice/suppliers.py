@@ -138,7 +138,9 @@ def update_supplier(
 
     Omitting a field (default) leaves it untouched; an explicit ``None`` or
     empty string clears nullable fields. Changing ``code`` is refused while the
-    supplier is linked to any catalog/PO/need/mapping row (immutability guard).
+    supplier is linked to any catalog/PO/need/mapping row (immutability guard);
+    resubmitting the supplier's own current code keeps it (the row itself is
+    excluded from the collision check).
     Editing the margin never re-prices existing catalog rows (future
     ingestions only).
     """
@@ -146,7 +148,7 @@ def update_supplier(
     if supplier is None:
         raise KeyError(f"unknown supplier: {supplier_id}")
     if code is not _UNSET:
-        resolved = resolve_code(session, _as_text(code))
+        resolved = resolve_code(session, _as_text(code), exclude_id=supplier.id)
         _assert_code_not_linked(session, supplier, resolved)
         supplier.code = resolved
     if business_name is not _UNSET:
