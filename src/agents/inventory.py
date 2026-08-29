@@ -2,12 +2,14 @@
 
 Availability follows the design formula:
 
-    available = stock_disponible − Σ(cantidad of ACTIVE, unexpired reservations)
+    available = Inventory.quantity_on_hand − Σ(cantidad of ACTIVE, unexpired reservations)
 
-Only the soft-lock calculation lives here (task 2.5). Expiry is honored at read
-time by filtering reservations whose `timestamp + ttl_minutes` is still in the
-future; the TTL sweeper, the reject→release transitions and the order state
-machine are later phases.
+``Inventory`` is the single on-hand source (backfilled from
+``catalogo.stock_disponible``); an SKU with no inventory row is treated as
+unavailable (zero on hand). Expiry is honored at read time by filtering
+reservations whose `timestamp + ttl_minutes` is still in the future; the TTL
+sweeper, the reject→release transitions and the order state machine are later
+phases.
 """
 
 from __future__ import annotations
@@ -15,10 +17,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
-from src.db.models import Catalogo, ReservationEstado, StockReservation
+from src.db.models import Catalogo, Inventory, ReservationEstado, StockReservation
 
 
 class InsufficientStockError(Exception):
@@ -26,9 +29,11 @@ class InsufficientStockError(Exception):
 
 
 def available_stock(session: Session, sku: str, *, now: datetime | None = None) -> int:
-    """Available stock = `stock_disponible` − Σ(active, unexpired reservations).
+    """Available stock = `Inventory.quantity_on_hand` − Σ(active, unexpired reservations).
 
-    ``now`` is injectable for tests; defaults to the current UTC time.
+    An SKU with no inventory row (unknown to the catalog/inventory) returns 0 —
+    it is treated as unavailable, never a KeyError. ``now`` is injectable for
+    tests; defaults to the current UTC time.
     """
     reference = now or datetime.now(UTC)
     # make_interval(years, months, weeks, days, hours, mins, secs) — positional
@@ -45,12 +50,32 @@ def available_stock(session: Session, sku: str, *, now: datetime | None = None) 
         )
         .scalar_subquery()
     )
-    available = session.execute(
-        select(Catalogo.stock_disponible - locked).where(Catalogo.codigo_interno == sku)
+    on_hand = session.execute(
+        select(Inventory.quantity_on_hand - locked).where(Inventory.sku_id == sku)
     ).scalar()
-    if available is None:
-        raise KeyError(f"unknown sku: {sku}")
-    return int(available)
+    if on_hand is None:
+        return 0
+    return int(on_hand)
+
+
+def seed_inventory(session: Session) -> int:
+    """Backfill `Inventory` from each catalog product's `stock_disponible`.
+
+    Idempotent: rows already present (INSERT … ON CONFLICT DO NOTHING) keep
+    their current on-hand value. Returns how many rows were inserted.
+    """
+    result = session.execute(
+        insert(Inventory)
+        .from_select(
+            [Inventory.sku_id, Inventory.quantity_on_hand, Inventory.updated_at],
+            select(Catalogo.codigo_interno, Catalogo.stock_disponible, func.now()),
+        )
+        .on_conflict_do_nothing(index_elements=[Inventory.sku_id])
+        .returning(Inventory.sku_id)
+    )
+    inserted = len(result.all())
+    session.flush()
+    return inserted
 
 
 def reserve_stock(

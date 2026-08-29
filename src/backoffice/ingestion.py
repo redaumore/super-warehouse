@@ -14,6 +14,7 @@ pricing engine. Extraction failures raise before anything is written.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from src.agents.disambiguation import normalize_text
 from src.agents.perception import VisionAnalyzer
-from src.db.models import Catalogo, Proveedor
+from src.db.models import Catalogo, Inventory, Proveedor
 from src.pricing.engine import compute_base
 from src.supplier.ocr import DocumentExtraction, extract_document
 
@@ -89,11 +90,18 @@ def confirm_items(
         product = _find_existing_product(session, codigo, descripcion)
         if product is not None:
             product.stock_disponible += cantidad
+            # Mirror the supplier confirmation into the canonical on-hand source.
+            inventory_row = session.scalar(
+                select(Inventory).where(Inventory.sku_id == product.codigo_interno)
+            )
+            if inventory_row is not None:
+                inventory_row.quantity_on_hand += cantidad
+                inventory_row.updated_at = datetime.now(UTC)
+            else:
+                session.add(Inventory(sku_id=product.codigo_interno, quantity_on_hand=cantidad))
             if costo is not None:
                 product.costo_proveedor = costo
-                product.precio_lista_base = compute_base(
-                    costo, product.margen_aplicado_pct
-                )
+                product.precio_lista_base = compute_base(costo, product.margen_aplicado_pct)
             updated += 1
         else:
             sku = codigo or f"NEW-{len(session.scalars(select(Catalogo)).all()) + 1:04d}"
@@ -111,6 +119,7 @@ def confirm_items(
                     sinonimos=[descripcion],
                 )
             )
+            session.add(Inventory(sku_id=sku, quantity_on_hand=cantidad))
             created += 1
     session.flush()
     return ConfirmedIngest(updated=updated, created=created)

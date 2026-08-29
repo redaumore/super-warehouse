@@ -99,7 +99,9 @@ def test_analyze_image_returns_text_with_stop_finish():
     """Una imagen analizada devuelve el texto con confianza plena al finalizar normal."""
     client = _fake_client()
     client.chat.completions.create.return_value = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="caja de clavos"), finish_reason="stop")]
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="caja de clavos"), finish_reason="stop")
+        ]
     )
     result = OpenAIVisionAnalyzer(client=client, settings=CONFIGURED).analyze(
         "https://img/caja.jpg", "¿qué hay?"
@@ -114,7 +116,9 @@ def test_analyze_image_suspect_finish_lowers_confidence():
     """Un cierre anómalo (length) baja la confianza del análisis."""
     client = _fake_client()
     client.chat.completions.create.return_value = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="parcial"), finish_reason="length")]
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="parcial"), finish_reason="length")
+        ]
     )
     result = OpenAIVisionAnalyzer(client=client, settings=CONFIGURED).analyze(
         "https://img/x.jpg", "describe"

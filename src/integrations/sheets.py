@@ -101,7 +101,12 @@ class SheetsWriter:
         except Exception as qexc:  # noqa: BLE001
             logger.error("quarantine append failed for order %s: %s", order_id, qexc)
             self._quarantine_log.append(
-                {"order_id": order_id, "row": row, "error": str(error), "quarantine_error": str(qexc)}
+                {
+                    "order_id": order_id,
+                    "row": row,
+                    "error": str(error),
+                    "quarantine_error": str(qexc),
+                }
             )
         return SheetsWriteStatus.QUARANTINED
 

@@ -35,6 +35,23 @@ def list_price_lists(session: Session) -> list[dict[str, object]]:
     ]
 
 
+def default_price_list_id(session: Session) -> int:
+    """The price list a client created in chat is assigned to (locked input: Base).
+
+    Returns the ``Base`` list when present; falls back to the lowest-id list so
+    a store that renamed the lists still works. Raises ``InvalidClientDataError``
+    when no price list exists at all (the chat create path has nothing to
+    assign).
+    """
+    base = session.scalar(select(ListaPrecios).where(ListaPrecios.nombre.ilike("base")))
+    if base is not None:
+        return base.lista_id
+    first = session.scalar(select(ListaPrecios).order_by(ListaPrecios.lista_id).limit(1))
+    if first is None:
+        raise InvalidClientDataError("no price list exists to assign a new client")
+    return first.lista_id
+
+
 def list_clients(session: Session) -> list[dict[str, object]]:
     """Every client row for the grid: name, phone, list, particular discount."""
     rows = []

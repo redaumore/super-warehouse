@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.inventory import available_stock
+from src.agents.inventory import available_stock, seed_inventory
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
@@ -130,8 +130,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -169,6 +170,8 @@ def order_ctx(db_session):
             sinonimos=["clavos 2 pulgadas"],
         )
     )
+    db_session.flush()
+    seed_inventory(db_session)
     order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
     db_session.add(order)
     db_session.flush()
@@ -229,8 +232,12 @@ def test_sweep_expires_only_past_ttl_among_mixed(order_ctx):
     _reservation(order_ctx, 4, minutes_ago=31)
     _reservation(order_ctx, 2, minutes_ago=5)
     assert sweep_expired(order_ctx["session"]) == 1
-    reservations = order_ctx["session"].scalars(
-        select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
-    ).all()
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
+        )
+        .all()
+    )
     states = sorted(r.estado.value for r in reservations)
     assert states == ["ACTIVE", "EXPIRED"]

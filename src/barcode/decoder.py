@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from PIL import Image
@@ -24,7 +25,7 @@ from pyzbar.pyzbar import decode  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import Catalogo, StockAdjustment
+from src.db.models import Catalogo, Inventory, StockAdjustment
 
 
 class BarcodeDecodeError(Exception):
@@ -135,6 +136,11 @@ def adjust_stock_by_barcode(
             f"{item.stock_disponible}, delta {delta})",
         )
     item.stock_disponible = new_stock
+    # Mirror the adjustment into the canonical on-hand source.
+    inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == item.codigo_interno))
+    if inventory_row is not None:
+        inventory_row.quantity_on_hand += delta
+        inventory_row.updated_at = datetime.now(UTC)
     adjustment = StockAdjustment(
         sku=item.codigo_interno,
         delta=delta,

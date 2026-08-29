@@ -19,6 +19,14 @@ from src.db.models import Base
 
 pytest_plugins: list[str] = []
 
+# Every table the integration fixtures must reset between tests (sourcing axis
+# tables first — they carry FKs into orders/catalogo/proveedores).
+TRUNCATE_TABLES = (
+    "supplier_purchase_order_items, supplier_purchase_orders, sourcing_needs, "
+    "inventory, order_items, orders, stock_reservations, catalogo, proveedores, "
+    "clientes, lista_precios, proveedor_sku_mapping, stock_adjustments"
+)
+
 
 @pytest.fixture(scope="session")
 def db_engine():
@@ -52,3 +60,11 @@ def db_session(db_engine):
 def db_inspector(db_engine):
     """Provide a SQLAlchemy inspector for the live schema."""
     return inspect(db_engine)
+
+
+@pytest.fixture
+def clean_schema(db_engine):
+    """Truncate every table after the test (shared by the sourcing suites)."""
+    yield
+    with db_engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE"))

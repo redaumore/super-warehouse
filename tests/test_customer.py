@@ -173,9 +173,7 @@ def test_openai_responder_maps_messages_and_returns_model_text():
         choices=[SimpleNamespace(message=SimpleNamespace(content="  dale, contame qué buscás  "))]
     )
     responder = OpenAIResponder(client=client, settings=Settings(openai_api_key="sk-test"))
-    reply = responder.respond(
-        [ChatMessage("system", SYSTEM_PROMPT), ChatMessage("user", "clavos")]
-    )
+    reply = responder.respond([ChatMessage("system", SYSTEM_PROMPT), ChatMessage("user", "clavos")])
 
     assert reply == "dale, contame qué buscás"
     call = client.chat.completions.create.call_args
@@ -199,7 +197,7 @@ def test_openai_responder_raises_when_model_returns_empty_reply():
 
 NO_STOCK_NOTE = (
     "Búsqueda en catálogo para «¿tienen tarugos fisher?»: sin resultados. "
-    "Si el cliente está preguntando por un producto, respondé que no lo tenemos en stock."
+    "Si el cliente pidió un producto que no está en stock, decíselo al dueño."
 )
 
 
@@ -288,7 +286,7 @@ def test_note_lands_after_history_and_before_latest_user_turn():
             "system",
             (
                 "Búsqueda en catálogo para «10 clavos»: sin resultados. "
-                "Si el cliente está preguntando por un producto, respondé que no lo tenemos en stock."
+                "Si el cliente pidió un producto que no está en stock, decíselo al dueño."
             ),
         ),
         ("user", "10 clavos"),
