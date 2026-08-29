@@ -24,9 +24,9 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Proveedor,
     SourcingNeed,
     SourcingState,
+    Supplier,
 )
 from src.orchestrator.session import (
     ConversationState,
@@ -78,7 +78,7 @@ def shop(db_session):
     _client(db_session, 1, "Ferretería Don Juan")
     _client(db_session, 2, "Ferretería El Zorro")
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+        Supplier(id=1, code="SUP", business_name="Supplier X", default_margin_pct=Decimal(0))
     )
     order_a = Order(
         customer_id=1,
@@ -112,7 +112,7 @@ def shop(db_session):
 CANDIDATES = (
     SupplierCandidate(
         supplier_id=1,
-        business_name="Proveedor X",
+        business_name="Supplier X",
         sku="CLV-001",
         description="Clavos Paris 2 Pulgadas",
         available_quantity=50,

@@ -103,7 +103,7 @@ def _parametrize_case_labels(func: ast.FunctionDef | ast.AsyncFunctionDef) -> li
 
 def _humanize(name: str) -> str:
     """Fallback mínimo: convierte ``snake_case`` en una frase legible."""
-    stem = name[5:] if name.startswith("test_") else name
+    stem = name.removeprefix("test_")
     text = " ".join(part for part in stem.split("_") if part)
     return text[0].upper() + text[1:] if text else name
 
@@ -150,8 +150,10 @@ def _render(domains: list[dict], gaps: list[str]) -> str:
     lines.append("")
     lines.append(f"**Total de escenarios:** {total}, agrupados en {len(domains)} dominios.")
     lines.append("")
-    lines.append("> Cada ítem lista el comportamiento que se valida en lenguaje "
-                 "natural, seguido (entre paréntesis) del nombre técnico del test.")
+    lines.append(
+        "> Cada ítem lista el comportamiento que se valida en lenguaje "
+        "natural, seguido (entre paréntesis) del nombre técnico del test."
+    )
     lines.append("")
     lines.append("## Índice")
     lines.append("")
@@ -173,8 +175,10 @@ def _render(domains: list[dict], gaps: list[str]) -> str:
     if gaps:
         lines.append("## ⚠️ Escenarios sin descripción humana")
         lines.append("")
-        lines.append("Los siguientes tests aún no tienen la primera línea del docstring "
-                     "en lenguaje natural. Agregala y volvé a generar el documento:")
+        lines.append(
+            "Los siguientes tests aún no tienen la primera línea del docstring "
+            "en lenguaje natural. Agregala y volvé a generar el documento:"
+        )
         lines.append("")
         for gap in gaps:
             lines.append(f"- `{gap}`")
@@ -208,8 +212,11 @@ def main() -> int:
     OUT_DOC.parent.mkdir(parents=True, exist_ok=True)
     OUT_DOC.write_text(rendered, encoding="utf-8")
     total = sum(len(d["scenarios"]) for d in domains)
-    print(f"Generado {OUT_DOC.relative_to(ROOT)} ({total} escenarios"
-          + (f", {len(gaps)} sin descripción)" if gaps else "") + ".")
+    print(
+        f"Generado {OUT_DOC.relative_to(ROOT)} ({total} escenarios"
+        + (f", {len(gaps)} sin descripción)" if gaps else "")
+        + "."
+    )
     return 0
 
 

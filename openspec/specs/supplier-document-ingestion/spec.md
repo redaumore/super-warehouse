@@ -122,3 +122,13 @@ The system SHALL reduce supplier remito/invoice data-entry time by at least 80% 
 - GIVEN supplier documents ingested during the pilot
 - WHEN entry time is compared against the manual baseline
 - THEN automated ingestion reduces entry time by at least 80%
+
+### Requirement: Refuse inactive suppliers at confirmation
+
+The system MUST refuse INACTIVO suppliers in `confirm_items` and MUST NOT write inventory for them.
+
+#### Scenario: confirm_items refuses INACTIVO
+
+- GIVEN a document whose supplier is INACTIVO
+- WHEN the owner confirms entry
+- THEN the system rejects the confirmation and writes no inventory

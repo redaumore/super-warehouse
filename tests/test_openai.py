@@ -88,7 +88,7 @@ def test_transcribe_without_segments_has_full_confidence():
 
 
 def test_transcribe_propagates_provider_errors_as_transcription_error():
-    """Un error del proveedor se propaga como TranscriptionError por percepción."""
+    """A provider error propagates as TranscriptionError through perception."""
     client = _fake_client()
     client.audio.transcriptions.create.side_effect = RuntimeError("network down")
     with pytest.raises(TranscriptionError):
@@ -127,7 +127,7 @@ def test_analyze_image_suspect_finish_lowers_confidence():
 
 
 def test_analyze_image_raises_vision_error_on_provider_failure():
-    """Un fallo del proveedor de visión se propaga como VisionError por percepción."""
+    """A vision provider failure propagates as VisionError through perception."""
     client = _fake_client()
     client.chat.completions.create.side_effect = RuntimeError("timeout")
     analyzer = OpenAIVisionAnalyzer(client=client, settings=CONFIGURED)

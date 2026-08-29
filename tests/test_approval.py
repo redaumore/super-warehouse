@@ -30,9 +30,9 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Proveedor,
     ReservationEstado,
     StockReservation,
+    Supplier,
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.orchestrator.approval import (
@@ -104,7 +104,7 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -121,10 +121,11 @@ def order_ctx(db_session):
     """Seed product (10 units), customer, PENDING_APPROVAL order + one item."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Test",
-            margen_predeterminado=Decimal(0),
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
         )
     )
     db_session.add(
@@ -140,7 +141,7 @@ def order_ctx(db_session):
         Catalogo(
             id=1,
             codigo_interno="CLV-001",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),

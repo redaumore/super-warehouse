@@ -27,7 +27,7 @@ def _state(sender: str = "+5491155551234", **overrides) -> ConversationState:
 
 
 def test_supplier_selection_reply_routes_to_sourcing():
-    """Una respuesta durante la selección de proveedor va al flujo SOURCING."""
+    """A reply during supplier selection routes to the SOURCING flow."""
     state = _state(
         order_id=7,
         sourcing_selection_pending=True,

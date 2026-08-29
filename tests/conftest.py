@@ -20,11 +20,11 @@ from src.db.models import Base
 pytest_plugins: list[str] = []
 
 # Every table the integration fixtures must reset between tests (sourcing axis
-# tables first — they carry FKs into orders/catalogo/proveedores).
+# tables first — they carry FKs into orders/catalogo/suppliers).
 TRUNCATE_TABLES = (
     "supplier_purchase_order_items, supplier_purchase_orders, sourcing_needs, "
-    "inventory, order_items, orders, stock_reservations, catalogo, proveedores, "
-    "clientes, lista_precios, proveedor_sku_mapping, stock_adjustments"
+    "inventory, order_items, orders, stock_reservations, catalogo, suppliers, "
+    "clientes, lista_precios, supplier_sku_mappings, stock_adjustments"
 )
 
 

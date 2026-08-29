@@ -22,12 +22,14 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -77,6 +79,27 @@ class SupplierPurchaseOrderState(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class SupplierStatus(str, enum.Enum):
+    """Supplier master-data lifecycle: ACTIVO usable, INACTIVO soft-deleted.
+
+    INACTIVO suppliers are excluded from sourcing, purchase-order creation and
+    document ingestion (guards live in ``src/supplier/guards.py``).
+    """
+
+    ACTIVO = "ACTIVO"
+    INACTIVO = "INACTIVO"
+
+
+class IvaCondition(str, enum.Enum):
+    """Argentine IVA condition of a supplier (master data, informational)."""
+
+    RESPONSABLE_INSCRIPTO = "RESPONSABLE_INSCRIPTO"
+    MONOTRIBUTO = "MONOTRIBUTO"
+    EXENTO = "EXENTO"
+    CONSUMIDOR_FINAL = "CONSUMIDOR_FINAL"
+    NO_RESPONSABLE = "NO_RESPONSABLE"
+
+
 class ListaPrecios(Base):
     """Commercial price list (Base = 0%, Gremio A = 10%, Gremio B = 20%)."""
 
@@ -109,19 +132,54 @@ class Cliente(Base):
     lista_precios: Mapped[ListaPrecios] = relationship()
 
 
-class Proveedor(Base):
-    """Supplier."""
+class Supplier(Base):
+    """Supplier master data (English domain naming).
 
-    __tablename__ = "proveedores"
+    ``code`` is the 3-char uppercase code generated from ``business_name``,
+    user-editable before save and immutable once linked (guarded in
+    ``src/backoffice/suppliers.py``). ``cuit`` is nullable (legacy rows may lack
+    it) and backed by a partial unique index; ``status`` is the soft-delete
+    lifecycle (default ACTIVO).
+    """
 
-    proveedor_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    razon_social: Mapped[str] = mapped_column(String(200), nullable=False)
-    contacto: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    telefono: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    margen_predeterminado: Mapped[Decimal] = mapped_column(
+    __tablename__ = "suppliers"
+
+    __table_args__ = (
+        Index("uq_suppliers_code", "code", unique=True),
+        Index(
+            "uq_suppliers_cuit",
+            "cuit",
+            unique=True,
+            postgresql_where=text("cuit IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    business_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    default_margin_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, default=Decimal(0)
     )
-    condiciones: Mapped[str | None] = mapped_column(Text, nullable=True)
+    terms: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cuit: Mapped[str | None] = mapped_column(String(13), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    whatsapp: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    code: Mapped[str] = mapped_column(String(3), nullable=False)
+    iva_condition: Mapped[IvaCondition | None] = mapped_column(
+        Enum(IvaCondition, name="iva_condition", values_callable=lambda e: [m.value for m in e]),
+        nullable=True,
+    )
+    status: Mapped[SupplierStatus] = mapped_column(
+        Enum(
+            SupplierStatus,
+            name="supplier_status",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        default=SupplierStatus.ACTIVO,
+    )
 
 
 class Catalogo(Base):
@@ -135,9 +193,7 @@ class Catalogo(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     codigo_interno: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     codigo_barras: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    proveedor_id: Mapped[int] = mapped_column(
-        ForeignKey("proveedores.proveedor_id"), nullable=False
-    )
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False)
     nombre_oficial: Mapped[str] = mapped_column(String(300), nullable=False)
     costo_proveedor: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     margen_aplicado_pct: Mapped[Decimal] = mapped_column(
@@ -148,22 +204,20 @@ class Catalogo(Base):
     sinonimos: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=True)
 
-    proveedor: Mapped[Proveedor] = relationship()
+    supplier: Mapped[Supplier] = relationship()
 
 
-class ProveedorSkuMapping(Base):
+class SupplierSkuMapping(Base):
     """Map a supplier's raw code/description to an internal SKU with confidence."""
 
-    __tablename__ = "proveedor_sku_mapping"
+    __tablename__ = "supplier_sku_mappings"
 
-    mapping_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    proveedor_id: Mapped[int] = mapped_column(
-        ForeignKey("proveedores.proveedor_id"), nullable=False
-    )
-    codigo_proveedor: Mapped[str] = mapped_column(String(64), nullable=False)
-    descripcion_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
-    sku_interno: Mapped[str] = mapped_column(String(64), nullable=False)
-    confianza: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal(0))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False)
+    supplier_sku_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal(0))
 
 
 class StockReservation(Base):
@@ -292,9 +346,7 @@ class SupplierPurchaseOrder(Base):
     __tablename__ = "supplier_purchase_orders"
 
     po_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    supplier_id: Mapped[int] = mapped_column(
-        ForeignKey("proveedores.proveedor_id"), nullable=False, index=True
-    )
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False, index=True)
     estado: Mapped[SupplierPurchaseOrderState] = mapped_column(
         Enum(
             SupplierPurchaseOrderState,
@@ -311,7 +363,7 @@ class SupplierPurchaseOrder(Base):
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    supplier: Mapped[Proveedor] = relationship()
+    supplier: Mapped[Supplier] = relationship()
 
     items: Mapped[list[SupplierPurchaseOrderItem]] = relationship(back_populates="po")
 
@@ -351,7 +403,7 @@ class SourcingNeed(Base):
     sku: Mapped[str] = mapped_column(String(64), nullable=False)
     missing_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     supplier_id: Mapped[int | None] = mapped_column(
-        ForeignKey("proveedores.proveedor_id"), nullable=True, index=True
+        ForeignKey("suppliers.id"), nullable=True, index=True
     )
     po_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("supplier_purchase_order_items.po_item_id"), nullable=True

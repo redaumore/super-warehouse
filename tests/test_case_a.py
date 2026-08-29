@@ -30,10 +30,10 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
-    Proveedor,
     ReservationEstado,
     SourcingState,
     StockReservation,
+    Supplier,
 )
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.router import AgentName, Orchestrator
@@ -90,7 +90,12 @@ def shop(db_session):
     """Catalog with 50 units on hand, a customer and a supplier."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor Test", margen_predeterminado=Decimal(0))
+        Supplier(
+            id=1,
+            code="TES",
+            business_name="Test Supplier",
+            default_margin_pct=Decimal(0),
+        )
     )
     db_session.add(
         Cliente(
@@ -105,7 +110,7 @@ def shop(db_session):
         Catalogo(
             id=1,
             codigo_interno="CLV-PRS-2",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas (50mm)",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),

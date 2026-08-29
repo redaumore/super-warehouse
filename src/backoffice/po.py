@@ -33,7 +33,7 @@ def list_purchase_orders(session: Session) -> list[dict[str, object]]:
     for po in session.scalars(
         select(SupplierPurchaseOrder).order_by(SupplierPurchaseOrder.po_id.desc())
     ):
-        supplier = po.supplier.razon_social if po.supplier else str(po.supplier_id)
+        supplier = po.supplier.business_name if po.supplier else str(po.supplier_id)
         items = "; ".join(f"{item.sku} × {item.quantity}" for item in po.items)
         received = "; ".join(f"{item.sku} × {item.received_quantity}" for item in po.items)
         rows.append(
@@ -52,7 +52,7 @@ def send_po_action(session: Session, po_id: int) -> str:
     """Execute OPEN → SENT (owner sends the PO to the supplier)."""
     send_po(session, _po(session, po_id))
     session.commit()
-    return f"PO #{po_id} enviado al proveedor."
+    return f"PO #{po_id} sent to the supplier."
 
 
 def receive_po_action(session: Session, po_id: int, sku: str, quantity: int) -> str:

@@ -20,7 +20,7 @@ from sqlalchemy.exc import OperationalError
 
 from src.agents.perception import VisionError
 from src.config import get_settings
-from src.db.models import Catalogo, Proveedor, ProveedorSkuMapping
+from src.db.models import Catalogo, Supplier, SupplierSkuMapping
 from src.supplier.ocr import (
     DocumentExtraction,
     ExtractedItem,
@@ -100,7 +100,7 @@ def test_extract_document_rejects_illegible_with_clear_error(tmp_path):
 
 
 def test_extract_document_vision_failure_propagates(tmp_path):
-    """Un fallo del proveedor de visión se propaga como VisionError."""
+    """A vision provider failure propagates as VisionError."""
 
     class FailingAnalyzer:
         def analyze(self, image_url, prompt):
@@ -154,8 +154,8 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios, proveedor_sku_mapping RESTART IDENTITY CASCADE"
+                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
+                "clientes, lista_precios, supplier_sku_mappings RESTART IDENTITY CASCADE"
             )
         )
 
@@ -163,17 +163,18 @@ def _clean_schema(db_engine):
 @pytest.fixture
 def supplier_ctx(db_session):
     db_session.add(
-        Proveedor(
-            proveedor_id=1,
-            razon_social="Proveedor Mayorista",
-            margen_predeterminado=Decimal("0.10"),
+        Supplier(
+            id=1,
+            code="MSA",
+            business_name="Mayorista SA",
+            default_margin_pct=Decimal("0.10"),
         )
     )
     db_session.add(
         Catalogo(
             id=1,
             codigo_interno="CLV-001",
-            proveedor_id=1,
+            supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas",
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
@@ -196,16 +197,16 @@ def test_ingest_price_list_maps_and_suggests(supplier_ctx):
             codigo="NEW-777", descripcion="Pintura Látex Blanco", costo=Decimal("3200.00")
         ),
     ]
-    result = ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
+    result = ingest_price_list_rows(supplier_ctx["session"], supplier_id=1, rows=rows)
     assert result.mapped == 1
     assert result.suggested == 1
-    mappings = supplier_ctx["session"].scalars(select(ProveedorSkuMapping)).all()
+    mappings = supplier_ctx["session"].scalars(select(SupplierSkuMapping)).all()
     assert len(mappings) == 2
-    by_code = {m.codigo_proveedor: m for m in mappings}
-    assert by_code["CLV-001"].sku_interno == "CLV-001"
-    assert by_code["CLV-001"].confianza == Decimal("0.90")
-    assert by_code["NEW-777"].sku_interno == "NEW-777"
-    assert by_code["NEW-777"].confianza == Decimal("0.50")
+    by_code = {m.supplier_sku_code: m for m in mappings}
+    assert by_code["CLV-001"].internal_sku == "CLV-001"
+    assert by_code["CLV-001"].confidence == Decimal("0.90")
+    assert by_code["NEW-777"].internal_sku == "NEW-777"
+    assert by_code["NEW-777"].confidence == Decimal("0.50")
 
 
 def test_ingest_price_list_updates_existing_mapping_without_duplicates(supplier_ctx):
@@ -215,11 +216,11 @@ def test_ingest_price_list_updates_existing_mapping_without_duplicates(supplier_
             codigo="CLV-001", descripcion="Clavos Paris 2 Pulgadas", costo=Decimal("95.00")
         )
     ]
-    ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
-    ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
-    mappings = supplier_ctx["session"].scalars(select(ProveedorSkuMapping)).all()
+    ingest_price_list_rows(supplier_ctx["session"], supplier_id=1, rows=rows)
+    ingest_price_list_rows(supplier_ctx["session"], supplier_id=1, rows=rows)
+    mappings = supplier_ctx["session"].scalars(select(SupplierSkuMapping)).all()
     assert len(mappings) == 1
-    assert mappings[0].descripcion_raw == "Clavos Paris 2 Pulgadas"
+    assert mappings[0].raw_description == "Clavos Paris 2 Pulgadas"
 
 
 def test_ingest_price_list_matches_by_normalized_name(supplier_ctx):
@@ -227,7 +228,7 @@ def test_ingest_price_list_matches_by_normalized_name(supplier_ctx):
     rows = [
         PriceListRow(codigo="X-999", descripcion="clavos paris 2 pulgadas", costo=Decimal("90.00"))
     ]
-    result = ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
+    result = ingest_price_list_rows(supplier_ctx["session"], supplier_id=1, rows=rows)
     assert result.mapped == 1
-    mapping = supplier_ctx["session"].scalar(select(ProveedorSkuMapping))
-    assert mapping.sku_interno == "CLV-001"
+    mapping = supplier_ctx["session"].scalar(select(SupplierSkuMapping))
+    assert mapping.internal_sku == "CLV-001"

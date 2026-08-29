@@ -1,14 +1,15 @@
-"""Backoffice Gradio app (task 3.5): four tabs for the owner.
+"""Backoffice Gradio app (task 3.5): six tabs for the owner.
 
-A lightweight web interface with four tabs — Catalog, Clients, Orders/Monitor
-and Ingestion — wired to the pure DB operations in ``src.backoffice``. The
-build function only constructs the Blocks tree (no server); ``launch()`` is
-guarded so importing the module never starts a server, which keeps tests and
-CI safe.
+A lightweight web interface with six tabs — Catalog, Clients, Orders/Monitor,
+Purchase Orders, Ingestion and Suppliers — wired to the pure DB operations in
+``src.backoffice``. The build function only constructs the Blocks tree (no
+server); ``launch()`` is guarded so importing the module never starts a server,
+which keeps tests and CI safe.
 """
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import cast
 
@@ -25,12 +26,23 @@ from src.backoffice.po import (
     receive_po_action,
     send_po_action,
 )
+from src.backoffice.suppliers import (
+    create_supplier,
+    list_suppliers,
+    toggle_status,
+    update_supplier,
+)
 from src.config import Settings, get_settings
+from src.db.models import IvaCondition, Supplier, SupplierStatus
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIVisionAnalyzer
 from src.integrations.sheets import SheetsWriter
+from src.supplier.validation import suggest_code
 
 _SHEETS = SheetsWriter()  # append-only; quarantines internally when unconfigured
+
+_IVA_CHOICES = [("—", "")] + [(c.value, c.value) for c in IvaCondition]
+_STATUS_CHOICES = ["All"] + [s.value for s in SupplierStatus]
 
 
 def _catalog_grid() -> list[list[object]]:
@@ -161,13 +173,128 @@ def _ingest_preview(analyzer: VisionAnalyzer, image_path: object) -> tuple[list[
     return grid, message
 
 
-def _ingest_confirm(rows: list[list[object]], proveedor_id: object) -> str:
+def _ingest_confirm(rows: list[list[object]], supplier_id: object) -> str:
     with SessionLocal() as session:
         try:
-            result = confirm_items(session, rows or [], int(str(proveedor_id)))
+            result = confirm_items(session, rows or [], int(str(supplier_id)))
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error al ingresar: {exc}"
     return f"Ingresado: {result.updated} actualizados, {result.created} creados."
+
+
+def _suppliers_grid(query: str, status: str) -> list[list[object]]:
+    with SessionLocal() as session:
+        rows = list_suppliers(
+            session,
+            query=query.strip() or None,
+            status=SupplierStatus[status] if status and status != "All" else None,
+        )
+    return [
+        [
+            r["id"],
+            r["code"],
+            r["business_name"],
+            r["cuit"] or "",
+            r["contact_name"] or "",
+            r["phone"] or "",
+            str(r["default_margin_pct"]),
+            r["iva_condition"] or "",
+            r["status"],
+        ]
+        for r in rows
+    ]
+
+
+def _supplier_row_selected(evt: gr.SelectData, grid: list[list[object]]) -> tuple[object, ...]:
+    """Populate the edit form + state from the selected grid row."""
+    row_index = evt.index[0]
+    supplier_id = int(str(grid[row_index][0]))
+    with SessionLocal() as session:
+        supplier = session.get(Supplier, supplier_id)
+    if supplier is None:
+        return (0, "", "", "", "", "", "", "", "", "", 0.0, "")
+    return (
+        supplier.id,
+        supplier.code,
+        supplier.business_name,
+        supplier.cuit or "",
+        supplier.contact_name or "",
+        supplier.phone or "",
+        supplier.whatsapp or "",
+        supplier.email or "",
+        supplier.address or "",
+        supplier.iva_condition.value if supplier.iva_condition else "",
+        float(supplier.default_margin_pct),
+        supplier.terms or "",
+    )
+
+
+def _supplier_code_suggestion(business_name: str) -> str:
+    """Reactive code assistant: suggest a 3-char code from the business name."""
+    return suggest_code(business_name)
+
+
+def _save_supplier(
+    supplier_id: object,
+    business_name: str,
+    code: str,
+    cuit: str,
+    contact_name: str,
+    phone: str,
+    whatsapp: str,
+    email: str,
+    address: str,
+    iva_condition: str,
+    margin: float,
+    terms: str,
+) -> str:
+    with SessionLocal() as session:
+        try:
+            if int(str(supplier_id or 0)):
+                update_supplier(
+                    session,
+                    int(str(supplier_id)),
+                    business_name=business_name,
+                    code=code,
+                    cuit=cuit,
+                    contact_name=contact_name,
+                    phone=phone,
+                    whatsapp=whatsapp,
+                    email=email,
+                    address=address,
+                    iva_condition=iva_condition,
+                    default_margin_pct=Decimal(str(margin)),
+                    terms=terms,
+                )
+                message = "Supplier saved"
+            else:
+                created = create_supplier(
+                    session,
+                    business_name=business_name,
+                    code=code or None,
+                    cuit=cuit,
+                    contact_name=contact_name,
+                    phone=phone,
+                    whatsapp=whatsapp,
+                    email=email,
+                    address=address,
+                    iva_condition=iva_condition,
+                    default_margin_pct=Decimal(str(margin)),
+                    terms=terms,
+                )
+                message = f"Supplier created (code {created.code})"
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
+    return message
+
+
+def _supplier_toggle(supplier_id: object) -> str:
+    with SessionLocal() as session:
+        try:
+            supplier = toggle_status(session, int(str(supplier_id)))
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
+    return f"Supplier {supplier.id} is now {supplier.status.value}"
 
 
 def _price_list_choices() -> list[dict[str, object]]:
@@ -176,7 +303,7 @@ def _price_list_choices() -> list[dict[str, object]]:
 
 
 def build_app(settings: Settings | None = None) -> gr.Blocks:
-    """Construct the four-tab Blocks tree (no server is started).
+    """Construct the six-tab Blocks tree (no server is started).
 
     Fase 4 gates the backoffice: when disabled the app refuses to build
     (``FeatureDisabledError``) — a clean stop at the boundary.
@@ -263,9 +390,9 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             monitor_refresh.click(_monitor_grid, outputs=orders_grid)
 
         with gr.Tab("Purchase Orders"):
-            gr.Markdown("### Órdenes de compra a proveedores")
+            gr.Markdown("### Purchase orders to suppliers")
             po_grid = gr.Dataframe(
-                headers=["PO", "Proveedor", "Estado", "Artículos", "Recibido"],
+                headers=["PO", "Supplier", "Estado", "Artículos", "Recibido"],
                 datatype=["number", "str", "str", "str", "str"],
                 value=_po_grid,
                 label="Órdenes de compra",
@@ -277,7 +404,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 po_sku = gr.Textbox(label="SKU recibido", placeholder="CLV-001")
                 po_qty = gr.Number(label="Cantidad recibida", precision=0, value=0)
             with gr.Row():
-                po_send = gr.Button("Enviar al proveedor (OPEN → SENT)")
+                po_send = gr.Button("Send to supplier (OPEN → SENT)")
                 po_receive = gr.Button("Registrar recepción (parcial/total)")
                 po_cancel = gr.Button("Cancelar PO", variant="stop")
             po_status = gr.Textbox(label="Ejecución", interactive=False)
@@ -286,16 +413,16 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
 
         with gr.Tab("Ingestion"):
-            gr.Markdown("### Ingreso de remitos / facturas de proveedor")
+            gr.Markdown("### Supplier remito / invoice entry")
             upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
             preview_grid = gr.Dataframe(
-                headers=["Código", "Descripción", "Cantidad", "Costo proveedor"],
+                headers=["Código", "Descripción", "Cantidad", "Supplier cost"],
                 datatype=["str", "str", "number", "str"],
                 label="Vista previa (editable)",
                 interactive=True,
             )
             preview_status = gr.Textbox(label="Extracción", interactive=False)
-            proveedor_id = gr.Number(label="Proveedor ID", precision=0, value=1)
+            supplier_id = gr.Number(label="Supplier ID", precision=0, value=1)
             confirm_button = gr.Button("Confirmar e Ingresar a Inventario", variant="primary")
             confirm_status = gr.Textbox(label="Ingreso", interactive=False)
             upload.upload(
@@ -305,8 +432,109 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             confirm_button.click(
                 _ingest_confirm,
-                inputs=[preview_grid, proveedor_id],
+                inputs=[preview_grid, supplier_id],
                 outputs=confirm_status,
+            )
+
+        with gr.Tab("Suppliers"):
+            gr.Markdown("### Supplier master data")
+            with gr.Row():
+                supplier_search = gr.Textbox(label="Search (name, CUIT, code)", scale=3)
+                supplier_status_filter = gr.Dropdown(
+                    choices=_STATUS_CHOICES, value="All", label="Status", scale=1
+                )
+            suppliers_grid = gr.Dataframe(
+                headers=[
+                    "ID",
+                    "Code",
+                    "Name",
+                    "CUIT",
+                    "Contact",
+                    "Phone",
+                    "Margin",
+                    "IVA",
+                    "Status",
+                ],
+                datatype=["number", "str", "str", "str", "str", "str", "str", "str", "str"],
+                value=lambda: _suppliers_grid("", "All"),
+                label="Suppliers",
+            )
+            supplier_state = gr.State(value=0)
+            with gr.Row():
+                supplier_name = gr.Textbox(label="Business name")
+                supplier_code = gr.Textbox(label="Code (3 chars — suggested from name)")
+                supplier_cuit = gr.Textbox(label="CUIT")
+            with gr.Row():
+                supplier_contact = gr.Textbox(label="Contact name")
+                supplier_phone = gr.Textbox(label="Phone (E.164)")
+                supplier_whatsapp = gr.Textbox(label="WhatsApp")
+                supplier_email = gr.Textbox(label="Email")
+            with gr.Row():
+                supplier_address = gr.Textbox(label="Address", scale=2)
+                supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="IVA condition")
+                supplier_margin = gr.Number(label="Default margin %", value=0.0)
+                supplier_terms = gr.Textbox(label="Terms")
+            supplier_status = gr.Textbox(label="Status", interactive=False)
+            with gr.Row():
+                supplier_save = gr.Button("Save supplier", variant="primary")
+                supplier_toggle = gr.Button("Toggle status", variant="stop")
+                supplier_refresh = gr.Button("Refresh")
+            supplier_search.change(
+                _suppliers_grid,
+                inputs=[supplier_search, supplier_status_filter],
+                outputs=suppliers_grid,
+            )
+            supplier_status_filter.change(
+                _suppliers_grid,
+                inputs=[supplier_search, supplier_status_filter],
+                outputs=suppliers_grid,
+            )
+            supplier_name.change(
+                _supplier_code_suggestion, inputs=[supplier_name], outputs=supplier_code
+            )
+            suppliers_grid.select(
+                _supplier_row_selected,
+                inputs=[suppliers_grid],
+                outputs=[
+                    supplier_state,
+                    supplier_code,
+                    supplier_name,
+                    supplier_cuit,
+                    supplier_contact,
+                    supplier_phone,
+                    supplier_whatsapp,
+                    supplier_email,
+                    supplier_address,
+                    supplier_iva,
+                    supplier_margin,
+                    supplier_terms,
+                ],
+            )
+            supplier_save.click(
+                _save_supplier,
+                inputs=[
+                    supplier_state,
+                    supplier_name,
+                    supplier_code,
+                    supplier_cuit,
+                    supplier_contact,
+                    supplier_phone,
+                    supplier_whatsapp,
+                    supplier_email,
+                    supplier_address,
+                    supplier_iva,
+                    supplier_margin,
+                    supplier_terms,
+                ],
+                outputs=supplier_status,
+            )
+            supplier_toggle.click(
+                _supplier_toggle, inputs=[supplier_state], outputs=supplier_status
+            )
+            supplier_refresh.click(
+                _suppliers_grid,
+                inputs=[supplier_search, supplier_status_filter],
+                outputs=suppliers_grid,
             )
     return cast(gr.Blocks, demo)
 

@@ -15,7 +15,7 @@ Per the supplier-document-ingestion spec:
   for entry;
 - price-list rows map to an existing catalog SKU when possible (code or name
   match), otherwise the row suggests a new SKU for owner confirmation; the
-  mapping rows are stored in ``proveedor_sku_mapping``.
+  mapping rows are stored in ``supplier_sku_mappings``.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from src.agents.disambiguation import normalize_text
 from src.agents.perception import VisionAnalyzer, analyze_image
-from src.db.models import Catalogo, ProveedorSkuMapping
+from src.db.models import Catalogo, SupplierSkuMapping
 
 DEFAULT_DOC_PROMPT = (
     "Extract the line items of this supplier document (remito, invoice or price "
@@ -195,12 +195,12 @@ def _match_existing_sku(session: Session, codigo: str, descripcion: str) -> str 
 
 def ingest_price_list_rows(
     session: Session,
-    proveedor_id: int,
+    supplier_id: int,
     rows: list[PriceListRow],
 ) -> PriceListIngestResult:
     """Store supplier→internal SKU mappings; suggest new SKUs when unmapped.
 
-    Existing mappings for the same (proveedor, codigo_proveedor) are updated,
+    Existing mappings for the same (supplier, supplier_sku_code) are updated,
     never duplicated. Suggested SKUs use the supplier code as the internal
     proposal and need owner confirmation to create the catalog product.
     """
@@ -211,29 +211,29 @@ def ingest_price_list_rows(
         if sku is None:
             sku = row.codigo.strip().upper()
             suggested += 1
-            confianza = Decimal("0.50")
+            confidence = Decimal("0.50")
         else:
             mapped += 1
-            confianza = Decimal("0.90")
+            confidence = Decimal("0.90")
         existing = session.scalar(
-            select(ProveedorSkuMapping).where(
-                ProveedorSkuMapping.proveedor_id == proveedor_id,
-                ProveedorSkuMapping.codigo_proveedor == row.codigo,
+            select(SupplierSkuMapping).where(
+                SupplierSkuMapping.supplier_id == supplier_id,
+                SupplierSkuMapping.supplier_sku_code == row.codigo,
             )
         )
         if existing is None:
             session.add(
-                ProveedorSkuMapping(
-                    proveedor_id=proveedor_id,
-                    codigo_proveedor=row.codigo,
-                    descripcion_raw=row.descripcion,
-                    sku_interno=sku,
-                    confianza=confianza,
+                SupplierSkuMapping(
+                    supplier_id=supplier_id,
+                    supplier_sku_code=row.codigo,
+                    raw_description=row.descripcion,
+                    internal_sku=sku,
+                    confidence=confidence,
                 )
             )
         else:
-            existing.sku_interno = sku
-            existing.descripcion_raw = row.descripcion
-            existing.confianza = confianza
+            existing.internal_sku = sku
+            existing.raw_description = row.descripcion
+            existing.confidence = confidence
     session.flush()
     return PriceListIngestResult(mapped=mapped, suggested=suggested)

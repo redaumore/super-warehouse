@@ -19,17 +19,19 @@ from src.db.models import (
     Cliente,
     ListaPrecios,
     Order,
-    Proveedor,
     SourcingNeed,
+    Supplier,
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
+    SupplierStatus,
 )
 from src.purchasing.accumulate import (
     SelectionExecutedError,
     accumulate_need,
     open_or_create_po,
 )
+from src.supplier.guards import SupplierInactiveError
 
 
 def _postgres_up() -> bool:
@@ -67,10 +69,10 @@ def suppliers(db_session):
         )
     )
     db_session.add(
-        Proveedor(proveedor_id=1, razon_social="Proveedor X", margen_predeterminado=Decimal(0))
+        Supplier(id=1, code="SUP", business_name="Supplier X", default_margin_pct=Decimal(0))
     )
     db_session.add(
-        Proveedor(proveedor_id=2, razon_social="Proveedor Y", margen_predeterminado=Decimal(0))
+        Supplier(id=2, code="SUY", business_name="Supplier Y", default_margin_pct=Decimal(0))
     )
     db_session.add(Order(order_id=100, customer_id=1))
     db_session.add(Order(order_id=200, customer_id=1))
@@ -92,7 +94,7 @@ def _need(session, order_id, sku, missing, *, supplier_id=None, po_item_id=None)
 
 
 def test_open_or_create_po_reuses_existing_open_po(suppliers):
-    """open_or_create_po devuelve el mismo PO abierto del proveedor."""
+    """open_or_create_po returns the same OPEN PO of the supplier."""
     first = open_or_create_po(suppliers, 1)
     second = open_or_create_po(suppliers, 1)
     assert second.po_id == first.po_id
@@ -100,14 +102,14 @@ def test_open_or_create_po_reuses_existing_open_po(suppliers):
 
 
 def test_open_or_create_po_splits_by_supplier(suppliers):
-    """Cada proveedor tiene su propio PO abierto."""
+    """Each supplier has its own OPEN PO."""
     po_x = open_or_create_po(suppliers, 1)
     po_y = open_or_create_po(suppliers, 2)
     assert po_x.po_id != po_y.po_id
 
 
 def test_second_order_merges_into_existing_open_po(suppliers):
-    """Un segundo pedido se acumula en el PO abierto existente del proveedor."""
+    """A later order merges into the supplier's existing OPEN PO."""
     order_a = 100
     order_b = 200
     need_a = _need(suppliers, order_a, "CLV-001", 6)
@@ -142,7 +144,7 @@ def test_new_sku_appends_a_line_to_the_same_po(suppliers):
 
 
 def test_multiple_suppliers_produce_multiple_pos(suppliers):
-    """Seleccionar proveedores X e Y genera un PO para cada uno."""
+    """Selecting suppliers X and Y produces one PO each."""
     need_x = _need(suppliers, 100, "CLV-001", 6)
     need_y = _need(suppliers, 100, "PINT-001", 2)
 
@@ -163,7 +165,7 @@ def test_multiple_suppliers_produce_multiple_pos(suppliers):
 
 
 def test_reselection_detaches_from_previous_open_po(suppliers):
-    """Re-elegir proveedor antes de ejecutar mueve la necesidad al nuevo PO."""
+    """Re-selecting a supplier before execution moves the need to the new PO."""
     need = _need(suppliers, 100, "CLV-001", 6)
     po_x = accumulate_need(suppliers, need, supplier_id=1)
     # Owner changes their mind before the PO is sent.
@@ -205,7 +207,7 @@ def test_reselection_after_execution_is_refused(suppliers):
 
 
 def test_reselection_same_supplier_is_idempotent(suppliers):
-    """Re-confirmar el mismo proveedor no duplica la cantidad acumulada."""
+    """Re-confirming the same supplier does not duplicate the accumulated quantity."""
     need = _need(suppliers, 100, "CLV-001", 6)
     po_a = accumulate_need(suppliers, need, supplier_id=1)
     po_b = accumulate_need(suppliers, need, supplier_id=1)
@@ -233,3 +235,39 @@ def test_reselection_keeps_linked_item_when_quantity_remains(suppliers):
     assert old_line.quantity == 6  # need_a's share remains
     assert suppliers.get(SourcingNeed, need_a.need_id).supplier_id == 1
     assert suppliers.get(SourcingNeed, need_b.need_id).supplier_id == 2
+
+
+def _make_inactive(session, supplier_id: int) -> None:
+    supplier = session.get(Supplier, supplier_id)
+    supplier.status = SupplierStatus.INACTIVO
+    session.flush()
+
+
+def test_open_or_create_po_refuses_inactive_supplier(suppliers):
+    """open_or_create_po rechaza un supplier INACTIVO y no crea PO."""
+    _make_inactive(suppliers, 1)
+    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
+        open_or_create_po(suppliers, 1)
+    assert suppliers.scalar(select(SupplierPurchaseOrder)) is None
+
+
+def test_accumulate_need_refuses_inactive_supplier(suppliers):
+    """accumulate_need rechaza un supplier INACTIVO y no escribe nada."""
+    need = _need(suppliers, 100, "CLV-001", 6)
+    _make_inactive(suppliers, 1)
+    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
+        accumulate_need(suppliers, need, supplier_id=1)
+    assert need.supplier_id is None
+    assert need.po_item_id is None
+    assert suppliers.scalar(select(SupplierPurchaseOrderItem)) is None
+
+
+def test_accumulate_need_refuses_inactive_on_reselection(suppliers):
+    """Re-elegir un supplier que quedó INACTIVO también se rechaza."""
+    need = _need(suppliers, 100, "CLV-001", 6)
+    accumulate_need(suppliers, need, supplier_id=1)
+    _make_inactive(suppliers, 1)
+    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
+        accumulate_need(suppliers, need, supplier_id=1)
+    # The need keeps its previous link; no new writes happened.
+    assert need.supplier_id == 1

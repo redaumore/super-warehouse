@@ -25,10 +25,15 @@ from src.db.models import (
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
+from src.supplier.guards import ensure_active_supplier
 
 
 def open_or_create_po(session: Session, supplier_id: int) -> SupplierPurchaseOrder:
-    """Return the supplier's OPEN purchase order, creating one when absent."""
+    """Return the supplier's OPEN purchase order, creating one when absent.
+
+    Refuses INACTIVO suppliers (ACTIVO guard) before any write.
+    """
+    ensure_active_supplier(session, supplier_id)
     po = session.scalar(
         select(SupplierPurchaseOrder).where(
             SupplierPurchaseOrder.supplier_id == supplier_id,
@@ -58,7 +63,9 @@ def accumulate_need(
     quantity is detached first so the SKU is never double-ordered. Re-selecting
     after the previous PO was executed (SENT or later) raises
     ``SelectionExecutedError`` — the owner must not re-order an executed line.
+    INACTIVO suppliers are refused (ACTIVO guard) before any write.
     """
+    ensure_active_supplier(session, supplier_id)
     if need.supplier_id is not None and need.supplier_id == supplier_id:
         # Same supplier re-selected: the need is already accumulated there.
         item = session.get(SupplierPurchaseOrderItem, need.po_item_id) if need.po_item_id else None
