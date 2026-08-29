@@ -72,15 +72,11 @@ def approve_order(session: Session, order: Order, *, now: datetime | None = None
     registration (Phase 3, task 3.4), not here.
     """
     if order.estado is not OrderEstado.PENDING_APPROVAL:
-        raise InvalidTransitionError(
-            f"cannot approve order in state {order.estado.value}"
-        )
+        raise InvalidTransitionError(f"cannot approve order in state {order.estado.value}")
     if requires_requote(session, order, now=now):
         order.needs_requote = True
         session.flush()
-        raise RequiresRequoteError(
-            "order has expired reservations; re-quote before approval"
-        )
+        raise RequiresRequoteError("order has expired reservations; re-quote before approval")
     order.estado = OrderEstado.APPROVED
     order.approved_at = now or datetime.now(UTC)
     order.needs_requote = False
@@ -114,17 +110,13 @@ def reject_order(session: Session, order: Order, *, now: datetime | None = None)
 def mark_dispatched(session: Session, order: Order, *, now: datetime | None = None) -> Order:
     """Move an APPROVED order to IN_DISPATCH (happy-path terminal transition)."""
     if order.estado is not OrderEstado.APPROVED:
-        raise InvalidTransitionError(
-            f"cannot dispatch order in state {order.estado.value}"
-        )
+        raise InvalidTransitionError(f"cannot dispatch order in state {order.estado.value}")
     order.estado = OrderEstado.IN_DISPATCH
     session.flush()
     return order
 
 
-def expire_reservations(
-    session: Session, order: Order, *, now: datetime | None = None
-) -> int:
+def expire_reservations(session: Session, order: Order, *, now: datetime | None = None) -> int:
     """Mark the order's past-TTL ACTIVE reservations EXPIRED and flag a re-quote.
 
     This is the durable side of the TTL rule, driven by the sweeper (task 2.10):

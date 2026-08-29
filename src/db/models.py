@@ -11,13 +11,14 @@ dimension from the config, ready for hybrid search in Phase 2.
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     ARRAY,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -25,6 +26,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -50,6 +52,29 @@ class OrderEstado(str, enum.Enum):
     APPROVED = "APPROVED"
     IN_DISPATCH = "IN_DISPATCH"
     REJECTED = "REJECTED"
+
+
+class SourcingState(str, enum.Enum):
+    """Sourcing/fulfillment axis, independent of the four approval states.
+
+    Case A orders await assembly (PENDING_ASSEMBLY); Case B orders are being
+    prepared from supplier purchase orders (IN_PREPARATION); Case C orders are
+    cancelled because the missing items cannot be sourced (CANCELLED).
+    """
+
+    PENDING_ASSEMBLY = "PENDING_ASSEMBLY"
+    IN_PREPARATION = "IN_PREPARATION"
+    CANCELLED = "CANCELLED"
+
+
+class SupplierPurchaseOrderState(str, enum.Enum):
+    """Supplier purchase order lifecycle states (own state machine)."""
+
+    OPEN = "OPEN"
+    SENT = "SENT"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
+    FULLY_RECEIVED = "FULLY_RECEIVED"
+    CANCELLED = "CANCELLED"
 
 
 class ListaPrecios(Base):
@@ -186,7 +211,12 @@ class StockAdjustment(Base):
 
 
 class Order(Base):
-    """Order with the fixed four-state machine plus a needs_requote flag."""
+    """Order with the fixed four-state machine plus a needs_requote flag.
+
+    ``sourcing_state`` is the separate sourcing/fulfillment axis (spec:
+    PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) and MUST NOT change or
+    replace the four approval states. ``delivery_date`` is informational.
+    """
 
     __tablename__ = "orders"
 
@@ -197,6 +227,12 @@ class Order(Base):
         nullable=False,
         default=OrderEstado.PENDING_APPROVAL,
     )
+    sourcing_state: Mapped[SourcingState] = mapped_column(
+        Enum(SourcingState, name="sourcing_state", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=SourcingState.PENDING_ASSEMBLY,
+    )
+    delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     needs_requote: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -209,6 +245,8 @@ class Order(Base):
     customer: Mapped[Cliente] = relationship()
 
     items: Mapped[list[OrderItem]] = relationship(back_populates="order")
+
+    sourcing_needs: Mapped[list[SourcingNeed]] = relationship(back_populates="order")
 
 
 class OrderItem(Base):
@@ -225,3 +263,98 @@ class OrderItem(Base):
     adjustment: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal(0))
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class Inventory(Base):
+    """Canonical on-hand stock per SKU (the single availability source).
+
+    Backfilled from ``catalogo.stock_disponible``; later stock changes update
+    ``quantity_on_hand`` and touch ``updated_at``.
+    """
+
+    __tablename__ = "inventory"
+
+    sku_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    quantity_on_hand: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SupplierPurchaseOrder(Base):
+    """Owner's purchase order to a supplier, accumulating missing items.
+
+    Own state machine (OPEN → SENT → PARTIALLY_RECEIVED → FULLY_RECEIVED,
+    CANCELLED) mirroring ``src/order_lifecycle/state.py``; transitions live in
+    ``src/purchasing/state.py``.
+    """
+
+    __tablename__ = "supplier_purchase_orders"
+
+    po_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    supplier_id: Mapped[int] = mapped_column(
+        ForeignKey("proveedores.proveedor_id"), nullable=False, index=True
+    )
+    estado: Mapped[SupplierPurchaseOrderState] = mapped_column(
+        Enum(
+            SupplierPurchaseOrderState,
+            name="supplier_purchase_order_state",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        default=SupplierPurchaseOrderState.OPEN,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    supplier: Mapped[Proveedor] = relationship()
+
+    items: Mapped[list[SupplierPurchaseOrderItem]] = relationship(back_populates="po")
+
+
+class SupplierPurchaseOrderItem(Base):
+    """One SKU line of a purchase order, aggregated across customer orders.
+
+    ``quantity`` accumulates; ``received_quantity`` tracks partial receipts.
+    """
+
+    __tablename__ = "supplier_purchase_order_items"
+
+    po_item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    po_id: Mapped[int] = mapped_column(ForeignKey("supplier_purchase_orders.po_id"), nullable=False)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    received_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("po_id", "sku", name="uq_supplier_po_item_sku"),)
+
+    po: Mapped[SupplierPurchaseOrder] = relationship(back_populates="items")
+
+
+class SourcingNeed(Base):
+    """Missing item of an order awaiting (or holding) a supplier selection.
+
+    DB source of truth for the Case B multi-turn flow: rows persist the missing
+    items and the owner's ``supplier_id`` selection so it survives the in-memory
+    30-minute conversation TTL. ``po_item_id`` links the need to the purchase
+    order item it was accumulated into.
+    """
+
+    __tablename__ = "sourcing_needs"
+
+    need_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.order_id"), nullable=False, index=True)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    missing_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    supplier_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proveedores.proveedor_id"), nullable=True, index=True
+    )
+    po_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("supplier_purchase_order_items.po_item_id"), nullable=True
+    )
+
+    order: Mapped[Order] = relationship(back_populates="sourcing_needs")

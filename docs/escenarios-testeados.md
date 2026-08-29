@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 229, agrupados en 26 dominios.
+**Total de escenarios:** 237, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -10,7 +10,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 - [Motor de precios](#motor-de-precios) — 6
 - [Cotización y ventas](#cotización-y-ventas) — 11
-- [Stock e inventario](#stock-e-inventario) — 10
+- [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
@@ -25,8 +25,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 7
-- [Teléfonos y clientes](#teléfonos-y-clientes) — 5
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 14
+- [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
@@ -66,15 +66,25 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Las reservas no activas (convertidas, liberadas, expiradas) no bloquean stock. _(`test_non_active_reservations_do_not_lock_stock`)_
 - Una reserva ACTIVE vencida por TTL se excluye al leer la disponibilidad. _(`test_expired_ttl_reservation_does_not_lock_stock`)_
 - Una reserva vigente todavía bloquea stock. _(`test_unexpired_reservation_still_locks_stock`)_
-- Consultar un SKU desconocido lanza error. _(`test_unknown_sku_raises`)_
+- Consultar un SKU desconocido devuelve 0 (nunca KeyError). _(`test_unknown_sku_returns_zero`)_
+- El seed copia stock_disponible del catálogo a Inventory.quantity_on_hand. _(`test_seed_inventory_backfills_from_catalogo`)_
+- Volver a sembrar no duplica filas ni pisa valores existentes. _(`test_seed_inventory_is_idempotent`)_
+- Un SKU sin fila en Inventory se trata como no disponible. _(`test_missing_inventory_row_means_zero_on_hand`)_
 - Reservar crea una reserva activa con el TTL configurado y bloquea stock. _(`test_reserve_creates_active_reservation_and_locks`)_
 - Reservar más de lo disponible se rechaza sin bloquear de más. _(`test_reserve_beyond_available_stock_is_refused`)_
 - Reservar una cantidad no positiva se rechaza. _(`test_reserve_rejects_non_positive_quantity`)_
 
 ## Despacho y aprobación del dueño
 
-- Se notifica al dueño la cotización a través del notificador. _(`test_notify_owner_sends_quote_via_notifier`)_
 - El mensaje de cotización menciona las líneas y el total. _(`test_format_quote_message_mentions_lines_and_total`)_
+- La referencia 'pedido #N' se extrae como número de pedido. _(`test_parse_order_reference`)_
+  - aprobá el pedido #3
+  - aprobá el pedido#3
+  - aprobá # 42
+  - aprobá
+  - rechazá el pedido
+  - (vacío)
+  - aprobá el pedido #3 y el #7
 - El texto del dueño se interpreta como aprobar, rechazar o desconocido. _(`test_parse_decision_actions`)_
   - sí, aprobá
   - aprobá
@@ -104,7 +114,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
 - Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
 - Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
-- La cuarentena de Sheets no bloquea: se confirma y el estado lo reporta. _(`test_sheets_quarantine_never_blocks_approval`)_
+- La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente. _(`test_sheets_quarantine_rolls_back_approval`)_
 
 ## Orquestador y enrutamiento
 
@@ -253,10 +263,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 ## Modelo de datos y migraciones
 
 - Cada entidad del diseño tiene su modelo ORM correspondiente. _(`test_all_design_entities_are_modeled`)_
+- Las tablas del eje de sourcing existen en el modelo ORM. _(`test_sourcing_entities_are_modeled`)_
+- El pedido tiene sourcing_state y delivery_date, sin tocar order_estado. _(`test_order_has_sourcing_axis_and_delivery_date`)_
+- El enum SourcingState tiene exactamente los tres estados del eje. _(`test_sourcing_state_enum_values`)_
+- El enum del PO tiene exactamente los cinco estados de su máquina. _(`test_po_state_enum_values`)_
 - La columna `catalogo.embedding` se declara como pgvector vector(1536). _(`test_catalogo_has_vector_1536_embedding`)_
 - El modelo `clientes` no modela límites de crédito ni condiciones de pago. _(`test_cliente_has_no_credit_or_payment_fields`)_
 - La máquina de estados del pedido se fija a los cuatro estados de la spec. _(`test_order_estado_enum_values`)_
 - La migración crea todas las tablas del diseño. _(`test_migration_creates_all_tables`)_
+- RED: la migración agrega sourcing_state y delivery_date a orders. _(`test_migration_creates_sourcing_columns`)_
+- RED: los enums del eje de sourcing existen tras la migración. _(`test_migration_creates_sourcing_enums`)_
+- RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
 
@@ -268,9 +285,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - abc
   - 5555
   - 12
-- Un número registrado — aun reescrito en otro formato — resuelve como KNOWN. _(`test_known_phone_matches_registered_customer`)_
-- Un número válido pero no registrado se marca UNKNOWN, nunca se adivina. _(`test_unknown_phone_is_flagged_for_onboarding`)_
-- Un número no interpretable se marca INVALID sin forma normalizada. _(`test_invalid_phone_is_flagged_not_guessed`)_
+- Una línea fija válida normaliza a su forma E.164 sin prefijo 9. _(`test_non_mobile_landline_still_normalizes`)_
 
 ## Registro en Google Sheets
 
@@ -310,7 +325,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Construir la app genera cuatro pestañas con los títulos esperados. _(`test_build_app_creates_four_tabs_with_expected_labels`)_
+- Construir la app genera cinco pestañas con los títulos esperados. _(`test_build_app_creates_five_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
@@ -344,10 +359,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## E2E: pedido completo
 
-- Un pedido de texto llega, cotiza al dueño y al aprobar descuenta stock. _(`test_e2e_text_order_flows_to_owner_approval_and_stock_deduction`)_
+- El pedido del dueño se aprueba: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_approves_and_deducts_stock`)_
+- Si Sheets falla, la aprobación se revierte y el pedido sigue pendiente. _(`test_e2e_sheets_failure_keeps_order_pending`)_
 - Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre. _(`test_e2e_owner_reject_releases_reservation`)_
 - Una nota de voz de WhatsApp se normaliza marcando media_type voice. _(`test_e2e_whatsapp_voice_payload_flags_media`)_
-- Aunque el envío de confirmación falle, el flujo de aprobación no se corta. _(`test_e2e_http_error_on_confirm_still_completes_flow`)_
 
 ## E2E: ingesta de documentos
 

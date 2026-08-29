@@ -9,7 +9,15 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from src.db.models import Base, Catalogo, Cliente, OrderEstado
+from src.db.models import (
+    Base,
+    Catalogo,
+    Cliente,
+    Order,
+    OrderEstado,
+    SourcingState,
+    SupplierPurchaseOrderState,
+)
 
 
 def test_all_design_entities_are_modeled():
@@ -27,8 +35,64 @@ def test_all_design_entities_are_modeled():
         "stock_reservations",
         "orders",
         "order_items",
+        "inventory",
+        "supplier_purchase_orders",
+        "supplier_purchase_order_items",
+        "sourcing_needs",
     }
     assert expected.issubset(tables)
+
+
+def test_sourcing_entities_are_modeled():
+    """Las tablas del eje de sourcing existen en el modelo ORM.
+
+    The sourcing axis tables (Inventory, POs, SourcingNeed) are modeled.
+    """
+    tables = set(Base.metadata.tables)
+    assert {
+        "inventory",
+        "supplier_purchase_orders",
+        "supplier_purchase_order_items",
+        "sourcing_needs",
+    }.issubset(tables)
+
+
+def test_order_has_sourcing_axis_and_delivery_date():
+    """El pedido tiene sourcing_state y delivery_date, sin tocar order_estado.
+
+    Order carries the separate sourcing axis and the informational delivery
+    date; the four approval states remain untouched.
+    """
+    cols = Order.__table__.c
+    assert "sourcing_state" in cols
+    assert "delivery_date" in cols
+    assert "estado" in cols  # the four-state machine is still there
+    assert {m.value for m in OrderEstado} == {
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "IN_DISPATCH",
+        "REJECTED",
+    }
+
+
+def test_sourcing_state_enum_values():
+    """El enum SourcingState tiene exactamente los tres estados del eje."""
+    assert {m.value for m in SourcingState} == {
+        "PENDING_ASSEMBLY",
+        "IN_PREPARATION",
+        "CANCELLED",
+    }
+
+
+def test_po_state_enum_values():
+    """El enum del PO tiene exactamente los cinco estados de su máquina."""
+    assert {m.value for m in SupplierPurchaseOrderState} == {
+        "OPEN",
+        "SENT",
+        "PARTIALLY_RECEIVED",
+        "FULLY_RECEIVED",
+        "CANCELLED",
+    }
 
 
 def test_catalogo_has_vector_1536_embedding():
@@ -74,8 +138,33 @@ def test_migration_creates_all_tables(db_inspector):
         "stock_reservations",
         "orders",
         "order_items",
+        "inventory",
+        "supplier_purchase_orders",
+        "supplier_purchase_order_items",
+        "sourcing_needs",
     }
     assert expected.issubset(tables)
+
+
+def test_migration_creates_sourcing_columns(db_inspector):
+    """RED: la migración agrega sourcing_state y delivery_date a orders.
+
+    The migration adds the sourcing axis + delivery_date columns to orders.
+    """
+    cols = {c["name"] for c in db_inspector.get_columns("orders")}
+    assert {"sourcing_state", "delivery_date"}.issubset(cols)
+
+
+def test_migration_creates_sourcing_enums(db_inspector):
+    """RED: los enums del eje de sourcing existen tras la migración."""
+    enums = {e["name"] for e in db_inspector.get_enums()}
+    assert {"sourcing_state", "supplier_purchase_order_state"}.issubset(enums)
+
+
+def test_migration_indexes_sourcing_needs(db_inspector):
+    """RED: sourcing_needs queda indexado por order_id y supplier_id."""
+    indexes = {i["name"] for i in db_inspector.get_indexes("sourcing_needs")}
+    assert {"ix_sourcing_needs_order_id", "ix_sourcing_needs_supplier_id"}.issubset(indexes)
 
 
 def test_migration_has_vector_1536_column(db_inspector):

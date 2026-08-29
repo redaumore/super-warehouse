@@ -56,8 +56,12 @@ def test_parse_line_items_extracts_quantity_and_cost_rows():
     extraction = parse_line_items(REMITO_TEXT)
     assert extraction.items == (
         ExtractedItem(codigo="", descripcion="Clavos Paris 2 Pulgadas", cantidad=10),
-        ExtractedItem(codigo="CLV-001", descripcion="Tornillos M6", cantidad=500, costo=Decimal("1250.00")),
-        ExtractedItem(codigo="CMT-002", descripcion="Cemento Portland", cantidad=2, costo=Decimal("24000.00")),
+        ExtractedItem(
+            codigo="CLV-001", descripcion="Tornillos M6", cantidad=500, costo=Decimal("1250.00")
+        ),
+        ExtractedItem(
+            codigo="CMT-002", descripcion="Cemento Portland", cantidad=2, costo=Decimal("24000.00")
+        ),
     )
 
 
@@ -88,23 +92,26 @@ def test_extract_document_rejects_illegible_with_clear_error(tmp_path):
     """Un documento ilegible se rechaza con un error claro, sin escribir nada."""
     image = tmp_path / "mancha.jpg"
     image.write_bytes(b"fake")
-    with patch(
-        "src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="
-    ), pytest.raises(IllegibleDocumentError, match="illegible"):
+    with (
+        patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="),
+        pytest.raises(IllegibleDocumentError, match="illegible"),
+    ):
         extract_document(FakeAnalyzer("texto ilegible sin filas"), image)
 
 
 def test_extract_document_vision_failure_propagates(tmp_path):
     """Un fallo del proveedor de visión se propaga como VisionError."""
+
     class FailingAnalyzer:
         def analyze(self, image_url, prompt):
             raise RuntimeError("vision down")
 
     image = tmp_path / "remito.jpg"
     image.write_bytes(b"fake")
-    with patch(
-        "src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="
-    ), pytest.raises(VisionError):
+    with (
+        patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="),
+        pytest.raises(VisionError),
+    ):
         extract_document(FailingAnalyzer(), image)  # type: ignore[arg-type]
 
 
@@ -182,8 +189,12 @@ def supplier_ctx(db_session):
 def test_ingest_price_list_maps_and_suggests(supplier_ctx):
     """La lista de precios mapea SKU existentes y sugiere nuevos."""
     rows = [
-        PriceListRow(codigo="CLV-001", descripcion="Clavos Paris 2 Pulgadas", costo=Decimal("95.00")),
-        PriceListRow(codigo="NEW-777", descripcion="Pintura Látex Blanco", costo=Decimal("3200.00")),
+        PriceListRow(
+            codigo="CLV-001", descripcion="Clavos Paris 2 Pulgadas", costo=Decimal("95.00")
+        ),
+        PriceListRow(
+            codigo="NEW-777", descripcion="Pintura Látex Blanco", costo=Decimal("3200.00")
+        ),
     ]
     result = ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
     assert result.mapped == 1
@@ -200,7 +211,9 @@ def test_ingest_price_list_maps_and_suggests(supplier_ctx):
 def test_ingest_price_list_updates_existing_mapping_without_duplicates(supplier_ctx):
     """Re-ingestar la misma fila actualiza el mapeo sin duplicarlo."""
     rows = [
-        PriceListRow(codigo="CLV-001", descripcion="Clavos Paris 2 Pulgadas", costo=Decimal("95.00"))
+        PriceListRow(
+            codigo="CLV-001", descripcion="Clavos Paris 2 Pulgadas", costo=Decimal("95.00")
+        )
     ]
     ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
     ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
@@ -211,7 +224,9 @@ def test_ingest_price_list_updates_existing_mapping_without_duplicates(supplier_
 
 def test_ingest_price_list_matches_by_normalized_name(supplier_ctx):
     """Una descripción normalizada mapea al SKU sin coincidencia de código."""
-    rows = [PriceListRow(codigo="X-999", descripcion="clavos paris 2 pulgadas", costo=Decimal("90.00"))]
+    rows = [
+        PriceListRow(codigo="X-999", descripcion="clavos paris 2 pulgadas", costo=Decimal("90.00"))
+    ]
     result = ingest_price_list_rows(supplier_ctx["session"], proveedor_id=1, rows=rows)
     assert result.mapped == 1
     mapping = supplier_ctx["session"].scalar(select(ProveedorSkuMapping))

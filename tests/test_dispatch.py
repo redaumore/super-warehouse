@@ -1,7 +1,7 @@
-"""Dispatch agent tests (task 2.7).
+"""Dispatch agent tests.
 
-Unit (no DB): owner notification through a fake notifier, decision parsing
-(approve / reject / adjustments / unknown), and message formatting.
+Unit (no DB): decision parsing (approve / reject / adjustments / unknown),
+``parse_order_reference`` (pedido #N) and message formatting.
 
 Integration (Postgres, skipped when down): applying the decision end-to-end —
 approval with a per-line adjustment re-prices the order_items rows, and
@@ -25,10 +25,10 @@ from src.agents.dispatch import (
     UnknownDecisionError,
     apply_decision,
     format_quote_message,
-    notify_owner,
     parse_decision,
+    parse_order_reference,
 )
-from src.agents.inventory import available_stock, reserve_stock
+from src.agents.inventory import available_stock, reserve_stock, seed_inventory
 from src.agents.sales import ItemInput, quote_order
 from src.config import get_settings
 from src.db.models import (
@@ -45,21 +45,21 @@ from src.db.models import (
 from src.order_lifecycle.state import RequiresRequoteError
 
 
-class FakeNotifier:
-    """Records outbound sends; never touches the network."""
-
-    def __init__(self):
-        self.sent: list[tuple[str, str]] = []
-
-    def send_text(self, recipient, text):
-        self.sent.append((recipient, text))
-
-
 def _quote() -> object:
     return quote_order(
         (
-            ItemInput(sku="CLV-001", cantidad=10, base_price=Decimal("100.00"), description="Clavos Paris 2 Pulgadas"),
-            ItemInput(sku="TRN-002", cantidad=5, base_price=Decimal("50.00"), description="Tornillos M6 x 30"),
+            ItemInput(
+                sku="CLV-001",
+                cantidad=10,
+                base_price=Decimal("100.00"),
+                description="Clavos Paris 2 Pulgadas",
+            ),
+            ItemInput(
+                sku="TRN-002",
+                cantidad=5,
+                base_price=Decimal("50.00"),
+                description="Tornillos M6 x 30",
+            ),
         ),
         None,
         None,
@@ -69,22 +69,28 @@ def _quote() -> object:
 # ---------------------------------------------------------------- unit tests
 
 
-def test_notify_owner_sends_quote_via_notifier():
-    """Se notifica al dueño la cotización a través del notificador."""
-    notifier = FakeNotifier()
-    notify_owner(notifier, "+5491100000000", _quote(), order_id=7, customer_name="Don Juan")
-    assert len(notifier.sent) == 1
-    recipient, body = notifier.sent[0]
-    assert recipient == "+5491100000000"
-    assert "Pedido #7 (Don Juan)" in body
-    assert "aprobá" in body
-
-
 def test_format_quote_message_mentions_lines_and_total():
     """El mensaje de cotización menciona las líneas y el total."""
     body = format_quote_message(_quote(), order_id=7)
     assert "1250.00" in body  # 10 × 100 + 5 × 50
     assert "Clavos Paris 2 Pulgadas" in body
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("aprobá el pedido #3", 3),
+        ("aprobá el pedido#3", 3),
+        ("aprobá # 42", 42),
+        ("aprobá", None),
+        ("rechazá el pedido", None),
+        ("", None),
+        ("aprobá el pedido #3 y el #7", 3),  # first reference wins
+    ],
+)
+def test_parse_order_reference(text, expected):
+    """La referencia 'pedido #N' se extrae como número de pedido."""
+    assert parse_order_reference(text) == expected
 
 
 @pytest.mark.parametrize(
@@ -134,6 +140,7 @@ def test_parse_decision_reject_ignores_adjustment_mention():
 
 # -------------------------------------------------- integration (apply_decision)
 
+
 def _postgres_up() -> bool:
     try:
         engine = create_engine(
@@ -156,8 +163,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -195,6 +203,8 @@ def order_ctx(db_session):
             sinonimos=["clavos 2 pulgadas"],
         )
     )
+    db_session.flush()
+    seed_inventory(db_session)
     order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
     db_session.add(order)
     db_session.flush()
@@ -259,11 +269,13 @@ def test_apply_reject_releases_reservations(order_ctx):
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 6
     apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.REJECT))
     assert order_ctx["order"].estado is OrderEstado.REJECTED
-    reservations = order_ctx["session"].scalars(
-        select(StockReservation).where(
-            StockReservation.order_id == order_ctx["order"].order_id
+    reservations = (
+        order_ctx["session"]
+        .scalars(
+            select(StockReservation).where(StockReservation.order_id == order_ctx["order"].order_id)
         )
-    ).all()
+        .all()
+    )
     assert all(r.estado is ReservationEstado.RELEASED for r in reservations)
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 10
 

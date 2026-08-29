@@ -184,8 +184,9 @@ async def test_send_text_http_error_raises_whatsapp_error():
     response = MagicMock()
     response.raise_for_status.side_effect = httpx.HTTPError("boom")
     client.post.return_value = response
-    with patch("src.channels.whatsapp.httpx.AsyncClient", return_value=client), pytest.raises(
-        WhatsAppError
+    with (
+        patch("src.channels.whatsapp.httpx.AsyncClient", return_value=client),
+        pytest.raises(WhatsAppError),
     ):
         await channel.send_text("5491155551234", "hola")
 
@@ -213,8 +214,6 @@ async def test_fetch_media_resolves_id_to_bytes():
 async def test_fetch_media_without_token_raises_before_network():
     """Sin token configurado, descargar media falla sin tocar la red."""
     channel = WhatsAppChannel(settings=UNCONFIGURED)
-    with patch("src.channels.whatsapp.httpx.AsyncClient") as client, pytest.raises(
-        WhatsAppError
-    ):
+    with patch("src.channels.whatsapp.httpx.AsyncClient") as client, pytest.raises(WhatsAppError):
         await channel.fetch_media("media-9")
     client.assert_not_called()

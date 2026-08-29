@@ -34,6 +34,31 @@ means. Start with the **Daily flow**, then consult the tables.
 | `fase N is disabled` | `FASE_N_ENABLED=false` | Re-enable the flag to run that phase's features |
 | `RequiresRequoteError` on approval | order reservations expired | Re-quote the order before approving (by design) |
 | Tests skip (`Postgres not running`) | DB down | `make db-up` |
+| Order shows `CANCELLED` / sourcing cancelado | missing items had no supplier candidate | Expected Case C until the supplier RAG is wired; check the searcher seam (`src/supplier/searcher.py`) |
+
+## Order sourcing
+
+The sourcing workflow (see `docs/sourcing.md`) is enabled by setting
+`OWNER_PHONE` in `.env`:
+
+| Action | Command / setting |
+|---|---|
+| Enable sourcing flow | `OWNER_PHONE=+54911...` in `.env`; notifications go over Telegram |
+| Disable (legacy intake) | remove `OWNER_PHONE` (parse step turns off) |
+| Backfill inventory | `python3 scripts/seed_inventory.py` (idempotent; the migration already backfills from `catalogo.stock_disponible`) |
+| Verify availability source | `SELECT sku_id, quantity_on_hand FROM inventory;` — this is the canonical on-hand |
+| Execute a PO | backoffice → **Purchase Orders** tab: send / receive (partial or full) / cancel |
+
+Rollback of the sourcing axis is a plain downgrade of the two additive
+migrations:
+
+```bash
+make migrate   # current head = 5f304e18a765 (supplier purchase orders)
+# to revert: .venv/bin/alembic downgrade -1  (drops PO tables + sourcing_needs)
+#            .venv/bin/alembic downgrade -1  (drops inventory + order sourcing columns)
+```
+
+Both downgrades keep `OrderEstado` and every legacy table untouched.
 
 ## Backup
 

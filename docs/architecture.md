@@ -1,55 +1,76 @@
 # Architecture — Ferretería Multi-Agent MVP
 
-This is the mental model of the whole system: one intake, six agents, one
-database, one append-only output. Read this before touching `src/`.
+This is the mental model of the whole system: one owner, one intake, six
+agents, one database, one append-only output. Read this before touching `src/`.
 
 ## The pipeline at a glance
 
 ```
 WhatsApp / Telegram ──> webhook ──> ACK (<5 s) ──> client
-                          └── background task ──> Orchestrator
-                                                   Perception (STT / Vision)
-                                                   Customer & Context
-                                                   Disambiguation (hybrid search)
-                                                   Inventory & Pricing (soft-lock)
-                                                   Conversational Sales (quote)
-                                                   Dispatch & Owner (approve/reject)
-                                                       approve ──> Sheets + stock deduct + confirm
-                                                       reject  ──> release reservations
+                          └── background task ──> OWNER GATE (allowlist)
+                                                     │ non-owner → polite rejection
+                                                     └─ owner ──> Orchestrator
+                                                                  Perception (STT / Vision)
+                                                                  Customer & Context (resolve by NAME)
+                                                                  Disambiguation (hybrid search)
+                                                                  Inventory & Pricing (soft-lock)
+                                                                  Conversational Sales (quote)
+                                                                  Dispatch (wired approve/reject)
+                                                                      approve ──> Sheets + stock deduct + confirm (in chat)
+                                                                      reject  ──> release reservations
+                                                                  Sourcing (Case B supplier selection)
 ```
 
 Heavy work (transcription, vision, search, pricing) never blocks the intake:
 the webhook ACKs immediately and hands the message to a FastAPI background
-task. The orchestrator routes each message to the agent that owns that step
-and carries conversation context between them.
+task. The owner gate (`src/orchestrator/owner.py`) runs FIRST, at the pipeline
+edge: only the configured owner sender (Telegram chat id / WhatsApp phone) is
+routed; anyone else gets a polite rejection and no order is ever created,
+quoted or approved for them. The orchestrator routes each message to the agent
+that owns that step and carries conversation context between them.
 
 ## The six agents
 
 | Agent | Owns | Where | Key behavior |
 |---|---|---|---|
 | Perception | STT + vision | `src/agents/perception.py`, `src/integrations/openai.py` | Whisper transcript with flagged low-confidence fragments; GPT-4o Vision description; failures become clear errors, never silent guesses |
-| Customer & Context | Phone identity | `src/agents/customer.py` | Normalizes AR numbers to WhatsApp E.164 form; KNOWN / UNKNOWN / INVALID — never guesses |
+| Customer & Context | Owner chat + customer-by-name | `src/agents/customer.py`, `src/agents/customers.py` | Owner-assistant persona; resolves the customer by `nombre_comercial` (exact → folded containment; 1 auto-picks, ≥2 numbered menu, 0 offers in-chat creation) |
 | Disambiguation | Catalog resolution | `src/agents/disambiguation.py` | Hybrid rapidfuzz + pgvector cosine; auto-maps high-confidence, menus on ambiguity, reports not-found |
 | Inventory & Pricing | Soft-lock + availability | `src/agents/inventory.py` | `available = stock − Σ(active, unexpired reservations)`; TTL enforced at read time |
 | Conversational Sales | Quotes + adjustments | `src/agents/sales.py`, `src/pricing/engine.py` | Compound discounts via the pure pricing function; per-line owner adjustments |
-| Dispatch & Owner | Notify + decide | `src/agents/dispatch.py`, `src/orchestrator/approval.py` | Quote to owner; approve/reject parsing (accent-safe); approval → convert → Sheets → stock → confirm |
+| Dispatch & Owner | Approve/reject (wired) | `src/agents/dispatch.py`, `src/orchestrator/approval.py` | `parse_decision` + `apply_decision` + `register_approved_order` (Sheets); `#N` override; Sheets failure rolls the approval back |
 
 ## Data flow details
 
 1. **Intake** (`src/api/webhook.py`): HMAC signature gate (`X-Hub-Signature-256`),
    channel verification, normalized `InboundMessage`, instant `ACK`.
-2. **Route** (`src/orchestrator/router.py`): voice/image → Perception;
-   awaiting-decision replies → Dispatch; in-progress orders → Sales or
-   Disambiguation; fresh messages → Customer. Context lives in an in-memory
-   store with a 30-minute TTL (`src/orchestrator/session.py`).
-3. **Reserve** (`src/agents/inventory.py`): each quoted line soft-locks stock
+2. **Gate** (`src/pipeline.py`): `is_owner_sender` compares the normalized
+   sender against the configured owner allowlist BEFORE routing; a non-owner is
+   rejected with `rejection_reply()` and the orchestrator never sees the turn.
+3. **Route** (`src/orchestrator/router.py`): voice/image → Perception;
+   awaiting-decision replies → wired Dispatch; customer-name menu picks and
+   supplier-selection replies → Customer / Sourcing; in-progress orders →
+   Sales or Disambiguation; fresh messages → Customer (after the parse step).
+   Context lives in an in-memory store with a 30-minute TTL
+   (`src/orchestrator/session.py`), rehydrated from the DB (latest open order
+   across all customers — the owner-keyed rule).
+4. **Resolve** (`src/agents/customers.py`): the parsed customer name is matched
+   against `Cliente.nombre_comercial` (exact → folded containment); `nuevo
+   cliente <nombre> <teléfono>` creates a client in chat reusing
+   `backoffice.clients.create_client`.
+5. **Reserve** (`src/agents/inventory.py`): each quoted line soft-locks stock
    with a TTL; the sweeper (`src/scheduler/sweeper.py`) makes expiry durable
    (EXPIRED + `needs_requote`).
-4. **Approve** (`src/orchestrator/approval.py`): the lifecycle transition
+6. **Approve** (`src/orchestrator/approval.py`): the lifecycle transition
    (`src/order_lifecycle/state.py`) refuses stale orders (`RequiresRequoteError`);
    registration converts ACTIVE→CONVERTED reservations, appends the order row
-   to Google Sheets (quarantined on failure, never blocking), deducts stock and
-   confirms to the owner.
+   to Google Sheets, deducts stock and returns the in-chat confirmation. A
+   quarantined Sheets write RAISES `SheetsRegistrationError` so the caller rolls
+   the approval back — the order stays PENDING (never half-registered).
+
+Quotes, cancellations and approvals are in-chat replies: the legacy
+`_ChannelNotifier` push to `owner_phone` was removed (the owner sender IS the
+chat).
 
 ## State machine
 

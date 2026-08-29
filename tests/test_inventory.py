@@ -1,9 +1,10 @@
-"""Inventory soft-lock tests (task 2.5).
+"""Inventory soft-lock tests (task 2.5, updated for the sourcing axis).
 
 Integration tests against the real Postgres fixture proving the availability
-formula `available = stock_disponible − Σ(active, unexpired reservations)` and
-the reservation guard. The TTL sweeper / reject→release state machine are later
-phases and are NOT exercised here.
+formula `available = Inventory.quantity_on_hand − Σ(active, unexpired
+reservations)` and the reservation guard. An SKU with no inventory row is
+treated as unavailable (zero on hand), never a KeyError. The TTL sweeper /
+reject→release state machine are later phases and are NOT exercised here.
 """
 
 from __future__ import annotations
@@ -12,14 +13,20 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.inventory import InsufficientStockError, available_stock, reserve_stock
+from src.agents.inventory import (
+    InsufficientStockError,
+    available_stock,
+    reserve_stock,
+    seed_inventory,
+)
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
+    Inventory,
     ListaPrecios,
     Proveedor,
     ReservationEstado,
@@ -49,8 +56,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, proveedores, "
-                "clientes, lista_precios RESTART IDENTITY CASCADE"
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                "catalogo, proveedores, clientes, lista_precios RESTART IDENTITY CASCADE"
             )
         )
 
@@ -89,6 +97,7 @@ def stock(db_session):
         )
     )
     db_session.flush()
+    seed_inventory(db_session)
     return db_session
 
 
@@ -150,10 +159,35 @@ def test_unexpired_reservation_still_locks_stock(stock):
     assert available_stock(stock, "CLV-001") == 6
 
 
-def test_unknown_sku_raises(stock):
-    """Consultar un SKU desconocido lanza error."""
-    with pytest.raises(KeyError, match="CLV-XXX"):
-        available_stock(stock, "CLV-XXX")
+def test_unknown_sku_returns_zero(stock):
+    """Consultar un SKU desconocido devuelve 0 (nunca KeyError)."""
+    assert available_stock(stock, "CLV-XXX") == 0
+
+
+def test_seed_inventory_backfills_from_catalogo(stock):
+    """El seed copia stock_disponible del catálogo a Inventory.quantity_on_hand."""
+    row = stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    assert row is not None
+    assert row.quantity_on_hand == 10
+
+
+def test_seed_inventory_is_idempotent(stock):
+    """Volver a sembrar no duplica filas ni pisa valores existentes."""
+    first = seed_inventory(stock)  # the fixture already seeded → no insert
+    assert first == 0
+    row = stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    row.quantity_on_hand = 7
+    stock.flush()
+    second = seed_inventory(stock)
+    assert second == 0
+    assert (
+        stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001")).quantity_on_hand == 7
+    )
+
+
+def test_missing_inventory_row_means_zero_on_hand(stock):
+    """Un SKU sin fila en Inventory se trata como no disponible."""
+    assert available_stock(stock, "OTRO-999") == 0
 
 
 def test_reserve_creates_active_reservation_and_locks(stock):

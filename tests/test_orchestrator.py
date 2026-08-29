@@ -181,7 +181,9 @@ def _capturing_handler(updated_state):
 def test_orchestrator_routes_and_persists_context():
     """El orquestador enruta y persiste el contexto."""
     store = ConversationStore()
-    handler, calls = _capturing_handler(_state(sender_id="+5491155551234", customer_id=3, order_id=7))
+    handler, calls = _capturing_handler(
+        _state(sender_id="+5491155551234", customer_id=3, order_id=7)
+    )
     orchestrator = Orchestrator(store, agents={AgentName.CUSTOMER: handler})
 
     result = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
