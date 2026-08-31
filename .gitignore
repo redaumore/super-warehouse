@@ -5,3 +5,5 @@ data
 catalogo_estructurado.json
 __pycache__/
 *.pyc
+*.json
+.DS_Store

@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,30 @@ logging.basicConfig(
     datefmt="%H:%M:%S"
 )
 logger = logging.getLogger("fase-1-chunking")
+
+
+def generate_output_filename(codigo_proveedor: str, phase: str = "nodes") -> str:
+    """Genera el nombre de archivo automático: <id_proveedor>_<phase>_<YYMMDDHHmmSS>.json"""
+    timestamp = datetime.now().strftime("%y%m%d%H%M%S")
+    prov_code = (codigo_proveedor or "PROV").strip().upper()[:3]
+    return f"{prov_code}_{phase}_{timestamp}.json"
+
+
+def extract_codigo_proveedor(data: Any, fallback: str = "PROV") -> str:
+    """Extrae el código de 3 caracteres del proveedor desde el payload o metadatos."""
+    if isinstance(data, dict):
+        meta = data.get("metadata", {})
+        if isinstance(meta, dict) and meta.get("codigo_proveedor"):
+            return str(meta["codigo_proveedor"]).strip().upper()[:3]
+        products = data.get("products_flat") or []
+        for p in products:
+            if isinstance(p, dict) and p.get("codigo_proveedor"):
+                return str(p["codigo_proveedor"]).strip().upper()[:3]
+    elif isinstance(data, list):
+        for p in data:
+            if isinstance(p, dict) and p.get("codigo_proveedor"):
+                return str(p["codigo_proveedor"]).strip().upper()[:3]
+    return fallback
 
 
 def get_token_encoder(model_or_encoding: str = "cl100k_base"):
@@ -114,7 +139,7 @@ def build_text_to_embed(product: Dict[str, Any]) -> str:
 def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     """
     Construye el diccionario plano de metadatos para pre-filtrado en base de datos vectorial.
-    Solo contiene tipos primitivos (int, str).
+    Solo contiene tipos primitivos (int, str, float).
     """
     metadata: Dict[str, Any] = {}
 
@@ -129,7 +154,11 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     # Campos base primitivos
     base_fields = [
         ("codigo", product.get("codigo")),
+        ("codigo_orig", product.get("codigo_orig")),
         ("proveedor", product.get("proveedor")),
+        ("codigo_proveedor", product.get("codigo_proveedor")),
+        ("precio", product.get("precio")),
+        ("moneda", product.get("moneda")),
         ("marca", product.get("marca")),
         ("categoria", product.get("categoria")),
         ("subcategoria", product.get("subcategoria")),
@@ -179,7 +208,12 @@ def process_product(product: Dict[str, Any], encoder: Any) -> Optional[Dict[str,
     }
 
 
-def run_pipeline(input_path: str, output_path: str, encoding_name: str = "cl100k_base") -> None:
+def run_pipeline(
+    input_path: str,
+    output_path: Optional[str] = None,
+    encoding_name: str = "cl100k_base",
+    codigo_proveedor: Optional[str] = None
+) -> None:
     """
     Ejecuta el pipeline completo de ingesta, transformación y persistencia.
     """
@@ -191,6 +225,13 @@ def run_pipeline(input_path: str, output_path: str, encoding_name: str = "cl100k
     logger.info("Cargando catálogo desde %s ...", in_file)
     with open(in_file, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    # Identificar código de proveedor y resolver nombre de salida si no fue provisto
+    if not codigo_proveedor:
+        codigo_proveedor = extract_codigo_proveedor(data)
+
+    if not output_path:
+        output_path = generate_output_filename(codigo_proveedor, "nodes")
 
     # Identificar la lista de productos (preferencia por products_flat)
     products_flat = []
@@ -215,7 +256,7 @@ def run_pipeline(input_path: str, output_path: str, encoding_name: str = "cl100k
         logger.warning("No se encontraron productos para procesar en el archivo de entrada.")
         nodes = []
     else:
-        logger.info("Procesando %d productos con codificación '%s'...", len(products_flat), encoding_name)
+        logger.info("Procesando %d productos con codificación '%s' (Proveedor: %s)...", len(products_flat), encoding_name, codigo_proveedor)
         encoder = get_token_encoder(encoding_name)
         nodes = []
         errors = 0
@@ -248,12 +289,17 @@ def main():
     parser.add_argument(
         "--input", "-i",
         default="catalogo_directo_luna.json",
-        help="Ruta al archivo JSON de entrada (ej: catalogo_directo_luna.json)."
+        help="Ruta al archivo JSON de entrada (ej: catalogo_directo_luna.json o FDN_ingestion_YYMMDDHHmmSS.json)."
     )
     parser.add_argument(
         "--output", "-o",
-        default="catalogo_nodes.json",
-        help="Ruta al archivo JSON de salida (ej: catalogo_nodes.json)."
+        default=None,
+        help="Ruta al archivo JSON de salida (por defecto: automático <COD>_nodes_<YYMMDDHHmmSS>.json)."
+    )
+    parser.add_argument(
+        "--codigo_proveedor", "--cod_prov",
+        default=None,
+        help="Código de 3 caracteres del proveedor (opcional, se infiere del archivo de entrada)."
     )
     parser.add_argument(
         "--encoding", "-e",
@@ -262,7 +308,12 @@ def main():
     )
 
     args = parser.parse_args()
-    run_pipeline(args.input, args.output, args.encoding)
+    run_pipeline(
+        input_path=args.input,
+        output_path=args.output,
+        encoding_name=args.encoding,
+        codigo_proveedor=args.codigo_proveedor
+    )
 
 
 if __name__ == "__main__":

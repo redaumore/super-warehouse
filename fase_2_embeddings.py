@@ -382,13 +382,30 @@ def export_embeddings_deliverable(
     logger.info("Archivo generado correctamente (%.2f MB).", file_size_mb)
 
 
+def generate_output_filename(codigo_proveedor: str, phase: str = "embedding") -> str:
+    """Genera el nombre de archivo automático: <id_proveedor>_<phase>_<YYMMDDHHmmSS>.json"""
+    timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+    prov_code = (codigo_proveedor or "PROV").strip().upper()[:3]
+    return f"{prov_code}_{phase}_{timestamp}.json"
+
+
+def extract_codigo_proveedor(nodes: List[Dict[str, Any]], fallback: str = "PROV") -> str:
+    """Extrae el código de 3 caracteres del proveedor desde los nodos cargados."""
+    for node in nodes:
+        meta = node.get("metadata", {})
+        if isinstance(meta, dict) and meta.get("codigo_proveedor"):
+            return str(meta["codigo_proveedor"]).strip().upper()[:3]
+    return fallback
+
+
 def run_pipeline(
     input_path_str: str,
-    output_path_str: str,
+    output_path_str: Optional[str],
     model: str,
     dimensions: int,
     batch_size: int,
     api_key: Optional[str] = None,
+    codigo_proveedor: Optional[str] = None,
 ) -> None:
     """
     Orquesta el flujo completo de la Fase 2:
@@ -399,7 +416,6 @@ def run_pipeline(
     5. Exportación del artefacto final para la base de datos vectorial.
     """
     input_path = Path(input_path_str)
-    output_path = Path(output_path_str)
 
     # Si no encuentra el default 'catalogo_nodos.json', comprobar si existe 'catalogo_nodes.json'
     if not input_path.exists() and input_path_str == "catalogo_nodos.json":
@@ -409,6 +425,14 @@ def run_pipeline(
             input_path = fallback_path
 
     nodes = load_input_nodes(input_path)
+
+    if not codigo_proveedor:
+        codigo_proveedor = extract_codigo_proveedor(nodes)
+
+    if not output_path_str:
+        output_path_str = generate_output_filename(codigo_proveedor, "embedding")
+
+    output_path = Path(output_path_str)
     client = get_openai_client(api_key=api_key)
 
     vectors_matrix = generate_all_embeddings(
@@ -434,7 +458,7 @@ def run_pipeline(
         dimensions=dimensions,
     )
 
-    logger.info("¡Fase 2 de Embeddings completada exitosamente!")
+    logger.info("¡Fase 2 de Embeddings completada exitosamente! Guardado en: %s", output_path)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -451,8 +475,13 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         "-o",
-        default="catalogo_embeddings.json",
-        help="Ruta donde se exportará el JSON con los embeddings (default: catalogo_embeddings.json).",
+        default=None,
+        help="Ruta donde se exportará el JSON con los embeddings (default: automático <COD>_embedding_<YYMMDDHHmmSS>.json).",
+    )
+    parser.add_argument(
+        "--codigo_proveedor", "--cod_prov",
+        default=None,
+        help="Código de 3 caracteres del proveedor (opcional, se infiere de los nodos de entrada).",
     )
     parser.add_argument(
         "--model",
@@ -494,6 +523,7 @@ def main() -> None:
             dimensions=args.dimensions,
             batch_size=args.batch_size,
             api_key=args.api_key,
+            codigo_proveedor=args.codigo_proveedor,
         )
     except Exception as err:
         logger.error("Error fatal en la ejecución del pipeline: %s", err, exc_info=True)
