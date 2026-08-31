@@ -111,7 +111,7 @@ def build_text_to_embed(product: Dict[str, Any]) -> str:
             seen_keys.add(key)
 
     # 1. Jerarquía Macro
-    add_line("proveedor", product.get("proveedor"))
+    add_line("proveedor", product.get("nombre_proveedor") or product.get("proveedor"))
     add_line("categoria_padre", product.get("categoria_padre"))
     add_line("categoria", product.get("categoria"))
     add_line("subcategoria", product.get("subcategoria"))
@@ -139,7 +139,7 @@ def build_text_to_embed(product: Dict[str, Any]) -> str:
 def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     """
     Construye el diccionario plano de metadatos para pre-filtrado en base de datos vectorial.
-    Solo contiene tipos primitivos (int, str, float).
+    Solo contiene tipos primitivos (int, str, float, bool).
     """
     metadata: Dict[str, Any] = {}
 
@@ -155,11 +155,12 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     base_fields = [
         ("codigo", product.get("codigo")),
         ("codigo_orig", product.get("codigo_orig")),
-        ("proveedor", product.get("proveedor")),
+        ("nombre_proveedor", product.get("nombre_proveedor") or product.get("proveedor")),
         ("codigo_proveedor", product.get("codigo_proveedor")),
         ("precio", product.get("precio")),
         ("moneda", product.get("moneda")),
         ("marca", product.get("marca")),
+        ("categoria_padre", product.get("categoria_padre")),
         ("categoria", product.get("categoria")),
         ("subcategoria", product.get("subcategoria")),
     ]
@@ -168,6 +169,13 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
         cleaned = clean_str(val)
         if cleaned is not None:
             metadata[key] = cleaned
+
+    # Atributo estructural es_tabla
+    es_tab = product.get("es_tabla")
+    if es_tab is None:
+        specs = product.get("especificaciones_tabla") or []
+        es_tab = len(specs) > 0
+    metadata["es_tabla"] = bool(es_tab)
 
     # Atributos técnicos clave planos (e.g., articulo, apertura, tipo, etc.)
     key_attributes = {"articulo", "apertura", "tipo", "fleje_ancho", "rosca", "medida", "diametro"}

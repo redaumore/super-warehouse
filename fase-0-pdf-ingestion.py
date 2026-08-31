@@ -179,7 +179,6 @@ class AttributeItem(BaseModel):
 class ExtractedProduct(BaseModel):
     codigo_orig: Optional[str] = Field(default=None, description="Código de artículo o identificador original presente en el catálogo del proveedor (None o vacío si no existe)")
     codigo: Optional[str] = Field(default=None, description="Código interno propio del negocio generado según reglas de codificación")
-    proveedor: Optional[str] = Field(default=None, description="Nombre descriptivo del proveedor asociado al producto")
     nombre_proveedor: Optional[str] = Field(default=None, description="Nombre descriptivo del proveedor asociado al producto")
     codigo_proveedor: Optional[str] = Field(default=None, description="Código de 3 caracteres del proveedor (ej: PRF)")
     precio: Optional[float] = Field(default=None, description="Precio unitario numérico del producto si figura en el catálogo")
@@ -192,6 +191,7 @@ class ExtractedProduct(BaseModel):
     descripcion_completa: str = Field(description="Descripción comercial fluida y completa para búsqueda semántica/RAG")
     atributos: List[AttributeItem] = Field(default_factory=list, description="Lista de atributos técnicos normalizados de esta variante/fila")
     especificaciones_tabla: List[AttributeItem] = Field(default_factory=list, description="Lista de especificaciones exactas columna-valor presentes en la fila de la tabla")
+    es_tabla: bool = Field(default=False, description="Indica si la variante/producto proviene de una grilla o tabla de especificaciones")
 
 
 class PageUsageMetrics(BaseModel):
@@ -238,7 +238,8 @@ class DirectLunaCatalogProcessor:
             "4. Identifica la marca real de los productos en la página (ej: Fischer, Stanley, Tacsa, etc.).\n"
             "5. Genera un nombre comercial claro y una descripción técnica enriquecida para cada variante.\n"
             "6. Extrae atributos clave normalizados (medida, color, material, presentación, unidades, etc.).\n"
-            "7. Conserva las especificaciones originales de la tabla en especificaciones_tabla."
+            "7. Conserva las especificaciones originales de la tabla en especificaciones_tabla.\n"
+            "8. Asigna 'es_tabla: true' si el producto proviene de una grilla/tabla de especificaciones, o 'es_tabla: false' si proviene de texto continuo."
         )
 
         user_content: List[Dict[str, Any]] = [
@@ -400,9 +401,9 @@ class DirectLunaCatalogProcessor:
         for page_res in all_pages_results:
             total_products += len(page_res.productos)
             for prod in page_res.productos:
-                prod.proveedor = nom_prov
                 prod.nombre_proveedor = nom_prov
                 prod.codigo_proveedor = codigo_proveedor
+                prod.es_tabla = bool(prod.es_tabla or (prod.especificaciones_tabla and len(prod.especificaciones_tabla) > 0))
                 if not prod.marca or not prod.marca.strip():
                     prod.marca = page_res.marca_encabezado
                 prod.codigo = generate_internal_code(
@@ -420,7 +421,6 @@ class DirectLunaCatalogProcessor:
             "metadata": {
                 "source_file": os.path.basename(pdf_path),
                 "model": self.model,
-                "proveedor": nom_prov,
                 "nombre_proveedor": nom_prov,
                 "codigo_proveedor": codigo_proveedor,
                 "marca_forzada": marca if marca else None,
