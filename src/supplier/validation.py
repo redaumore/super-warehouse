@@ -46,7 +46,7 @@ class CodeCollisionError(Exception):
 def validate_cuit(cuit: str) -> bool:
     """Validate an Argentine CUIT (11 digits) with the mod-11 check digit.
 
-    Accepts plain digits or dashed input (``30-12345678-5``); returns ``False``
+    Accepts plain digits or dashed input (``30-12345678-1``); returns ``False``
     for anything that is not a well-formed, verifier-passing CUIT.
     """
     cleaned = cuit.strip().replace("-", "")

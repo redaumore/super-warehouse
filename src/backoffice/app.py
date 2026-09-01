@@ -261,6 +261,7 @@ def _save_supplier(
     iva_condition: str,
     margin: float,
     terms: str,
+    status_filter: str = "ACTIVO",
 ) -> tuple[str, list[list[object]]]:
     with SessionLocal() as session:
         try:
@@ -299,8 +300,8 @@ def _save_supplier(
                 message = f"Supplier created (code {created.code})"
             session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
-            return f"Error: {exc}", _suppliers_grid("", "All")
-    return message, _suppliers_grid("", "All")
+            return f"Error: {exc}", _suppliers_grid("", status_filter)
+    return message, _suppliers_grid("", status_filter)
 
 
 def _supplier_toggle(supplier_id: object) -> str:
@@ -460,7 +461,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             with gr.Row():
                 supplier_search = gr.Textbox(label="Search (name, CUIT, code)", scale=3)
                 supplier_status_filter = gr.Dropdown(
-                    choices=_STATUS_CHOICES, value="All", label="Status", scale=1
+                    choices=_STATUS_CHOICES, value="ACTIVO", label="Status", scale=1
                 )
             suppliers_grid = gr.Dataframe(
                 headers=[
@@ -475,19 +476,21 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     "Status",
                 ],
                 datatype=["number", "str", "str", "str", "str", "str", "str", "str", "str"],
-                value=lambda: _suppliers_grid("", "All"),
+                value=lambda: _suppliers_grid("", "ACTIVO"),
                 label="Suppliers",
             )
             supplier_state = gr.State(value=0)
             with gr.Row():
                 supplier_name = gr.Textbox(label="Business name")
-                supplier_code = gr.Textbox(label="Code (3 chars — suggested from name)")
-                supplier_cuit = gr.Textbox(label="CUIT")
+                supplier_code = gr.Textbox(
+                    label="Code (3 chars — suggested from name)", placeholder="ABC"
+                )
+                supplier_cuit = gr.Textbox(label="CUIT", placeholder="30-12345678-1")
             with gr.Row():
                 supplier_contact = gr.Textbox(label="Contact name")
-                supplier_phone = gr.Textbox(label="Phone (E.164)")
-                supplier_whatsapp = gr.Textbox(label="WhatsApp")
-                supplier_email = gr.Textbox(label="Email")
+                supplier_phone = gr.Textbox(label="Phone (E.164)", placeholder="+54 11 4321-5678")
+                supplier_whatsapp = gr.Textbox(label="WhatsApp", placeholder="+54 9 11 4321-5678")
+                supplier_email = gr.Textbox(label="Email", placeholder="nombre@empresa.com.ar")
             with gr.Row():
                 supplier_address = gr.Textbox(label="Address", scale=2)
                 supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="IVA condition")
@@ -544,6 +547,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_iva,
                     supplier_margin,
                     supplier_terms,
+                    supplier_status_filter,
                 ],
                 outputs=[supplier_status, suppliers_grid],
             )
