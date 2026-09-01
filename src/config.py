@@ -10,6 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -85,6 +86,20 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def sqlalchemy_test_database_url(self) -> str:
+        """Effective SQLAlchemy URL for the disposable pytest database.
+
+        Derived from the main database URL by appending ``_test`` to the
+        database name, so explicit ``DATABASE_URL`` overrides keep working
+        (e.g. CI sets ``.../ferreteria`` and tests derive ``.../ferreteria_test``).
+        """
+        url = make_url(self.sqlalchemy_database_url)
+        # render_as_string(hide_password=False) is required: SQLAlchemy 2.0
+        # masks passwords as "***" in str(URL), which would break every
+        # connection derived from this URL.
+        return url.set(database=f"{url.database}_test").render_as_string(hide_password=False)
 
 
 @lru_cache
