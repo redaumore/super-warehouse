@@ -153,7 +153,10 @@ def generate_canonical_identifiers(
     """
     Genera identificadores deterministas canónicos para evitar colisiones multi-proveedor:
     1. document_id: '{proveedor_id}:{codigo_orig}' (o '{proveedor_id}:{hash_base62}' si no hay código original).
-    2. sku_compuesto: '{codigo_proveedor}-{slug_marca}-{codigo_orig}' (ej: 'FDN-CARBIZ-100001').
+    2. sku_compuesto: '{codigo_proveedor}-{slug_marca}-{codigo_orig}' con desduplicación inteligente:
+       - Si la marca coincide con el código o slug del proveedor (marca propia), se omite la repetición
+         (ej: 'SON-SM 211-67' en vez de 'SON-SONC-SM 211-67', 'AMX-AT-5044' en vez de 'AMX-AMX-AT-5044').
+       - Si es multi-marca/fabricante tercero, se preserva el fabricante (ej: 'FDN-CARBIZ-100001').
     """
     prov_id = slugify(proveedor_id or "proveedor", upper=False)
     prov_code = (codigo_proveedor or "PRF").strip().upper()[:3]
@@ -170,7 +173,20 @@ def generate_canonical_identifiers(
         is_fallback = True
 
     doc_id = f"{prov_id}:{item_code}"
-    sku_compuesto = f"{prov_code}-{brand_slug}-{item_code}"
+
+    # Desduplicación inteligente: si la marca es marca propia o redundante con el código/slug del proveedor
+    is_redundant_brand = (
+        brand_slug == prov_code
+        or brand_slug == prov_id.upper()
+        or brand_slug.startswith(prov_code)
+        or prov_code.startswith(brand_slug)
+        or brand_slug == "GENERICO"
+    )
+
+    if is_redundant_brand:
+        sku_compuesto = f"{prov_code}-{item_code}"
+    else:
+        sku_compuesto = f"{prov_code}-{brand_slug}-{item_code}"
 
     return {
         "document_id": doc_id,
