@@ -49,8 +49,18 @@ logging.basicConfig(
 logger = logging.getLogger("RAG_Fase_0_Luna_Direct")
 
 
-# Helper functions for code generation and brand normalization
+# Helper functions for code generation, brand normalization and multi-supplier namespacing
 BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+
+def slugify(text: str, upper: bool = False) -> str:
+    """Normaliza una cadena a slug alfanumérico sin acentos ni caracteres especiales."""
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^\w\s-]", "", text).strip()
+    text = re.sub(r"[-\s]+", "_", text)
+    return text.upper() if upper else text.lower()
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -132,35 +142,91 @@ def base62_encode_bytes(data: bytes, min_length: int = 10) -> str:
     return encoded
 
 
-def generate_internal_code(
+def generate_canonical_identifiers(
+    proveedor_id: str,
     codigo_proveedor: str,
     codigo_orig: Optional[str],
-    nombre_comercial: str,
+    nombre_producto: str,
     marca: Optional[str] = None
-) -> str:
+) -> Dict[str, Any]:
     """
-    Genera el código propio del negocio con las siguientes reglas:
-    1. Si existe código original: '{codigo_proveedor}-{codigo_orig}' (ej: 'PRF-1000001').
-    2. Si no existe código original: '{codigo_proveedor}-{hash_base62}'
-       donde hash_base62 es el hash SHA-256 del nombre de producto normalizado
-       (en minúsculas y sin espacios extra) codificando los primeros 7 bytes (56 bits) en Base62.
+    Genera identificadores deterministas canónicos para evitar colisiones multi-proveedor:
+    1. document_id: '{proveedor_id}:{codigo_orig}' (o '{proveedor_id}:{hash_base62}' si no hay código original).
+    2. sku_compuesto: '{codigo_proveedor}-{slug_marca}-{codigo_orig}' (ej: 'FDN-CARBIZ-100001').
     """
+    prov_id = slugify(proveedor_id or "proveedor", upper=False)
     prov_code = (codigo_proveedor or "PRF").strip().upper()[:3]
+    brand_slug = slugify(marca or "GENERICO", upper=True) or "GENERICO"
 
     cleaned_orig = codigo_orig.strip() if codigo_orig else ""
     if cleaned_orig and cleaned_orig.upper() not in ["N/D", "N/A", "NONE", "NULL", ""]:
-        return f"{prov_code}-{cleaned_orig}"
+        item_code = cleaned_orig
+        is_fallback = False
+    else:
+        norm_name = " ".join((nombre_producto or "").strip().lower().split()) or "producto"
+        digest_56bits = hashlib.sha256(norm_name.encode("utf-8")).digest()[:7]
+        item_code = base62_encode_bytes(digest_56bits, min_length=10)
+        is_fallback = True
 
-    # Normalizar nombre: minúsculas y sin espacios extra
-    norm_name = " ".join((nombre_comercial or "").strip().lower().split())
-    if not norm_name:
-        norm_name = "producto"
+    doc_id = f"{prov_id}:{item_code}"
+    sku_compuesto = f"{prov_code}-{brand_slug}-{item_code}"
 
-    # Hash SHA-256 y primeros 7 bytes (56 bits) en Base62
-    digest_56bits = hashlib.sha256(norm_name.encode("utf-8")).digest()[:7]
-    base62_str = base62_encode_bytes(digest_56bits, min_length=10)
+    return {
+        "document_id": doc_id,
+        "sku_compuesto": sku_compuesto,
+        "codigo_orig": cleaned_orig if not is_fallback else None,
+        "codigo_item": item_code
+    }
 
-    return f"{prov_code}-{base62_str}"
+
+def build_texto_vectorizacion(
+    proveedor_nombre: str,
+    marca: str,
+    categoria_padre: str,
+    categoria: str,
+    subcategoria: str,
+    nombre_producto: str,
+    sku_compuesto: str,
+    codigo_proveedor_item: str,
+    descripcion_tecnica: str,
+    unidad_venta: Optional[str],
+    empaque: Optional[str],
+    atributos: List["AttributeItem"],
+    especificaciones_tabla: List["AttributeItem"]
+) -> str:
+    """
+    Construye la síntesis textual con cabecera de contexto semántico explícito para el embedding:
+    [Proveedor: {proveedor_nombre} | Marca: {marca} | Categoría: {categoria_padre} > {categoria} > {subcategoria}]
+    Producto: {nombre_producto}
+    SKU Compuesto: {sku_compuesto} | Código Catálogo: {codigo_proveedor_item}
+    Descripción: {descripcion_tecnica}
+    Especificaciones: {resumen_especificaciones}
+    """
+    categories = [c for c in [categoria_padre, categoria, subcategoria] if c and c.strip()]
+    cat_hier = " > ".join(categories) if categories else (categoria or "GENERAL")
+    header = f"[Proveedor: {proveedor_nombre} | Marca: {marca} | Categoría: {cat_hier}]"
+    line_prod = f"Producto: {nombre_producto}"
+    line_sku = f"SKU Compuesto: {sku_compuesto} | Código Catálogo: {codigo_proveedor_item or 'N/A'}"
+    line_desc = f"Descripción: {descripcion_tecnica}"
+
+    specs_dict: Dict[str, str] = {}
+    if unidad_venta and str(unidad_venta).strip() and str(unidad_venta).strip().upper() not in ["N/A", "NONE", "NULL"]:
+        specs_dict["U/Vta"] = str(unidad_venta).strip()
+    if empaque and str(empaque).strip() and str(empaque).strip().upper() not in ["N/A", "NONE", "NULL"]:
+        specs_dict["Empaque"] = str(empaque).strip()
+
+    for item in (especificaciones_tabla or []) + (atributos or []):
+        k = (item.nombre or "").strip()
+        v = (item.valor or "").strip()
+        if k and v and k not in specs_dict:
+            specs_dict[k] = v
+
+    lines = [header, line_prod, line_sku, line_desc]
+    if specs_dict:
+        specs_str = " | ".join(f"{k}: {v}" for k, v in specs_dict.items())
+        lines.append(f"Especificaciones: {specs_str}")
+
+    return "\n".join(lines)
 
 
 def generate_output_filename(codigo_proveedor: str, phase: str = "ingestion") -> str:
@@ -177,18 +243,26 @@ class AttributeItem(BaseModel):
 
 
 class ExtractedProduct(BaseModel):
-    codigo_orig: Optional[str] = Field(default=None, description="Código de artículo o identificador original presente en el catálogo del proveedor (None o vacío si no existe)")
-    codigo: Optional[str] = Field(default=None, description="Código interno propio del negocio generado según reglas de codificación")
+    document_id: Optional[str] = Field(default=None, description="Identificador canónico único determinista '{PROVEEDOR_ID}:{codigo_orig}'")
+    sku_compuesto: Optional[str] = Field(default=None, description="SKU estandarizado en mayúsculas '{SLUG_PROVEEDOR_CORTO}-{SLUG_MARCA}-{codigo_orig}'")
+    codigo_orig: Optional[str] = Field(default=None, description="Código de artículo o identificador original presente en el catálogo del proveedor (null si no existe)")
+    codigo: Optional[str] = Field(default=None, description="Código interno propio del negocio (retrocompatibilidad)")
+    proveedor_id: Optional[str] = Field(default=None, description="Slug identificador del proveedor (ej: 'ferretera_del_norte')")
     nombre_proveedor: Optional[str] = Field(default=None, description="Nombre descriptivo del proveedor asociado al producto")
-    codigo_proveedor: Optional[str] = Field(default=None, description="Código de 3 caracteres del proveedor (ej: PRF)")
+    codigo_proveedor: Optional[str] = Field(default=None, description="Código de 3 caracteres del proveedor (ej: PRF / FDN)")
     precio: Optional[float] = Field(default=None, description="Precio unitario numérico del producto si figura en el catálogo")
     moneda: Optional[str] = Field(default=None, description="Moneda del precio ('ARS' para pesos argentinos, 'USD' para dólares estadounidenses o None si no hay precio)")
-    nombre_comercial: str = Field(description="Título claro y estandarizado para catálogo / e-commerce, incluyendo el sustantivo rector y detalles clave")
+    nombre_producto: str = Field(description="Título claro y estandarizado para catálogo / e-commerce, incluyendo el sustantivo rector y detalles clave")
+    nombre_comercial: Optional[str] = Field(default=None, description="Alias retrocompatible de nombre_producto")
     categoria_padre: str = Field(description="Categoría principal de ferretería (ej: Fijaciones y Sujeciones, Herramientas, Cintas, Seguridad Industrial)")
     categoria: str = Field(description="Categoría específica (ej: Abrazaderas, Cintas Adhesivas, Calzado de Seguridad)")
     subcategoria: str = Field(description="Subcategoría o tipo de material/diseño (ej: Abrazaderas de Acero, Cintas Aisladoras PVC)")
     marca: str = Field(description="Marca normalizada del producto detectada en la página o encabezado")
-    descripcion_completa: str = Field(description="Descripción comercial fluida y completa para búsqueda semántica/RAG")
+    descripcion_tecnica: str = Field(description="Descripción comercial fluida y completa para búsqueda semántica/RAG")
+    descripcion_completa: Optional[str] = Field(default=None, description="Alias retrocompatible de descripcion_tecnica")
+    unidad_venta: Optional[str] = Field(default=None, description="Unidad de venta (ej: 'c/u', 'metro', 'kilo')")
+    empaque: Optional[str] = Field(default=None, description="Presentación o empaque (ej: 'Paq x 10', 'Caja x 100')")
+    texto_vectorizacion: Optional[str] = Field(default=None, description="Texto contextualizado con cabecera semántica explícita para vectorización en RAG")
     atributos: List[AttributeItem] = Field(default_factory=list, description="Lista de atributos técnicos normalizados de esta variante/fila")
     especificaciones_tabla: List[AttributeItem] = Field(default_factory=list, description="Lista de especificaciones exactas columna-valor presentes en la fila de la tabla")
     es_tabla: bool = Field(default=False, description="Indica si la variante/producto proviene de una grilla o tabla de especificaciones")
@@ -224,22 +298,48 @@ class DirectLunaCatalogProcessor:
         img_bytes = pix.tobytes("png")
         return base64.b64encode(img_bytes).decode("utf-8")
 
-    def process_page(self, page_num: int, page_text: str, image_b64: Optional[str] = None) -> PageExtractionResult:
-        """Envía el contenido de la página directamente al modelo GPT-5.6 Luna."""
+    def process_page(
+        self,
+        page_num: int,
+        page_text: str,
+        image_b64: Optional[str] = None,
+        proveedor_id: str = "ferretera_del_norte",
+        proveedor_nombre: str = "Ferretera del Norte S.R.L.",
+        codigo_proveedor: str = "FDN"
+    ) -> PageExtractionResult:
+        """Envía el contenido de la página directamente al modelo GPT-5.6 Luna con Structured Outputs."""
         system_prompt = (
-            "Sos un extractor y estructurador experto de catálogos industriales y ferreteros para sistemas RAG y e-commerce.\n"
-            "Tu tarea es analizar la página del catálogo provista (texto y/o imagen de la página), identificar las tablas de productos, "
-            "los encabezados, marcas (distinguiendo la marca real del fabricante del logo de la distribuidora del catálogo) "
-            "y extraer cada variante/fila de producto de forma completa y estructurada.\n\n"
-            "REGLAS CRÍTICAS:\n"
-            "1. NO omitas variantes ni filas de las tablas.\n"
-            "2. Extrae en 'codigo_orig' el código o número de artículo original del proveedor si figura en la tabla o página (o null si no existe).\n"
-            "3. Extrae 'precio' (número float) y 'moneda' ('ARS' para pesos argentinos $, 'USD' para dólares U$S/USD) si figuran en el catálogo.\n"
-            "4. Identifica la marca real de los productos en la página (ej: Fischer, Stanley, Tacsa, etc.).\n"
-            "5. Genera un nombre comercial claro y una descripción técnica enriquecida para cada variante.\n"
-            "6. Extrae atributos clave normalizados (medida, color, material, presentación, unidades, etc.).\n"
-            "7. Conserva las especificaciones originales de la tabla en especificaciones_tabla.\n"
-            "8. Asigna 'es_tabla: true' si el producto proviene de una grilla/tabla de especificaciones, o 'es_tabla: false' si proviene de texto continuo."
+            "Eres un motor especialista en Document AI y extracción estructurada de catálogos técnicos e industriales para sistemas RAG multi-proveedor.\n\n"
+            "Tu objetivo es procesar la página/tabla provista y transformar cada producto o fila técnica en un registro estructurado JSON libre de ambigüedades.\n\n"
+            "=== PARÁMETROS DE SESIÓN (Inyectados por el pipeline) ===\n"
+            f"- PROVEEDOR_ID: \"{proveedor_id}\" (ej: \"ferretera_del_norte\", \"distribuidora_sur\")\n"
+            f"- PROVEEDOR_NOMBRE: \"{proveedor_nombre}\" (ej: \"Ferretera del Norte S.R.L.\")\n"
+            f"- SLUG_PROVEEDOR_CORTO: \"{codigo_proveedor}\" (ej: \"FDN\")\n\n"
+            "=== REGLAS OBLIGATORIAS DE PROCESAMIENTO ===\n\n"
+            "1. IDENTIFICACIÓN Y DESAMBIGUACIÓN DE CÓDIGOS (CRÍTICO):\n"
+            "   - Múltiples proveedores pueden usar el mismo código numérico de producto. Para evitar colisiones en la base de datos vectorial y en el índice léxico:\n"
+            "     a) 'codigo_orig': Extrae el código literal original del catálogo (ej: '100001'). Si no existe código explícito, usa null.\n"
+            f"     b) 'document_id': Genera un identificador canónico único con el formato exacto: '{proveedor_id}:<codigo_orig>' (o '{proveedor_id}:N/A' si no hay código).\n"
+            f"     c) 'sku_compuesto': Genera un SKU estandarizado en mayúsculas sin espacios ni caracteres especiales: '{codigo_proveedor}-<SLUG_MARCA>-<codigo_orig>' (ej: '{codigo_proveedor}-CARBIZ-100001').\n\n"
+            "2. HERENCIA DE CONTEXTO Y METADATOS:\n"
+            "   - Identifica la MARCA visualmente en los logotipos de cabecera o en los títulos de sección. Si no hay marca comercial explícita, cataloga como la marca del proveedor o 'GENÉRICO'.\n"
+            "   - Asocia siempre a cada producto su CATEGORÍA_PADRE, CATEGORÍA y SUBCATEGORÍA precedente, evitando tablas huérfanas.\n\n"
+            "3. SÍNTESIS DEL TEXTO PARA VECTORIZACIÓN (texto_vectorizacion):\n"
+            "   - Los modelos de embeddings calculan distancias sobre el texto, no sobre los metadatos.\n"
+            "   - Para cada producto, debes generar un campo 'texto_vectorizacion' con una cabecera semántica explícita.\n"
+            "   - Formato requerido para 'texto_vectorizacion':\n"
+            f"     [Proveedor: {proveedor_nombre} | Marca: <marca> | Categoría: <categoria_padre> > <categoria> > <subcategoria>]\n"
+            "     Producto: <nombre_producto>\n"
+            "     SKU Compuesto: <sku_compuesto> | Código Catálogo: <codigo_orig>\n"
+            "     Descripción: <descripcion_tecnica>\n"
+            "     Especificaciones: <resumen_de_medidas_y_unidades>\n\n"
+            "4. INTEGRIDAD FACTUAL Y PRECIOS:\n"
+            "   - NO omitas variantes ni filas de las tablas.\n"
+            "   - Prohibido inferir, redondear o inventar códigos de producto, aperturas milimétricas, roscas o talles.\n"
+            "   - Extrae 'precio' (número float) y 'moneda' ('ARS' o 'USD') si figuran en el catálogo.\n"
+            "   - Extrae 'unidad_venta' (ej: 'c/u') y 'empaque' (ej: 'Paq x 10') si figuran.\n"
+            "   - Extrae atributos técnicos normalizados en 'atributos' y especificaciones de la tabla en 'especificaciones_tabla'.\n"
+            "   - Asigna 'es_tabla: true' si proviene de grilla/tabla de especificaciones, o 'false' si es texto continuo."
         )
 
         user_content: List[Dict[str, Any]] = [
@@ -320,6 +420,7 @@ class DirectLunaCatalogProcessor:
         max_pages: Optional[int] = None,
         use_vision: bool = True,
         skip_pages: Optional[str] = None,
+        proveedor_id: Optional[str] = None,
         proveedor: str = "Ferretera del Norte",
         nombre_proveedor: Optional[str] = None,
         codigo_proveedor: str = "FDN",
@@ -331,9 +432,11 @@ class DirectLunaCatalogProcessor:
             sys.exit(1)
 
         nom_prov = (nombre_proveedor or proveedor or "Ferretera del Norte").strip()
+        prov_id = slugify(proveedor_id or nom_prov, upper=False)
+        cod_prov = (codigo_proveedor or "FDN").strip().upper()[:3]
 
         if not output_json:
-            output_json = generate_output_filename(codigo_proveedor, "ingestion")
+            output_json = generate_output_filename(cod_prov, "ingestion")
 
         run_date_iso = datetime.now().astimezone().isoformat()
         doc = fitz.open(pdf_path)
@@ -343,7 +446,7 @@ class DirectLunaCatalogProcessor:
 
         logger.info(
             f"Iniciando procesamiento directo de '{pdf_path}' (Páginas {start_page} a {end_page} de {total_pdf_pages}) | "
-            f"Proveedor: {nom_prov} [{codigo_proveedor}]"
+            f"Proveedor: {nom_prov} (ID: {prov_id}, Código: {cod_prov})"
             + (f" | Marca forzada: '{marca}'" if marca else "")
         )
         if pages_to_skip:
@@ -366,7 +469,14 @@ class DirectLunaCatalogProcessor:
             image_b64 = self.render_page_to_base64(page) if use_vision else None
 
             try:
-                page_result = self.process_page(pno, page_text, image_b64)
+                page_result = self.process_page(
+                    page_num=pno,
+                    page_text=page_text,
+                    image_b64=image_b64,
+                    proveedor_id=prov_id,
+                    proveedor_nombre=nom_prov,
+                    codigo_proveedor=cod_prov
+                )
                 all_pages_results.append(page_result)
 
                 if page_result.metrics:
@@ -396,21 +506,55 @@ class DirectLunaCatalogProcessor:
                         if prod.marca in brand_corrections:
                             prod.marca = brand_corrections[prod.marca]
 
-        # Asignar metadatos y resolver códigos de negocio internos
+        # Asignar metadatos, resolver IDs canónicos deterministas y generar texto de vectorización
         total_products = 0
         for page_res in all_pages_results:
             total_products += len(page_res.productos)
             for prod in page_res.productos:
-                prod.nombre_proveedor = nom_prov
-                prod.codigo_proveedor = codigo_proveedor
-                prod.es_tabla = bool(prod.es_tabla or (prod.especificaciones_tabla and len(prod.especificaciones_tabla) > 0))
                 if not prod.marca or not prod.marca.strip():
-                    prod.marca = page_res.marca_encabezado
-                prod.codigo = generate_internal_code(
-                    codigo_proveedor=codigo_proveedor,
+                    prod.marca = page_res.marca_encabezado or "GENÉRICO"
+
+                # Resolver nombres canónicos y alias
+                prod_nombre = (prod.nombre_producto or prod.nombre_comercial or "Producto").strip()
+                prod_desc = (prod.descripcion_tecnica or prod.descripcion_completa or "").strip()
+                prod.nombre_producto = prod_nombre
+                prod.nombre_comercial = prod_nombre
+                prod.descripcion_tecnica = prod_desc
+                prod.descripcion_completa = prod_desc
+
+                prod.proveedor_id = prov_id
+                prod.nombre_proveedor = nom_prov
+                prod.codigo_proveedor = cod_prov
+                prod.es_tabla = bool(prod.es_tabla or (prod.especificaciones_tabla and len(prod.especificaciones_tabla) > 0))
+
+                # Identificadores canónicos deterministas con safety net en Python
+                canonical_ids = generate_canonical_identifiers(
+                    proveedor_id=prov_id,
+                    codigo_proveedor=cod_prov,
                     codigo_orig=prod.codigo_orig,
-                    nombre_comercial=prod.nombre_comercial,
+                    nombre_producto=prod.nombre_producto,
                     marca=prod.marca
+                )
+                prod.document_id = canonical_ids["document_id"]
+                prod.sku_compuesto = canonical_ids["sku_compuesto"]
+                prod.codigo_orig = canonical_ids["codigo_orig"]
+                prod.codigo = canonical_ids["sku_compuesto"]
+
+                # Inyección / validación de texto de vectorización con cabecera semántica
+                prod.texto_vectorizacion = build_texto_vectorizacion(
+                    proveedor_nombre=nom_prov,
+                    marca=prod.marca,
+                    categoria_padre=prod.categoria_padre,
+                    categoria=prod.categoria,
+                    subcategoria=prod.subcategoria,
+                    nombre_producto=prod.nombre_producto,
+                    sku_compuesto=prod.sku_compuesto,
+                    codigo_proveedor_item=canonical_ids["codigo_item"],
+                    descripcion_tecnica=prod.descripcion_tecnica,
+                    unidad_venta=prod.unidad_venta,
+                    empaque=prod.empaque,
+                    atributos=prod.atributos,
+                    especificaciones_tabla=prod.especificaciones_tabla
                 )
 
         total_elapsed = time.time() - start_benchmark
@@ -421,8 +565,9 @@ class DirectLunaCatalogProcessor:
             "metadata": {
                 "source_file": os.path.basename(pdf_path),
                 "model": self.model,
+                "proveedor_id": prov_id,
                 "nombre_proveedor": nom_prov,
-                "codigo_proveedor": codigo_proveedor,
+                "codigo_proveedor": cod_prov,
                 "marca_forzada": marca if marca else None,
                 "run_date": run_date_iso,
                 "execution_summary": {
@@ -469,7 +614,7 @@ class DirectLunaCatalogProcessor:
 
         logger.info("=" * 60)
         logger.info("PROCESAMIENTO DIRECTO FINALIZADO")
-        logger.info(f"Fecha de Ejecución: {run_date_iso} | Proveedor: {nom_prov} [{codigo_proveedor}]")
+        logger.info(f"Fecha de Ejecución: {run_date_iso} | Proveedor: {nom_prov} (ID: {prov_id}, Código: {cod_prov})")
         logger.info(f"Tiempo Total: {total_elapsed:.2f}s | Páginas procesadas: {pages_count} | Productos: {total_products}")
         logger.info(f"Consumo Total de Tokens: {total_tokens:,} (Prompt: {total_prompt_tokens:,} | Completion: {total_completion_tokens:,})")
         logger.info(f"Resultado guardado en: {output_json}")
@@ -483,12 +628,13 @@ if __name__ == "__main__":
 Procesamiento directo de Catálogos PDF con OpenAI GPT-5.6 Luna (Multimodal)
 ================================================================================
 Extrae y estructura tablas complejas, normaliza especificaciones técnicas,
-identifica marcas de fabricante y genera fichas de producto en un único paso.
+identifica marcas de fabricante y genera identificadores canónicos multi-proveedor
+sin colisiones para sistemas RAG.
         """,
         epilog="""
 EJEMPLOS DE USO:
-  1. Extraer con nombre y código de proveedor explícitos:
-     python fase-0-pdf-ingestion.py --pdf "data/FN Catalogo.pdf" --nombre_proveedor "PZ Force S.A." --codigo_proveedor "PZF" --marca "PZ Force" --start_page 1 --max_pages 5
+  1. Extraer con slug, nombre y código de proveedor explícitos:
+     python fase-0-pdf-ingestion.py --pdf "data/FN Catalogo.pdf" --proveedor_id "ferretera_del_norte" --nombre_proveedor "Ferretera del Norte S.R.L." --codigo_proveedor "FDN" --marca "CARBIZ" --start_page 1 --max_pages 5
 
   2. Extraer páginas 1 a 15 omitiendo portada e índice (páginas 1, 2 y 3):
      python fase-0-pdf-ingestion.py --pdf "data/FN Catalogo.pdf" --codigo_proveedor "FDN" --start_page 1 --max_pages 15 --skip_pages "1-3"
@@ -504,9 +650,10 @@ EJEMPLOS DE USO:
     parser.add_argument("--pdf", type=str, default="data/FN Catalogo.pdf", help="Ruta al archivo PDF del catálogo")
     parser.add_argument("--out_json", type=str, default=None, help="Ruta del archivo JSON de salida (por defecto: automático <COD>_ingestion_<YYMMDDHHmmSS>.json)")
     parser.add_argument("--model", type=str, default="gpt-5.6-luna", help="Modelo de OpenAI a utilizar (por defecto: gpt-5.6-luna)")
+    parser.add_argument("--proveedor_id", "--id_proveedor", "--proveedor-id", dest="proveedor_id", type=str, default=None, help="Slug canónico del proveedor (ej: 'ferretera_del_norte'). Si no se especifica, se deriva de nombre_proveedor.")
     parser.add_argument("--nombre_proveedor", "--nombre-proveedor", "--proveedor", dest="nombre_proveedor", type=str, default="Ferretera del Norte", help="Nombre descriptivo del proveedor (por defecto: Ferretera del Norte)")
-    parser.add_argument("--codigo_proveedor", "--cod_prov", "--codigo-proveedor", dest="codigo_proveedor", type=str, default="FDN", help="Código de 3 caracteres del proveedor (por defecto: FDN)")
-    parser.add_argument("--marca", type=str, default=None, help="Nombre de marca forzado para todo el catálogo (ej: 'PZ Force')")
+    parser.add_argument("--codigo_proveedor", "--cod_prov", "--codigo-proveedor", dest="codigo_proveedor", type=str, default="FDN", help="Código corto de 3 caracteres del proveedor para SKU (por defecto: FDN)")
+    parser.add_argument("--marca", type=str, default=None, help="Nombre de marca forzado para todo el catálogo (ej: 'CARBIZ')")
     parser.add_argument("--start_page", type=int, default=1, help="Número de página de inicio 1-indexed (por defecto: 1)")
     parser.add_argument("--max_pages", type=int, default=None, help="Cantidad máxima de páginas consecutivas a procesar (por defecto: procesa todo el catálogo hasta el final)")
     parser.add_argument("--skip_pages", type=str, default=None, help="Páginas o rangos a omitir separados por comas (ej: '1,2,3' o '1-3,5,8-10')")
@@ -527,6 +674,7 @@ EJEMPLOS DE USO:
         max_pages=args.max_pages,
         use_vision=not args.no_vision,
         skip_pages=args.skip_pages,
+        proveedor_id=args.proveedor_id,
         proveedor=args.nombre_proveedor,
         nombre_proveedor=args.nombre_proveedor,
         codigo_proveedor=cod_prov,
