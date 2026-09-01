@@ -6,6 +6,7 @@ Este pipeline procesa catálogos en un solo paso multimodal (End-to-End):
 - Utiliza GPT-5.6 Luna con Structured Outputs (esquema estricto Pydantic) para:
   * Identificar marcas reales del producto y descartar logotipos de la distribuidora.
   * Extraer cada fila de las tablas como una variante individual con su código de artículo.
+  * Filtrar y omitir productos sin precio o explícitamente marcados como agotados/sin stock.
   * Normalizar categorías y atributos clave (medida, apertura, material, cantidad por paquete, etc.).
   * Generar descripciones comerciales completas optimizadas para búsqueda semántica/RAG y e-commerce.
 
@@ -32,7 +33,7 @@ import unicodedata
 import re
 from collections import Counter
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import pymupdf as fitz
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -236,6 +237,51 @@ def generate_output_filename(codigo_proveedor: str, phase: str = "ingestion") ->
     return f"{prov_code}_{phase}_{timestamp}.json"
 
 
+def is_product_available_and_priced(prod: "ExtractedProduct") -> bool:
+    """
+    Verifica si el producto cuenta con un precio numérico válido mayor a cero
+    y no contiene indicadores explícitos de estar agotado o sin stock.
+    """
+    if prod.precio is None or prod.precio <= 0:
+        return False
+
+    out_of_stock_keywords = (
+        "agotado",
+        "sin stock",
+        "s/stock",
+        "s/ stock",
+        "sin existencias",
+        "no disponible",
+        "fuera de stock",
+        "discontinuado",
+        "consultar stock",
+        "falta de stock",
+        "sin precio",
+        "s/precio",
+        "s/p"
+    )
+
+    text_elements = [
+        prod.nombre_producto or "",
+        prod.nombre_comercial or "",
+        prod.descripcion_tecnica or "",
+        prod.descripcion_completa or "",
+        prod.unidad_venta or "",
+        prod.empaque or ""
+    ]
+
+    for attr in (prod.atributos or []) + (prod.especificaciones_tabla or []):
+        text_elements.append(attr.nombre or "")
+        text_elements.append(attr.valor or "")
+
+    combined_text = " ".join(text_elements).lower()
+    for kw in out_of_stock_keywords:
+        if kw in combined_text:
+            return False
+
+    return True
+
+
 # Pydantic Schemas for Structured Output
 class AttributeItem(BaseModel):
     nombre: str = Field(description="Nombre del atributo en snake_case (ej: apertura, color, medida, unidad_venta, paquete_cantidad)")
@@ -250,8 +296,8 @@ class ExtractedProduct(BaseModel):
     proveedor_id: Optional[str] = Field(default=None, description="Slug identificador del proveedor (ej: 'ferretera_del_norte')")
     nombre_proveedor: Optional[str] = Field(default=None, description="Nombre descriptivo del proveedor asociado al producto")
     codigo_proveedor: Optional[str] = Field(default=None, description="Código de 3 caracteres del proveedor (ej: PRF / FDN)")
-    precio: Optional[float] = Field(default=None, description="Precio unitario numérico del producto si figura en el catálogo")
-    moneda: Optional[str] = Field(default=None, description="Moneda del precio ('ARS' para pesos argentinos, 'USD' para dólares estadounidenses o None si no hay precio)")
+    precio: Optional[float] = Field(default=None, description="Precio unitario numérico del producto (obligatorio para ingesta; omitir productos sin precio)")
+    moneda: Optional[str] = Field(default=None, description="Moneda del precio ('ARS' para pesos argentinos, 'USD' para dólares estadounidenses)")
     nombre_producto: str = Field(description="Título claro y estandarizado para catálogo / e-commerce, incluyendo el sustantivo rector y detalles clave")
     nombre_comercial: Optional[str] = Field(default=None, description="Alias retrocompatible de nombre_producto")
     categoria_padre: str = Field(description="Categoría principal de ferretería (ej: Fijaciones y Sujeciones, Herramientas, Cintas, Seguridad Industrial)")
@@ -310,7 +356,7 @@ class DirectLunaCatalogProcessor:
         """Envía el contenido de la página directamente al modelo GPT-5.6 Luna con Structured Outputs."""
         system_prompt = (
             "Eres un motor especialista en Document AI y extracción estructurada de catálogos técnicos e industriales para sistemas RAG multi-proveedor.\n\n"
-            "Tu objetivo es procesar la página/tabla provista y transformar cada producto o fila técnica en un registro estructurado JSON libre de ambigüedades.\n\n"
+            "Tu objetivo es procesar la página/tabla provista y transformar cada producto o fila técnica disponible en un registro estructurado JSON libre de ambigüedades.\n\n"
             "=== PARÁMETROS DE SESIÓN (Inyectados por el pipeline) ===\n"
             f"- PROVEEDOR_ID: \"{proveedor_id}\" (ej: \"ferretera_del_norte\", \"distribuidora_sur\")\n"
             f"- PROVEEDOR_NOMBRE: \"{proveedor_nombre}\" (ej: \"Ferretera del Norte S.R.L.\")\n"
@@ -333,13 +379,15 @@ class DirectLunaCatalogProcessor:
             "     SKU Compuesto: <sku_compuesto> | Código Catálogo: <codigo_orig>\n"
             "     Descripción: <descripcion_tecnica>\n"
             "     Especificaciones: <resumen_de_medidas_y_unidades>\n\n"
-            "4. INTEGRIDAD FACTUAL Y PRECIOS:\n"
-            "   - NO omitas variantes ni filas de las tablas.\n"
+            "4. INTEGRIDAD FACTUAL Y ESPECIFICACIONES:\n"
             "   - Prohibido inferir, redondear o inventar códigos de producto, aperturas milimétricas, roscas o talles.\n"
-            "   - Extrae 'precio' (número float) y 'moneda' ('ARS' o 'USD') si figuran en el catálogo.\n"
+            "   - Extrae 'precio' (número float mayor a 0) y 'moneda' ('ARS' o 'USD').\n"
             "   - Extrae 'unidad_venta' (ej: 'c/u') y 'empaque' (ej: 'Paq x 10') si figuran.\n"
             "   - Extrae atributos técnicos normalizados en 'atributos' y especificaciones de la tabla en 'especificaciones_tabla'.\n"
-            "   - Asigna 'es_tabla: true' si proviene de grilla/tabla de especificaciones, o 'false' si es texto continuo."
+            "   - Asigna 'es_tabla: true' si proviene de grilla/tabla de especificaciones, o 'false' si es texto continuo.\n\n"
+            "5. FILTRADO ESTRICTO DE DISPONIBILIDAD Y PRECIO (CRÍTICO):\n"
+            "   - ÚNICAMENTE debes extraer e ingestar productos y variantes que estén DISPONIBLES y cuenten con PRECIO numérico explícito.\n"
+            "   - Si un producto o fila de tabla NO tiene precio (campo vacío, nulo, guionado '-', 's/p', 'consultar', etc.), o indica explícitamente que está agotado, sin stock, faltante, s/stock, no disponible, discontinuado o fuera de stock, DEBES OMITIRLO COMPLETAMENTE y NO incluirlo en la lista 'productos'."
         )
 
         user_content: List[Dict[str, Any]] = [
@@ -425,7 +473,7 @@ class DirectLunaCatalogProcessor:
         nombre_proveedor: Optional[str] = None,
         codigo_proveedor: str = "FDN",
         marca: Optional[str] = None
-    ):
+    ) -> Tuple[Dict[str, Any], str]:
         """Procesa el PDF página por página directamente con GPT-5.6 Luna."""
         if not os.path.exists(pdf_path):
             logger.error(f"El archivo PDF no existe: {pdf_path}")
@@ -487,6 +535,17 @@ class DirectLunaCatalogProcessor:
                 logger.info(f"-> Página {pno}: Extraídos {len(page_result.productos)} productos. Marca detectada: '{page_result.marca_encabezado}'")
             except Exception as e:
                 logger.error(f"Error procesando página {pno}: {e}")
+
+        # Filtrado de disponibilidad y stock (safety net determinista en Python)
+        for page_res in all_pages_results:
+            initial_count = len(page_res.productos)
+            page_res.productos = [p for p in page_res.productos if is_product_available_and_priced(p)]
+            discarded = initial_count - len(page_res.productos)
+            if discarded > 0:
+                logger.info(
+                    f"-> Página {page_res.pagina}: Se filtraron {discarded} producto(s) por falta de precio "
+                    f"o estar agotados/sin stock ({len(page_res.productos)} disponibles retenidos)."
+                )
 
         # Post-procesamiento y reconciliación de marcas
         if marca and marca.strip():
@@ -619,6 +678,7 @@ class DirectLunaCatalogProcessor:
         logger.info(f"Consumo Total de Tokens: {total_tokens:,} (Prompt: {total_prompt_tokens:,} | Completion: {total_completion_tokens:,})")
         logger.info(f"Resultado guardado en: {output_json}")
         logger.info("=" * 60)
+        return output_payload, output_json
 
 
 if __name__ == "__main__":

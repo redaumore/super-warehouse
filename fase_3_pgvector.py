@@ -456,7 +456,13 @@ class PgVectorManager:
     # -------------------------------------------------------------------------
     # 6. Suite de QA & Verificación Operativa
     # -------------------------------------------------------------------------
-    def run_qa_suite(self, expected_count: int, sample_vector: List[float], sample_marca: Optional[str] = None) -> None:
+    def run_qa_suite(
+        self,
+        expected_count: int,
+        sample_vector: List[float],
+        sample_marca: Optional[str] = None,
+        codigo_proveedor: Optional[str] = None
+    ) -> None:
         """Ejecuta la batería completa de validación de infraestructura."""
         logger.info("==================================================")
         logger.info("INICIANDO SUITE DE CONTROL DE CALIDAD (QA FASE 3)")
@@ -465,12 +471,23 @@ class PgVectorManager:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 # 1. Paridad de Registros
-                cur.execute(sql.SQL("SELECT COUNT(*) FROM {};").format(sql.Identifier(self.table_name)))
-                row_count = cur.fetchone()
-                actual_count = row_count[0] if row_count else 0
-                if actual_count != expected_count:
-                    raise AssertionError(f"Fallo de paridad: esperados {expected_count} filas, encontradas {actual_count}.")
-                logger.info(f"✓ [1/4] Paridad de registros: {actual_count} filas == {expected_count} esperadas.")
+                if codigo_proveedor:
+                    cur.execute(
+                        sql.SQL("SELECT COUNT(*) FROM {} WHERE codigo_proveedor = %s;").format(sql.Identifier(self.table_name)),
+                        (codigo_proveedor,)
+                    )
+                    row_count = cur.fetchone()
+                    actual_count = row_count[0] if row_count else 0
+                    if actual_count != expected_count:
+                        raise AssertionError(f"Fallo de paridad para proveedor '{codigo_proveedor}': esperados {expected_count} filas, encontradas {actual_count}.")
+                    logger.info(f"✓ [1/4] Paridad de registros para proveedor '{codigo_proveedor}': {actual_count} filas == {expected_count} esperadas.")
+                else:
+                    cur.execute(sql.SQL("SELECT COUNT(*) FROM {};").format(sql.Identifier(self.table_name)))
+                    row_count = cur.fetchone()
+                    actual_count = row_count[0] if row_count else 0
+                    if actual_count < expected_count:
+                        raise AssertionError(f"Fallo de paridad: esperadas al menos {expected_count} filas, encontradas {actual_count}.")
+                    logger.info(f"✓ [1/4] Paridad de registros: {actual_count} filas totales en tabla (batch actual: {expected_count}).")
 
                 # 2. Verificación de No Nulos en Campos Críticos
                 cur.execute(sql.SQL("""

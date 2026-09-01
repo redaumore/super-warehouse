@@ -13,7 +13,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import tiktoken
@@ -221,7 +221,7 @@ def run_pipeline(
     output_path: Optional[str] = None,
     encoding_name: str = "cl100k_base",
     codigo_proveedor: Optional[str] = None
-) -> None:
+) -> Tuple[List[Dict[str, Any]], str]:
     """
     Ejecuta el pipeline completo de ingesta, transformación y persistencia.
     """
@@ -288,6 +288,7 @@ def run_pipeline(
         json.dump(nodes, f, indent=2, ensure_ascii=False)
 
     logger.info("Archivo generado correctamente en %s", out_file)
+    return nodes, str(out_file)
 
 
 def main():

@@ -406,7 +406,7 @@ def run_pipeline(
     batch_size: int,
     api_key: Optional[str] = None,
     codigo_proveedor: Optional[str] = None,
-) -> None:
+) -> Tuple[np.ndarray, str]:
     """
     Orquesta el flujo completo de la Fase 2:
     1. Carga de nodos estructurados.
@@ -459,6 +459,7 @@ def run_pipeline(
     )
 
     logger.info("¡Fase 2 de Embeddings completada exitosamente! Guardado en: %s", output_path)
+    return vectors_matrix, str(output_path)
 
 
 def parse_arguments() -> argparse.Namespace:
