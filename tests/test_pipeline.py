@@ -55,6 +55,25 @@ def _message(
     return InboundMessage(channel="telegram", sender_id=sender, text=text, media_type=media_type)
 
 
+@pytest.fixture(autouse=True)
+def _owner_gate_open():
+    """Force the owner gate open — these tests assume any sender is routed.
+
+    The local ``.env`` may set ``OWNER_TELEGRAM_CHAT_ID`` /
+    ``OWNER_WHATSAPP_PHONE`` (closing the gate and changing every reply), so
+    the suite pins its own settings instead of depending on the env file.
+    """
+    from src.config import Settings
+
+    open_settings = Settings(
+        _env_file=None,
+        owner_telegram_chat_id="",
+        owner_whatsapp_phone="",
+    )
+    with patch("src.pipeline.get_settings", return_value=open_settings):
+        yield
+
+
 def test_build_orchestrator_registers_all_six_agents():
     """El orquestador de la pipeline enlaza los seis agentes."""
     orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeSearcher())
