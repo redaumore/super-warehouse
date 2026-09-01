@@ -69,6 +69,7 @@ super-warehouse-data-processing/
 │   └── test_rag_pipeline.py          # Tests unitarios del pipeline RAG
 │
 ├── cli.py                            # CLI unificado (serve, ingest, query, evaluate, health)
+├── pyproject.toml                    # Manifiesto estándar PEP 621 y dependencias
 ├── .env.example                      # Template de variables de entorno
 └── pyrightconfig.json                # Configuración de type checking
 ```
@@ -86,18 +87,24 @@ Variables requeridas en `.env`:
 - `OPENAI_API_KEY`: Clave de API de OpenAI (para GPT-5.6 Luna, text-embedding-3-large y GPT-4o).
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` (o `DATABASE_URL`).
 
-### 2. Entorno Virtual y Dependencias
+### 2. Entorno Virtual e Instalación de Dependencias
+El proyecto utiliza el estándar moderno **PEP 621** (`pyproject.toml`):
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt # o dependencias de fastapi, psycopg, pgvector, pymupdf, openai, etc.
+
+# Instalación en modo editable (registra el comando 'rag-cli' en el PATH):
+pip install -e .
+
+# Opcional: incluir herramientas de test y desarrollo:
+pip install -e ".[dev]"
 ```
 
 ---
 
 ## 🛠️ Guía de Comandos Típicos (CLI)
 
-El archivo `cli.py` en la raíz unifica la operación de todo el sistema:
+El sistema puede gestionarse utilizando `rag-cli` (instalado automáticamente en el PATH) o directamente con `python cli.py`:
 
 ### 1. Iniciar la API REST
 Levanta el servidor local con soporte de recarga en caliente:
