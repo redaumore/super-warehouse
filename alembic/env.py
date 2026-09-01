@@ -7,6 +7,7 @@ migration.
 
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -20,8 +21,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Point Alembic at the app's DATABASE_URL.
-config.set_main_option("sqlalchemy.url", get_settings().sqlalchemy_database_url)
+# Point Alembic at the app's DATABASE_URL; an explicit ALEMBIC_DATABASE_URL
+# env var wins (used to migrate the disposable test database).
+config.set_main_option(
+    "sqlalchemy.url",
+    os.environ.get("ALEMBIC_DATABASE_URL") or get_settings().sqlalchemy_database_url,
+)
 
 target_metadata = Base.metadata
 

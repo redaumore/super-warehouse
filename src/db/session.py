@@ -6,6 +6,7 @@ source of truth for connection config. `pool_pre_ping` avoids stale connections.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
@@ -15,7 +16,13 @@ from src.config import get_settings
 
 _settings = get_settings()
 
-engine = create_engine(_settings.sqlalchemy_database_url, pool_pre_ping=True)
+# tests/conftest.py sets SQLALCHEMY_DATABASE_URL before importing this module,
+# so the app session factory targets the disposable ferreteria_test database
+# during pytest runs instead of the dev database.
+engine = create_engine(
+    os.environ.get("SQLALCHEMY_DATABASE_URL", _settings.sqlalchemy_database_url),
+    pool_pre_ping=True,
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 

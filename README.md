@@ -16,14 +16,16 @@ OpenAI · Google Sheets · Gradio.
 3. Copy `.env.example` to `.env`, set at least `POSTGRES_PASSWORD` and the owner
    sender keys (`OWNER_TELEGRAM_CHAT_ID` and/or `OWNER_WHATSAPP_PHONE`).
 4. `make migrate` — applies the Alembic migration.
-5. `make test` — runs the suite (unit, integration, E2E).
+5. `make test` — runs the suite (unit, integration, E2E) against a disposable
+   `ferreteria_test` database rebuilt from the Alembic migrations on every run;
+   the dev database is never touched by the suite.
 6. `make run` — boots the intake API; `make backoffice` — boots the Gradio UI.
 
 ## Environment setup
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | Local database | `ferreteria` / (set it) / `ferreteria` |
+| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | Local database (tests derive a `_test` database from this URL) | `ferreteria` / (set it) / `ferreteria` |
 | `WEBHOOK_SECRET` | HMAC secret for webhook signatures | `change-me` |
 | `RESERVATION_TTL_MINUTES` | Soft-lock expiry window | `30` |
 | `OWNER_TELEGRAM_CHAT_ID` | Owner Telegram chat id (gate + sender) | empty (gate open) |
@@ -49,7 +51,7 @@ flow roll the order back (it stays pending) instead of half-registering it.
 | `make install` | Create venv + editable install |
 | `make db-up` / `db-down` / `db-logs` | Docker Postgres+pgvector lifecycle |
 | `make migrate` / `migrate-new m=...` | Alembic up / new revision |
-| `make test` | Full pytest suite |
+| `make test` | Full pytest suite on a disposable `ferreteria_test` database rebuilt from the Alembic migrations (the dev database is never touched) |
 | `make run` | Uvicorn intake API (`:8000`) |
 | `make backoffice` | Gradio backoffice (`:7860`) |
 | `make lint` / `format` / `typecheck` | Ruff / Ruff format / mypy strict |
@@ -78,6 +80,6 @@ flow roll the order back (it stays pending) instead of half-registering it.
 
 - [ ] `docker compose ps` shows `super-warehouse-db` healthy
 - [ ] `make migrate` completes
-- [ ] `make test` → full suite green
+- [ ] `make test` → full suite green (runs on `ferreteria_test`, dev data untouched)
 - [ ] `make lint && make typecheck` → clean
 - [ ] `curl localhost:8000/healthz` → `{"status":"ok"}`

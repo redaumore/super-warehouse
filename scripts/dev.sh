@@ -153,6 +153,10 @@ do_up() {
   "$PY" -m alembic upgrade head
   "$PY" -m alembic current
 
+  info "Running Alembic migrations on the test database"
+  TEST_DB_URL="$("$PY" -c 'from src.config import get_settings; print(get_settings().sqlalchemy_test_database_url)')"
+  ALEMBIC_DATABASE_URL="$TEST_DB_URL" "$PY" -m alembic upgrade head
+
   if ((seed)); then
     info "Seeding inventory (idempotent)"
     "$PY" scripts/seed_inventory.py
