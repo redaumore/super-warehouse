@@ -319,7 +319,7 @@ class ExtractedProduct(BaseModel):
     categoria_padre: str = Field(description="Categoría principal de ferretería (ej: Fijaciones y Sujeciones, Herramientas, Cintas, Seguridad Industrial)")
     categoria: str = Field(description="Categoría específica (ej: Abrazaderas, Cintas Adhesivas, Calzado de Seguridad)")
     subcategoria: str = Field(description="Subcategoría o tipo de material/diseño (ej: Abrazaderas de Acero, Cintas Aisladoras PVC)")
-    marca: str = Field(description="Marca normalizada del producto detectada en la página o encabezado")
+    marca: str = Field(description="Marca normalizada del fabricante (ej: 'STANLEY', 'BOSCH', 'CARBIZ') o 'Genérico' si el artículo no tiene marca comercial explícita")
     descripcion_tecnica: str = Field(description="Descripción comercial fluida y completa para búsqueda semántica/RAG")
     descripcion_completa: Optional[str] = Field(default=None, description="Alias retrocompatible de descripcion_tecnica")
     unidad_venta: Optional[str] = Field(default=None, description="Unidad de venta (ej: 'c/u', 'metro', 'kilo')")
@@ -339,7 +339,7 @@ class PageUsageMetrics(BaseModel):
 
 class PageExtractionResult(BaseModel):
     pagina: int = Field(description="Número de página 1-indexed")
-    marca_encabezado: str = Field(description="Marca del fabricante identificada en la cabecera/página (ignorar distribuidora)")
+    marca_encabezado: str = Field(description="Marca del fabricante identificada en la cabecera/sección (ej: 'BOSCH', 'CARBIZ') o 'Genérico' si la sección/catálogo no tiene marca de fabricante")
     productos: List[ExtractedProduct] = Field(default_factory=list, description="Lista de productos/variantes extraídos de la página")
     metrics: Optional[PageUsageMetrics] = Field(default=None, description="Métricas de consumo de tokens y latencia de la llamada")
 
@@ -382,11 +382,15 @@ class DirectLunaCatalogProcessor:
             "   - Múltiples proveedores pueden usar el mismo código numérico de producto. Para evitar colisiones en la base de datos vectorial y en el índice léxico:\n"
             "     a) 'codigo_orig': Extrae el código literal original del catálogo (ej: '100001'). Si no existe código explícito, usa null.\n"
             f"     b) 'document_id': Genera un identificador canónico único con el formato exacto: '{proveedor_id}:<codigo_orig>' (o '{proveedor_id}:N/A' si no hay código).\n"
-            f"     c) 'sku_compuesto': Genera un SKU estandarizado en mayúsculas sin espacios ni caracteres especiales: '{codigo_proveedor}-<SLUG_MARCA>-<codigo_orig>' (ej: '{codigo_proveedor}-CARBIZ-100001').\n\n"
-            "2. HERENCIA DE CONTEXTO Y METADATOS:\n"
-            "   - Identifica la MARCA visualmente en los logotipos de cabecera o en los títulos de sección. Si no hay marca comercial explícita, cataloga como la marca del proveedor o 'GENÉRICO'.\n"
+            f"     c) 'sku_compuesto': Genera un SKU estandarizado en mayúsculas sin espacios ni caracteres especiales: '{codigo_proveedor}-<SLUG_MARCA>-<codigo_orig>' (ej: '{codigo_proveedor}-CARBIZ-100001', o '{codigo_proveedor}-<codigo_orig>' si es Genérico).\n\n"
+            "2. DISTINCIÓN DE MARCA DEL FABRICANTE VS ARTÍCULOS GENÉRICOS (CRÍTICO):\n"
+            "   - En un mismo catálogo pueden coexistir artículos con marca comercial y artículos genéricos o sin marca (commodities, ferretería general, consumibles blancos).\n"
+            "   - Extrae la MARCA real del fabricante/marca registrada si está presente en el producto, título o cabecera de sección (ej: 'STANLEY', 'BOSCH', 'CARBIZ', 'CROSSMASTER').\n"
+            "   - Si un producto NO tiene una marca de fabricante explícita, asigna obligatoriamente 'Genérico' en el campo 'marca'.\n"
+            "   - PROHIBIDO asumir o copiar automáticamente el nombre del distribuidor/proveedor como marca del producto, salvo que se trate explícitamente de una marca propia registrada.\n\n"
+            "3. HERENCIA DE CATEGORÍAS:\n"
             "   - Asocia siempre a cada producto su CATEGORÍA_PADRE, CATEGORÍA y SUBCATEGORÍA precedente, evitando tablas huérfanas.\n\n"
-            "3. SÍNTESIS DEL TEXTO PARA VECTORIZACIÓN (texto_vectorizacion):\n"
+            "4. SÍNTESIS DEL TEXTO PARA VECTORIZACIÓN (texto_vectorizacion):\n"
             "   - Los modelos de embeddings calculan distancias sobre el texto, no sobre los metadatos.\n"
             "   - Para cada producto, debes generar un campo 'texto_vectorizacion' con una cabecera semántica explícita.\n"
             "   - Formato requerido para 'texto_vectorizacion':\n"
@@ -395,7 +399,7 @@ class DirectLunaCatalogProcessor:
             "     SKU Compuesto: <sku_compuesto> | Código Catálogo: <codigo_orig>\n"
             "     Descripción: <descripcion_tecnica>\n"
             "     Especificaciones: <resumen_de_medidas_y_unidades>\n\n"
-            "4. INTEGRIDAD FACTUAL Y ESPECIFICACIONES:\n"
+            "5. INTEGRIDAD FACTUAL Y ESPECIFICACIONES:\n"
             "   - Prohibido inferir, redondear o inventar códigos de producto, aperturas milimétricas, roscas o talles.\n"
             "   - Extrae 'precio' (número float mayor a 0) y 'moneda' ('ARS' o 'USD').\n"
             "   - Extrae 'unidad_venta' (ej: 'c/u') y 'empaque' (ej: 'Paq x 10') si figuran.\n"
@@ -586,8 +590,13 @@ class DirectLunaCatalogProcessor:
         for page_res in all_pages_results:
             total_products += len(page_res.productos)
             for prod in page_res.productos:
-                if not prod.marca or not prod.marca.strip():
-                    prod.marca = page_res.marca_encabezado or "GENÉRICO"
+                raw_brand = (prod.marca or "").strip()
+                if not raw_brand or raw_brand.upper() in ["N/D", "N/A", "NONE", "NULL", "DESCONOCIDA", "SIN MARCA", "GENERICO", "GENÉRICO", "NO ESPECIFICADA"]:
+                    hdr_brand = (page_res.marca_encabezado or "").strip()
+                    if not hdr_brand or hdr_brand.upper() in ["N/D", "N/A", "NONE", "NULL", "DESCONOCIDA", "SIN MARCA", "GENERICO", "GENÉRICO", "NO ESPECIFICADA"]:
+                        prod.marca = "Genérico"
+                    else:
+                        prod.marca = hdr_brand
 
                 # Resolver nombres canónicos y alias
                 prod_nombre = (prod.nombre_producto or prod.nombre_comercial or "Producto").strip()
