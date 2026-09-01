@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-test_api.py
-===========
-Suite de pruebas automatizadas para la API REST con FastAPI TestClient.
+tests/test_api.py
+=================
+Suite de pruebas automatizadas para los endpoints REST de la aplicación FastAPI.
 """
 
-import os
-import sys
 import unittest
 from fastapi.testclient import TestClient
 
-from api import app
+from app.main import app
 
 client = TestClient(app)
 
 
 class TestRAGApi(unittest.TestCase):
-    """Test suite para endpoints REST del sistema RAG."""
+    """Pruebas de integración sobre la API REST."""
 
     def test_health_root_endpoint(self):
         """Valida el endpoint /health."""

@@ -913,7 +913,10 @@ def run_rag_pipeline(
     # Invocación de Fase 4 y Fase 5 mediante helper integrado
     candidates: Sequence[Any]
     try:
-        from fase_5_reranker import retrieve_and_rerank
+        try:
+            from app.core.retrieval.reranker import retrieve_and_rerank
+        except ImportError:
+            from fase_5_reranker import retrieve_and_rerank
         rerank_result = retrieve_and_rerank(
             query=query,
             table_name=table_name,
@@ -926,7 +929,10 @@ def run_rag_pipeline(
         candidates = rerank_result.final_candidates
     except Exception as e:
         logger.warning(f"Error al encadenar Fase 4/5 ({e}). Utilizando pool sintético de respaldo.")
-        from fase_5_reranker import generar_pool_sintetico_fase_4, Fase5RerankerCompressor
+        try:
+            from app.core.retrieval.reranker import generar_pool_sintetico_fase_4, Fase5RerankerCompressor
+        except ImportError:
+            from fase_5_reranker import generar_pool_sintetico_fase_4, Fase5RerankerCompressor
         pool = generar_pool_sintetico_fase_4()
         reranker = Fase5RerankerCompressor(score_threshold=threshold, top_n=top_n)
         rerank_result = reranker.process(query, pool)

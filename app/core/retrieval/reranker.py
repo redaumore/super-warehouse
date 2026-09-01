@@ -751,7 +751,10 @@ def retrieve_and_rerank(
     """
     candidates: Sequence[Any]
     try:
-        from fase_4_retrieval import HybridRetriever, generate_mock_hardware_catalog
+        try:
+            from app.core.retrieval.hybrid import HybridRetriever, generate_mock_hardware_catalog
+        except ImportError:
+            from fase_4_retrieval import HybridRetriever, generate_mock_hardware_catalog
         retriever = HybridRetriever(
             db_url=db_url,
             table_name=table_name,

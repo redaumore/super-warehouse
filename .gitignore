@@ -6,4 +6,5 @@ catalogo_estructurado.json
 __pycache__/
 *.pyc
 *.json
+!pyrightconfig.json
 .DS_Store

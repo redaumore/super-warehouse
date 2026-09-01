@@ -1117,7 +1117,10 @@ def evaluate_live_query(
     """
     logger.info(f"Evaluando consulta en vivo: '{query_text}'")
     try:
-        from fase_6_generator import run_rag_pipeline
+        try:
+            from app.core.retrieval.generator import run_rag_pipeline
+        except ImportError:
+            from fase_6_generator import run_rag_pipeline
         gen_result = run_rag_pipeline(
             query=query_text,
             table_name=table_name,
