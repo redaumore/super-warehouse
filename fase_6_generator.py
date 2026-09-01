@@ -179,22 +179,23 @@ class PromptBuilder:
     @staticmethod
     def build_system_prompt() -> str:
         """
-        Retorna el System Prompt de producción con directivas anti-alucinación.
+        Retorna el System Prompt de producción con directivas anti-alucinación reforzadas.
         """
         return (
             "Eres un Asistente Técnico y Especialista en Catálogos Industriales y Ferretería de alta precisión.\n"
             "Tu única fuente de verdad y conocimiento es la información factual contenida exclusivamente dentro de las "
             "etiquetas <contexto_conocimiento>.\n\n"
             "### DIRECTIVAS OBLIGATORIAS DE SEGURIDAD Y PRECISIÓN FACTUAL:\n\n"
-            "1. DIRECTIVA DE AUSENCIA (RECHAZO HONESTO):\n"
-            f"   - Si la respuesta precisa o el producto consultado NO se encuentra explícitamente detallado en el contexto provisto, "
+            "1. DIRECTIVA DE AUSENCIA (RECHAZO HONESTO Y DETERMINISTA):\n"
+            f"   - Si la respuesta precisa, el producto consultado, o el código/SKU específico NO se encuentra explícitamente detallado en el contexto provisto, "
             f"debes responder exactamente con la siguiente frase canónica:\n"
             f"     \"{PromptBuilder.REFUSAL_CANONICAL_MESSAGE}\"\n"
             "   - Tienes terminantemente prohibido utilizar tu memoria pre-entrenada para suponer, inventar o extrapolar información ausente.\n\n"
-            "2. DIRECTIVA DE INTEGRIDAD DE CÓDIGOS, SKUs Y DIMENSIONES:\n"
-            "   - No extrapoles, aproximes ni autocompletes números de pieza, códigos de catálogo (ej. 'AMX-AT-5044', 'CARBIZ-099'), "
-            "dimensiones en milímetros/pulgadas, torques o valores de presión si no figuran de forma textual exacta.\n"
-            "   - Si el usuario solicita una medida, precio o variante que no está listada en los datos, advierte claramente que no figura en la tabla.\n\n"
+            "2. DIRECTIVA DE INTEGRIDAD ALFANUMÉRICA ESTRICTA (CERO EXTRAPOLACIÓN):\n"
+            "   - Prohibido inferir, inventar, aproximar o extrapolar números de pieza, códigos de catálogo (ej. 'AMX-AT-5044', 'CARBIZ-099', '205020'), "
+            "dimensiones en milímetros/pulgadas, materiales, torques o valores de presión si no figuran de forma textual exacta en los fragmentos.\n"
+            "   - Jamás inventes códigos numéricos ficticios ni deduzcas variantes no listadas en las tablas técnicas.\n"
+            "   - Si el usuario consulta por una variante, medida o precio que no figura explícitamente en el catálogo, aplica la Directiva de Ausencia o declara textualmente que dicha medida no se encuentra listada.\n\n"
             "3. DIRECTIVA DE CITACIÓN ATÓMICA OBLIGATORIA:\n"
             "   - Toda afirmación, dato técnico, precio o especificación que declares DEBE finalizar obligatoriamente con la citación "
             "del fragmento de origen usando el formato exacto `[Fragmento N]`, donde N es el identificador numérico del fragmento.\n"
@@ -894,7 +895,7 @@ def run_rag_pipeline(
     table_name: str = "catalogo_amx_rag",
     k_input: int = 20,
     top_n: int = 3,
-    threshold: float = 0.35,
+    threshold: float = 0.45,
     reranker_model: str = "BAAI/bge-reranker-v2-m3",
     llm_model: str = "gpt-4o",
     provider: str = "auto",
@@ -1120,7 +1121,7 @@ EJEMPLOS DE USO:
     parser.add_argument("--table", "-t", type=str, default="catalogo_amx_rag", help="Tabla en PostgreSQL (default: catalogo_amx_rag).")
     parser.add_argument("--k-input", "-k", type=int, default=20, help="Candidatos a recuperar en Fase 4 (default: 20).")
     parser.add_argument("--top-n", "-n", type=int, default=3, help="Candidatos finalistas de Fase 5 (default: 3).")
-    parser.add_argument("--threshold", type=float, default=0.35, help="Umbral de corte de score sigmoide en Fase 5 (default: 0.35).")
+    parser.add_argument("--threshold", type=float, default=0.45, help="Umbral de corte de score sigmoide en Fase 5 (default: 0.45).")
     parser.add_argument("--reranker-model", type=str, default="BAAI/bge-reranker-v2-m3", help="Modelo de Reranking Cross-Encoder.")
     parser.add_argument("--model", "-m", type=str, default="gpt-4o", help="Modelo de LLM para Fase 6 (default: gpt-4o).")
     parser.add_argument("--provider", type=str, default="auto", choices=["auto", "openai", "gemini"], help="Proveedor de LLM.")

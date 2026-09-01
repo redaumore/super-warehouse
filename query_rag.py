@@ -109,7 +109,7 @@ def query_catalog(
     categoria: Optional[str] = None,
     nombre_proveedor: Optional[str] = None,
     solo_tablas: Optional[bool] = None,
-    ef_search: int = 64,
+    ef_search: int = 128,
     min_score: Optional[float] = None,
     embedding_model: str = "text-embedding-3-large",
     dimensions: int = 256,
@@ -307,8 +307,8 @@ def main():
     parser.add_argument(
         "--ef-search",
         type=int,
-        default=64,
-        help="Profundidad de exploración HNSW en tiempo de consulta."
+        default=128,
+        help="Profundidad de exploración HNSW en tiempo de consulta (default: 128)."
     )
     parser.add_argument(
         "--min-score",

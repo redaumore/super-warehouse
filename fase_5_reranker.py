@@ -420,7 +420,7 @@ class Fase5RerankerCompressor:
     def __init__(
         self,
         model_name: str = "BAAI/bge-reranker-v2-m3",
-        score_threshold: float = 0.35,
+        score_threshold: float = 0.45,
         top_n: int = 3,
         batch_size: int = 16,
         device: str = "cpu"
@@ -667,7 +667,7 @@ def ejecutar_benchmarks():
 
     reranker = Fase5RerankerCompressor(
         model_name="BAAI/bge-reranker-v2-m3",
-        score_threshold=0.35,
+        score_threshold=0.45,
         top_n=3
     )
 
@@ -741,7 +741,7 @@ def retrieve_and_rerank(
     table_name: str = "catalogo_amx_rag",
     k_input: int = 20,
     top_n: int = 3,
-    threshold: float = 0.35,
+    threshold: float = 0.45,
     model_name: str = "BAAI/bge-reranker-v2-m3",
     db_url: Optional[str] = None,
     mock: bool = False
@@ -806,7 +806,7 @@ EJEMPLOS DE USO:
     parser.add_argument("--table", "-t", type=str, default="catalogo_amx_rag", help="Tabla en PostgreSQL (default: catalogo_amx_rag).")
     parser.add_argument("--k-input", "-k", type=int, default=20, help="Candidatos a recuperar de Fase 4 (default: 20).")
     parser.add_argument("--top-n", "-n", type=int, default=3, help="Candidatos finalistas para Fase 6 (default: 3).")
-    parser.add_argument("--threshold", type=float, default=0.35, help="Umbral de corte de score sigmoide (default: 0.35).")
+    parser.add_argument("--threshold", type=float, default=0.45, help="Umbral de corte de score sigmoide (default: 0.45).")
     parser.add_argument("--model", "-m", type=str, default="BAAI/bge-reranker-v2-m3", help="Nombre del modelo Cross-Encoder (default: BAAI/bge-reranker-v2-m3).")
     parser.add_argument("--json", "-j", action="store_true", help="Formato de salida JSON.")
     parser.add_argument("--benchmark", action="store_true", help="Ejecutar suite de pruebas y benchmark.")

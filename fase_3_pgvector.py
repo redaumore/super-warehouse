@@ -234,7 +234,7 @@ class PgVectorManager:
     # -------------------------------------------------------------------------
     # 3. Compilación de Índices HNSW y Relacionales
     # -------------------------------------------------------------------------
-    def create_indexes(self, m: int = 16, ef_construction: int = 128) -> None:
+    def create_indexes(self, m: int = 32, ef_construction: int = 200) -> None:
         """
         Compila el grafo de proximidad HNSW (vector_ip_ops) y las estructuras de pre-filtrado.
         """
@@ -346,7 +346,7 @@ class PgVectorManager:
         top_k: int = 5,
         marca: Optional[str] = None,
         categoria: Optional[str] = None,
-        ef_search: int = 64
+        ef_search: int = 128
     ) -> List[Dict[str, Any]]:
         """
         Ejecuta una búsqueda de vecinos más cercanos con pre-filtrado y calibración ef_search.
@@ -423,7 +423,7 @@ class PgVectorManager:
         query_vector: List[float],
         top_k: int = 5,
         marca: Optional[str] = None,
-        ef_search: int = 64
+        ef_search: int = 128
     ) -> str:
         """
         Ejecuta EXPLAIN (ANALYZE, BUFFERS) para certificar que el optimizador usa el índice HNSW.
@@ -598,20 +598,20 @@ def main():
     parser.add_argument(
         "--m",
         type=int,
-        default=16,
-        help="Número máximo de conexiones bidireccionales por nodo en HNSW."
+        default=32,
+        help="Número máximo de conexiones bidireccionales por nodo en HNSW (default: 32)."
     )
     parser.add_argument(
         "--ef-construction",
         type=int,
-        default=128,
-        help="Profundidad de exploración durante la construcción del índice HNSW."
+        default=200,
+        help="Profundidad de exploración durante la construcción del índice HNSW (default: 200)."
     )
     parser.add_argument(
         "--ef-search",
         type=int,
-        default=64,
-        help="Profundidad de exploración durante las consultas ANN (ef_search)."
+        default=128,
+        help="Profundidad de exploración durante las consultas ANN ef_search (default: 128)."
     )
     parser.add_argument(
         "--recreate-table",

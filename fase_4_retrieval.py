@@ -315,7 +315,7 @@ class HybridRetriever:
         k_dense: int = 50,
         k_sparse: int = 50,
         rrf_k: int = 60,
-        ef_search: int = 64,
+        ef_search: int = 128,
         openai_api_key: Optional[str] = None,
         embedding_model: str = "text-embedding-3-large",
         dimension: int = 256
@@ -890,7 +890,7 @@ def main():
     parser.add_argument("--k-dense", type=int, default=50, help="Candidatos en rama densa.")
     parser.add_argument("--k-sparse", type=int, default=50, help="Candidatos en rama léxica.")
     parser.add_argument("--rrf-k", type=int, default=60, help="Constante de suavizado RRF.")
-    parser.add_argument("--ef-search", type=int, default=64, help="Parámetro HNSW ef_search.")
+    parser.add_argument("--ef-search", type=int, default=128, help="Parámetro HNSW ef_search (default: 128).")
     parser.add_argument("--top-k", "-k", type=int, default=10, help="Top final de candidatos a retornar.")
     parser.add_argument("--json", "-j", action="store_true", help="Salida en formato JSON para integración API/Agentes.")
     parser.add_argument("--benchmark", action="store_true", help="Ejecuta la suite de benchmarking comparativo.")
