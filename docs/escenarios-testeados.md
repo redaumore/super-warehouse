@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 257, agrupados en 26 dominios.
+**Total de escenarios:** 279, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,6 +17,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 13
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 9
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -191,6 +193,51 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Rechazar libera las reservas y restaura el stock disponible. _(`test_reject_releases_reservations_and_restores_stock`)_
 - Un pedido con reserva vencida no se puede aprobar: exige recotizar. _(`test_expired_order_cannot_be_approved`)_
 - Una reserva vigente no bloquea la aprobación. _(`test_fresh_reservation_can_be_approved`)_
+
+## Integración con RAG de catálogo de proveedores
+
+- El SKU RAG con prefijo duplicado se normaliza a una sola forma. _(`test_normalize_rag_sku`)_
+  - AMX-AMX-AT-5044 / AMX / AMX-AT-5044
+  - AMX-AT-5044 / AMX / AMX-AT-5044
+  - AMX-AMX-AMX-AT-5044 / AMX / AMX-AT-5044
+  - AT-5044 / AMX / AT-5044
+  - AMX-AMX-AT-5044 / (vacío) / AMX-AMX-AT-5044
+- Un query exitoso mapea productos tipados y pide structured_json=true. _(`test_rag_client_query_maps_products_and_sends_structured_json`)_
+- Un is_refusal=true se traduce a lista vacía (no encontrado en catálogos). _(`test_rag_client_refusal_returns_empty_tuple`)_
+- Un SUCCESS sin productos devuelve lista vacía, no un error. _(`test_rag_client_empty_products_returns_empty_tuple`)_
+- Los productos sin nombre se omiten del resultado tipado. _(`test_rag_client_skips_products_without_name`)_
+- El codigo_orig gana; el codigo normalizado es solo el fallback. _(`test_rag_client_prefers_codigo_orig_over_normalized_codigo`)_
+- Sin codigo_orig, el codigo con doble prefijo se normaliza al mostrarlo. _(`test_rag_client_normalizes_double_prefix_codigo`)_
+- Un error de conexión se convierte en RagProductError, nunca transport crudo. _(`test_rag_client_connect_error_raises_domain_error`)_
+- Un timeout de lectura se convierte en RagProductError. _(`test_rag_client_read_timeout_raises_domain_error`)_
+- Un HTTP 500 del servicio se convierte en RagProductError. _(`test_rag_client_http_500_raises_domain_error`)_
+- Un payload 200 no-JSON se convierte en RagProductError. _(`test_rag_client_malformed_json_raises_domain_error`)_
+- Sin RAG_BASE_URL el cliente lanza RagProductNotConfigured al usarse. _(`test_rag_client_without_base_url_raises_not_configured`)_
+- Un httpx.Client inyectado se usa tal cual, sin construir otro desde settings. _(`test_rag_client_injected_client_is_used_directly`)_
+
+## Búsqueda de producto (precedencia local → RAG)
+
+- Las frases de alta ('agregalo', 'sumá N de eso', 'el N') se resuelven a (índice, cantidad). _(`test_parse_product_add`)_
+  - agregalo
+  - agregala
+  - sumá 5 de eso
+  - sumale 3 de eso
+  - agregá 2 de esos
+  - el 2
+  - quiero el 3
+  - agregalo
+  - el 5
+  - el 2
+  - pasame el precio
+  - (vacío)
+- Un hit local (>= floor) resuelve LOCAL y nunca llama al RAG. _(`test_local_hit_skips_rag`)_
+- Un candidato local bajo el floor no es hit: el RAG se consulta. _(`test_local_below_floor_falls_back_to_rag`)_
+- Un local vacío cae al RAG y los campos del producto viajan al entry. _(`test_empty_local_falls_back_to_rag_and_maps_fields`)_
+- Un RAG que rechaza (sin productos) resuelve NONE, no un error. _(`test_empty_local_with_refusal_is_none`)_
+- Un error del RAG resuelve ERROR sin propagar la excepción. _(`test_empty_local_with_rag_error_is_error`)_
+- Un SQLAlchemyError del hop local no propaga: el RAG igual se consulta. _(`test_local_sqlalchemy_error_still_calls_rag`)_
+- Hop local caído + RAG caído resuelve ERROR (la cadena nunca lanza). _(`test_local_error_and_rag_error_is_error`)_
+- La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
 
 ## Percepción (voz e imagen)
 
