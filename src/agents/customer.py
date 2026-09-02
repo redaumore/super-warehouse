@@ -3,15 +3,26 @@
 The owner is the only chat actor: the persona is the owner's assistant, not a
 customer-facing chatbot. Every text turn is answered by the LLM responder over
 the full context (system prompt + prior history + the new message). Slice 2
-adds a catalog search boundary: when a ``CatalogSearcher`` is wired, the
-turn's text is searched against `catalogo` and the results become a TRANSIENT
-system note injected right before the user turn — never persisted into
-history.
+adds a search boundary: when a ``ProductSearcher`` is wired, the turn's text is
+resolved through the local-first → RAG-fallback precedence chain
+(``PrecedenceProductSearcher``) and the source-discriminated result becomes a
+TRANSIENT system note injected right before the user turn — never persisted
+into history.
 
-Because the catalog is currently empty, a product query returns no candidates
-and the note instructs the assistant to tell the owner the product is not in
-stock. A database error skips the note instead of failing the turn, so the
+The note is source-aware (ADR 5): LOCAL hits list ``nombre_oficial (sku)``
+under own stock; RAG hits are numbered, cheapest first, with provider, price,
+specs and source page/PDF, plus a footer clarifying they are supplier-catalog
+items, not own stock; NONE means "not found in current catalogs" with a
+reformulation suggestion; ERROR means the supplier catalogs could not be
+consulted. It never claims the item is out of stock either way. A SQLAlchemy
+error from the searcher skips the note instead of failing the turn, so the
 conversation keeps answering while the DB is down.
+
+Order building rides the same seam: while an order is open, the owner can add
+the last displayed product with natural phrases ("agregalo", "sumá 5 de eso",
+"el 2") and the handler appends it to the state's ``draft_items`` without
+calling the LLM; without an open order the handler offers to create one
+through the existing sourcing path.
 
 The sourcing turn (parsed orders) resolves the customer by NAME
 (``src/agents/customers.py``), offers in-chat creation for unknown names and
@@ -49,6 +60,13 @@ from src.agents.disambiguation import (
 )
 from src.agents.intake import ParsedItem
 from src.agents.inventory import available_stock
+from src.agents.product_search import (
+    ProductEntry,
+    ProductSearcher,
+    ProductSearchResult,
+    ProductSource,
+    parse_product_add,
+)
 from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import Cliente, Order
@@ -65,6 +83,13 @@ _DEFAULT_REGION = "AR"
 
 # Fallback reply when the LLM responder is unavailable.
 GREETING = "¿Qué pedido cargamos hoy? Decime el cliente, los productos y la cantidad."
+
+# Add-intent short-circuit replies (owner-facing, rioplatense).
+OFFER_TO_CREATE_REPLY = (
+    "Todavía no hay un pedido abierto para agregar productos. "
+    "Mandá el pedido completo (cliente, productos y cantidades) y lo cargo."
+)
+ADDED_TO_ORDER_REPLY = "Listo: agregué {name} × {qty} al pedido en curso."
 
 SYSTEM_PROMPT = (
     "Sos el asistente del dueño de una ferretería de barrio, y te escribe el dueño "
@@ -118,18 +143,13 @@ class CustomerResponder(Protocol):
         """Answer the customer from the full message list (system + history + latest user turn)."""
 
 
-class CatalogSearcher(Protocol):
-    """Search boundary over the product catalog (real impl: DbCatalogSearcher)."""
-
-    def search(self, query: str) -> tuple[SearchCandidate, ...]:
-        """Return catalog candidates for ``query``, best first."""
-
-
 class DbCatalogSearcher:
-    """Catalog search backed by Postgres; one short-lived session per call.
+    """Local catalog search backed by Postgres; one short-lived session per call.
 
-    The with-block closes the session even when the query raises, so the
-    Customer agent never leaks connections across turns.
+    The local hop of the ``PrecedenceProductSearcher`` chain (structurally
+    satisfies ``LocalSearcher``). The with-block closes the session even when
+    the query raises, so the Customer agent never leaks connections across
+    turns.
     """
 
     def search(self, query: str) -> tuple[SearchCandidate, ...]:
@@ -138,23 +158,106 @@ class DbCatalogSearcher:
             return tuple(search_catalog(session, query, limit=3))
 
 
-def catalog_context_note(query: str, candidates: Sequence[SearchCandidate]) -> str:
-    """Render catalog search results as a transient system note (Spanish, rioplatense).
-
-    The note is product copy for the owner's assistant: an empty result set
-    tells it the product is not in stock; candidates list the products the
-    reply must use.
-    """
-    if not candidates:
-        return (
-            f"Búsqueda en catálogo para «{query}»: sin resultados. "
-            "Si el cliente pidió un producto que no está en stock, decíselo al dueño."
-        )
-    items = ", ".join(f"{c.nombre_oficial} ({c.sku})" for c in candidates)
-    return (
-        f"Búsqueda en catálogo para «{query}»: {len(candidates)} resultado(s): {items}. "
-        "Respondé usando estos productos."
+def _cheapest_first(entries: Sequence[ProductEntry]) -> list[ProductEntry]:
+    """Sort product entries by ascending price; entries without price go last."""
+    return sorted(
+        entries,
+        key=lambda e: (e.price is None, e.price if e.price is not None else 0.0),
     )
+
+
+def _rag_entry_fields(entry: ProductEntry) -> str:
+    """Render one RAG entry: name, brand, provider, price, specs, source page/PDF."""
+    parts = [entry.name]
+    if entry.brand:
+        parts.append(entry.brand)
+    if entry.provider:
+        parts.append(entry.provider)
+    if entry.price is not None:
+        price_text = f"{entry.price:g}"
+        if entry.currency and entry.unit:
+            price_text = f"{price_text} {entry.currency}/{entry.unit}"
+        elif entry.currency:
+            price_text = f"{price_text} {entry.currency}"
+        elif entry.unit:
+            price_text = f"{price_text}/{entry.unit}"
+        parts.append(price_text)
+    if entry.specs:
+        parts.append(entry.specs)
+    if entry.source_file:
+        source_text = entry.source_file
+        if entry.page is not None:
+            source_text = f"{source_text} p.{entry.page}"
+        parts.append(source_text)
+    return " — ".join(parts)
+
+
+def _local_note(query: str, entries: Sequence[ProductEntry]) -> str:
+    """Render a LOCAL-only note: numbered official names with SKUs."""
+    lines = [f"Catalog results for «{query}» — own stock:"]
+    lines.extend(f"{i}. {entry.name} ({entry.sku})" for i, entry in enumerate(entries, 1))
+    return "\n".join(lines)
+
+
+def _rag_note(query: str, entries: Sequence[ProductEntry]) -> str:
+    """Render a RAG-only note: numbered, cheapest first, with the supplier footer."""
+    lines = [f"Catalog results for «{query}» — supplier catalog:"]
+    lines.extend(
+        f"{i}. {_rag_entry_fields(entry)}" for i, entry in enumerate(_cheapest_first(entries), 1)
+    )
+    lines.append("These are supplier-catalog items, not own stock.")
+    return "\n".join(lines)
+
+
+def _dual_note(query: str, local: Sequence[ProductEntry], rag: Sequence[ProductEntry]) -> str:
+    """Render a mixed local + RAG note: local block first, global numbering, labeled."""
+    lines = [f"Catalog results for «{query}» — own stock (local):"]
+    number = 1
+    for entry in local:
+        lines.append(f"{number}. {entry.name} ({entry.sku}) [local]")
+        number += 1
+    lines.append(f"Catalog results for «{query}» — supplier catalog (rag):")
+    for entry in _cheapest_first(rag):
+        lines.append(f"{number}. {_rag_entry_fields(entry)} [rag]")
+        number += 1
+    return "\n".join(lines)
+
+
+def product_context_note(
+    query: str,
+    result: ProductSearchResult,
+    *,
+    draft: tuple[ProductEntry, ...] = (),
+) -> str:
+    """Render product-query results as a transient system note (English copy, ADR 5).
+
+    The note is internal guidance for the owner's assistant. RAG results are
+    numbered and sorted cheapest first; a draft accumulation that mixes local
+    and RAG entries (accumulated across queries during order building) renders
+    local-first with each block labeled by source. NONE/ERROR notes never claim
+    the item is out of stock.
+    """
+    if result.source is ProductSource.NONE:
+        return (
+            f"Catalog results for «{query}»: no match in current catalogs. "
+            "Ask the owner for a synonym or reformulation. "
+            "Do not claim the item is out of stock."
+        )
+    if result.source is ProductSource.ERROR:
+        return (
+            f"Catalog results for «{query}»: supplier catalogs could not be "
+            "consulted. Tell the owner they are unavailable and offer to retry "
+            "later. Do not claim the item is out of stock."
+        )
+    draft_local = tuple(e for e in draft if e.source is ProductSource.LOCAL)
+    draft_rag = tuple(e for e in draft if e.source is ProductSource.RAG)
+    if result.source is ProductSource.RAG and draft_local:
+        return _dual_note(query, draft_local, result.entries)
+    if result.source is ProductSource.LOCAL and draft_rag:
+        return _dual_note(query, result.entries, draft_rag)
+    if result.source is ProductSource.RAG:
+        return _rag_note(query, result.entries)
+    return _local_note(query, result.entries)
 
 
 @dataclass
@@ -427,7 +530,7 @@ def build_handler(
     *,
     fallback_reply: str = GREETING,
     system_prompt: str = SYSTEM_PROMPT,
-    searcher: CatalogSearcher | None = None,
+    searcher: ProductSearcher | None = None,
     sourcing: SourcingDeps | None = None,
 ) -> Callable[[InboundMessage, ConversationState | None, RoutingDecision], AgentOutcome]:
     """Build the Customer conversational handler around a mockable responder.
@@ -435,11 +538,16 @@ def build_handler(
     Every user turn is answered by the LLM over the full context (system prompt
     + prior history + the new message); the greeting is only a fallback when
     the responder has no API key or the message carries no text. When a
-    ``searcher`` is wired, catalog results for the turn's text become a
-    transient system note injected right before the user turn: it rides the
-    outgoing message list only and never enters history (which keeps user and
-    assistant turns). A SQLAlchemy error skips the note so the conversation
-    survives a down database.
+    ``searcher`` is wired, the turn's text is resolved through the product-query
+    chain and the source-discriminated result becomes a transient system note
+    injected right before the user turn: it rides the outgoing message list only
+    and never enters history. A SQLAlchemy error from the searcher skips the
+    note so the conversation survives a down database.
+
+    While ``product_options`` hold the last displayed results, an add-intent
+    phrase ("agregalo", "sumá 5 de eso", "el 2") short-circuits the LLM: with an
+    open order the referenced entry is appended to ``draft_items``; without one
+    the handler offers to create an order through the sourcing path.
 
     When ``sourcing`` is wired and the orchestrator's parse step flagged the
     turn (``decision.parsed``), the handler runs the sourcing workflow instead
@@ -461,24 +569,53 @@ def build_handler(
         if not text:
             reply = fallback_reply
             new_history = (*history, ChatMessage("assistant", reply))
+            updated = base.with_updates(history=new_history)
         else:
+            intent = parse_product_add(text, base.product_options) if base.product_options else None
+            if intent is not None:
+                index, qty = intent
+                entry = base.product_options[index]
+                turn_history = (*history, ChatMessage("user", text))
+                if base.order_id is None:
+                    reply = OFFER_TO_CREATE_REPLY
+                    updated = base.with_updates(
+                        history=(*turn_history, ChatMessage("assistant", reply)),
+                        product_options=(),
+                    )
+                else:
+                    reply = ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty)
+                    updated = base.with_updates(
+                        history=(*turn_history, ChatMessage("assistant", reply)),
+                        product_options=(),
+                        draft_items=(*base.draft_items, (entry, qty)),
+                    )
+                return AgentOutcome(state=updated, reply=reply)
             messages = [ChatMessage("system", system_prompt), *history]
+            displayed: tuple[ProductEntry, ...] = ()
             if searcher is not None:
                 try:
-                    candidates = searcher.search(text)
+                    result = searcher.search(text)
                 except SQLAlchemyError:
                     logger.warning(
-                        "catalog search failed for query=%r; answering without catalog context",
+                        "product search failed for query=%r; answering without catalog context",
                         text,
                     )
                 else:
-                    messages.append(ChatMessage("system", catalog_context_note(text, candidates)))
+                    draft_entries = tuple(entry for entry, _ in base.draft_items)
+                    messages.append(
+                        ChatMessage(
+                            "system",
+                            product_context_note(text, result, draft=draft_entries),
+                        )
+                    )
+                    displayed = result.entries
             messages.append(ChatMessage("user", text))
             try:
                 reply = responder.respond(messages)
             except ResponderNotConfigured:
                 reply = fallback_reply
             new_history = (*history, ChatMessage("user", text), ChatMessage("assistant", reply))
-        return AgentOutcome(state=base.with_updates(history=new_history), reply=reply)
+            updated = base.with_updates(history=new_history, product_options=displayed)
+        return AgentOutcome(state=updated, reply=reply)
 
     return handler

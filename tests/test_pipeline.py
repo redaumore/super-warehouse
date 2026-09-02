@@ -15,11 +15,12 @@ from unittest.mock import patch
 import pytest
 
 from src.agents.customer import CustomerResponder
+from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
 from src.channels.base import InboundMessage
 from src.orchestrator.router import AgentName
 from src.orchestrator.session import ChatMessage
 from src.pipeline import build_orchestrator, handle_inbound
-from tests.test_customer import FakeSearcher
+from tests.test_customer import FakeProductSearcher
 
 
 class FakeChannel:
@@ -76,7 +77,7 @@ def _owner_gate_open():
 
 def test_build_orchestrator_registers_all_six_agents():
     """El orquestador de la pipeline enlaza los seis agentes."""
-    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeSearcher())
+    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeProductSearcher())
     assert set(orchestrator.agents) == set(AgentName)
 
 
@@ -85,7 +86,7 @@ async def test_handle_inbound_routes_persists_and_replies():
     """Un mensaje de Telegram nuevo es respondido por el agente Customer a través del responder LLM."""
     channel = FakeChannel()
     responder = FakeResponder()
-    orchestrator = build_orchestrator(responder=responder, searcher=FakeSearcher())
+    orchestrator = build_orchestrator(responder=responder, searcher=FakeProductSearcher())
     with (
         patch("src.pipeline.CHANNELS", {"telegram": channel}),
         patch("src.pipeline.ORCHESTRATOR", orchestrator),
@@ -106,7 +107,7 @@ async def test_second_message_resumes_context():
     """Un segundo mensaje del mismo remitente continúa la conversación con el responder LLM."""
     channel = FakeChannel()
     responder = FakeResponder()
-    orchestrator = build_orchestrator(responder=responder, searcher=FakeSearcher())
+    orchestrator = build_orchestrator(responder=responder, searcher=FakeProductSearcher())
     with (
         patch("src.pipeline.CHANNELS", {"telegram": channel}),
         patch("src.pipeline.ORCHESTRATOR", orchestrator),
@@ -125,7 +126,7 @@ async def test_second_message_resumes_context():
 async def test_voice_routes_to_perception_reply():
     """Una nota de voz se enruta a Percepción con una respuesta específica."""
     channel = FakeChannel()
-    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeSearcher())
+    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeProductSearcher())
     with (
         patch("src.pipeline.CHANNELS", {"telegram": channel}),
         patch("src.pipeline.ORCHESTRATOR", orchestrator),
@@ -138,6 +139,44 @@ async def test_voice_routes_to_perception_reply():
 @pytest.mark.asyncio
 async def test_unknown_channel_drops_reply_without_crash():
     """Un canal sin adaptador no rompe la pipeline: descarta la respuesta."""
-    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeSearcher())
+    orchestrator = build_orchestrator(responder=FakeResponder(), searcher=FakeProductSearcher())
     with patch("src.pipeline.CHANNELS", {}), patch("src.pipeline.ORCHESTRATOR", orchestrator):
         await handle_inbound(InboundMessage(channel="unknown", sender_id="x", text="hola"))
+
+
+@pytest.mark.asyncio
+async def test_rag_fallback_result_reaches_responder_as_source_note():
+    """Un resultado RAG del searcher llega al responder como nota de catálogo de proveedores."""
+    channel = FakeChannel()
+    responder = FakeResponder()
+    rag_result = ProductSearchResult(
+        source=ProductSource.RAG,
+        entries=(
+            ProductEntry(
+                sku="AMX-AT-5044",
+                name="Tarugo Fischer 8mm",
+                source=ProductSource.RAG,
+                provider="AMX",
+                price=135.5,
+                currency="ARS",
+                unit="bolsa",
+                source_file="catalogo-2024.pdf",
+                page=12,
+            ),
+        ),
+    )
+    orchestrator = build_orchestrator(
+        responder=responder,
+        searcher=FakeProductSearcher(result=rag_result),
+    )
+    with (
+        patch("src.pipeline.CHANNELS", {"telegram": channel}),
+        patch("src.pipeline.ORCHESTRATOR", orchestrator),
+    ):
+        await handle_inbound(_message(text="tarugos"))
+
+    assert channel.sent == [("+5491155551234", "respuesta del modelo")]
+    note = responder.calls[0][1].content
+    assert "supplier catalog" in note
+    assert "Tarugo Fischer 8mm" in note
+    assert "135.5 ARS/bolsa" in note
