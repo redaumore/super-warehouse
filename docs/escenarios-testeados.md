@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 244, agrupados en 26 dominios.
+**Total de escenarios:** 257, agrupados en 26 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -14,8 +14,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
-- [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 5
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 13
+- [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -144,6 +144,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un segundo mensaje del mismo remitente continúa la conversación con el responder LLM. _(`test_second_message_resumes_context`)_
 - Una nota de voz se enruta a Percepción con una respuesta específica. _(`test_voice_routes_to_perception_reply`)_
 - Un canal sin adaptador no rompe la pipeline: descarta la respuesta. _(`test_unknown_channel_drops_reply_without_crash`)_
+- Un resultado RAG del searcher llega al responder como nota de catálogo de proveedores. _(`test_rag_fallback_result_reaches_responder_as_source_note`)_
 
 ## Agente Customer (respondedor conversacional)
 
@@ -155,11 +156,23 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Sin OPENAI_API_KEY, el responder OpenAI lanza ResponderNotConfigured. _(`test_openai_responder_raises_not_configured_without_key`)_
 - El responder OpenAI mapea roles y contenido y devuelve el texto del modelo. _(`test_openai_responder_maps_messages_and_returns_model_text`)_
 - Un modelo que no produce texto dispara ResponderError. _(`test_openai_responder_raises_when_model_returns_empty_reply`)_
-- Con catálogo vacío el responder recibe la nota 'sin resultados' y el historial no la guarda. _(`test_product_query_with_empty_catalog_injects_no_stock_note`)_
-- Con candidatos, la nota lista nombre oficial y SKU de cada producto. _(`test_catalog_candidates_become_note_listing_names_and_skus`)_
+- Un resultado NONE inyecta la nota de no encontrado y el historial no la guarda. _(`test_product_query_with_none_result_injects_not_found_note`)_
+- Un resultado LOCAL lista nombre oficial y SKU de cada producto bajo own stock. _(`test_local_candidates_become_note_listing_names_and_skus`)_
+- Un resultado RAG se numera, ordena por precio ascendente e incluye campos y footer. _(`test_rag_results_note_numbered_cheapest_first_with_fields_and_footer`)_
+- La nota RAG nunca muestra el codigo crudo con doble prefijo (higiene de SKU). _(`test_rag_note_never_leaks_raw_double_prefix_codigo`)_
+- El intent de alta conserva el SKU normalizado del producto RAG en el draft. _(`test_add_intent_preserves_normalized_rag_sku_in_draft`)_
+- La nota NONE sugiere sinónimos/reformulación y no afirma estado de stock. _(`test_refusal_none_note_suggests_reformulation_without_stock_claim`)_
+- La nota ERROR dice que los catálogos no pudieron consultarse, sin stock claim. _(`test_error_note_states_catalogs_unavailable_without_stock_claim`)_
+- Un draft mixto (local + RAG) renderiza local primero, numeración global y etiquetado. _(`test_dual_source_note_lists_local_first_labeled`)_
 - Un error de base de datos omite la nota y el responder igual contesta. _(`test_searcher_database_error_skips_note_and_keeps_reply`)_
 - Sin searcher, la lista de mensajes mantiene la forma del slice 1: system + historial + usuario. _(`test_handler_without_searcher_keeps_slice1_message_shape`)_
 - En una conversación en curso, la nota va después del historial y justo antes del último turno del usuario. _(`test_note_lands_after_history_and_before_latest_user_turn`)_
+- 'agregalo' con pedido abierto agrega el producto al draft sin llamar al LLM. _(`test_add_intent_with_open_order_appends_draft_and_clears_options`)_
+- 'sumá 5 de eso' agrega 5 unidades del último producto mostrado al draft. _(`test_add_intent_with_quantity_appends_draft_with_qty`)_
+- 'el 2' selecciona el segundo resultado mostrado. _(`test_add_intent_numbered_reference_picks_displayed_result`)_
+- 'agregalo' sin pedido abierto ofrece crear un pedido y no agrega a ninguno. _(`test_add_intent_without_open_order_offers_to_create`)_
+- Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
+- Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
 
 ## Ciclo de vida del pedido
 
