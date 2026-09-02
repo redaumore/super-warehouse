@@ -21,6 +21,7 @@ from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.intake import SimpleOrderParser
 from src.agents.inventory import seed_inventory
+from src.agents.product_search import ProductSearchResult, ProductSource
 from src.channels.base import InboundMessage
 from src.config import Settings, get_settings
 from src.db.models import (
@@ -72,6 +73,13 @@ class FakeSheets:
     ):
         self.rows.append((order_id, items_summary))
         return SheetsWriteStatus.APPENDED
+
+
+class FakeProductSearcher:
+    """Product-query seam stand-in: sourcing turns never call it, NONE otherwise."""
+
+    def search(self, query: str) -> ProductSearchResult:
+        return ProductSearchResult(source=ProductSource.NONE)
 
 
 def _postgres_up() -> bool:
@@ -159,6 +167,9 @@ def _orchestrator(session, sheets):
     )
     return build_orchestrator(
         responder=FakeResponder(),
+        # The product-query seam is injected (not the production RAG chain) so
+        # the owner-flow tests stay deterministic; sourcing turns never use it.
+        searcher=FakeProductSearcher(),
         sourcing=deps,
         parser=SimpleOrderParser(),
         dispatch=build_dispatch_handler(lambda: session, sheets),

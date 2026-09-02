@@ -36,7 +36,7 @@ def _no_telegram_network(monkeypatch):
     never reaches Postgres, regardless of env credentials.
     """
     from src.pipeline import build_orchestrator
-    from tests.test_customer import FakeSearcher
+    from tests.test_customer import FakeProductSearcher
 
     async def _noop(self, sender_id, text):
         return None
@@ -44,7 +44,7 @@ def _no_telegram_network(monkeypatch):
     monkeypatch.setattr(TelegramChannel, "send_text", _noop)
     monkeypatch.setattr(
         "src.pipeline.ORCHESTRATOR",
-        build_orchestrator(responder=_FakeResponder(), searcher=FakeSearcher()),
+        build_orchestrator(responder=_FakeResponder(), searcher=FakeProductSearcher()),
     )
 
 
