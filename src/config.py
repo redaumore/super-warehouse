@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     google_sheets_credentials_file: str = ""
     google_sheets_spreadsheet_key: str = ""
 
+    # Supplier-catalog RAG (sibling fase-0-pdf-parsing service).
+    # NOTE: the service runs on 8001 while some docs still say 8000 — 8001 is
+    # the real default so a fresh deploy talks to the live service.
+    rag_base_url: str = "http://localhost:8001"
+    rag_timeout_seconds: float = 10.0
+    rag_top_n: int = 3
+    rag_threshold: float = 0.45
+    rag_table_name: str = "catalogo_productos_rag"
+    rag_model: str = "gpt-4o"
+
     # Owner sender allowlist. The owner is the ONLY chat actor: every inbound
     # message is gated against these keys before routing (Telegram senders are
     # chat ids, WhatsApp senders are phone numbers). When both are empty the
