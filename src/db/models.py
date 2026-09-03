@@ -288,6 +288,11 @@ class Order(Base):
     )
     delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     needs_requote: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    subtotal: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    total: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    conversion_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -315,8 +320,34 @@ class OrderItem(Base):
     base_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     final_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     adjustment: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal(0))
+    name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    supplier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    moneda: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    precio_original: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class ExchangeRate(Base):
+    """Manual currency-to-ARS exchange rate maintained by the backoffice."""
+
+    __tablename__ = "exchange_rates"
+
+    currency: Mapped[str] = mapped_column(String(3), primary_key=True)
+    rate_to_ars: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AppSetting(Base):
+    """Extensible key/value application setting storage."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
 class Inventory(Base):

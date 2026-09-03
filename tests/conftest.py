@@ -39,11 +39,13 @@ os.environ["ALEMBIC_DATABASE_URL"] = get_settings().sqlalchemy_test_database_url
 os.environ["SQLALCHEMY_DATABASE_URL"] = get_settings().sqlalchemy_test_database_url
 
 # Every table the integration fixtures must reset between tests (sourcing axis
-# tables first — they carry FKs into orders/catalogo/suppliers).
+# tables first — they carry FKs into orders/catalogo/suppliers). Pricing settings
+# are included so one test cannot leak a rate or default margin into another.
 TRUNCATE_TABLES = (
     "supplier_purchase_order_items, supplier_purchase_orders, sourcing_needs, "
     "inventory, order_items, orders, stock_reservations, catalogo, suppliers, "
-    "clientes, lista_precios, supplier_sku_mappings, stock_adjustments"
+    "clientes, lista_precios, supplier_sku_mappings, stock_adjustments, "
+    "exchange_rates, app_settings"
 )
 
 
