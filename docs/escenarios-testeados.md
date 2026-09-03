@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 279, agrupados en 28 dominios.
+**Total de escenarios:** 282, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,7 +17,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 13
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 9
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -214,6 +214,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un payload 200 no-JSON se convierte en RagProductError. _(`test_rag_client_malformed_json_raises_domain_error`)_
 - Sin RAG_BASE_URL el cliente lanza RagProductNotConfigured al usarse. _(`test_rag_client_without_base_url_raises_not_configured`)_
 - Un httpx.Client inyectado se usa tal cual, sin construir otro desde settings. _(`test_rag_client_injected_client_is_used_directly`)_
+- A successful price lookup returns the offer and forwards the supplier code. _(`test_price_lookup_200_maps_price_and_supplier_query_parameter`)_
+- A missing supplier product is a normal lookup miss. _(`test_price_lookup_404_returns_none`)_
+- Transport and server failures never leak raw HTTP exceptions. _(`test_price_lookup_transport_and_server_errors_raise_domain_error`)_
 
 ## Búsqueda de producto (precedencia local → RAG)
 

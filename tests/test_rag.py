@@ -15,6 +15,7 @@ import pytest
 
 from src.config import Settings
 from src.integrations.rag import (
+    RagPrice,
     RagProduct,
     RagProductClient,
     RagProductError,
@@ -130,6 +131,7 @@ def test_rag_client_query_maps_products_and_sends_structured_json():
             specs="plástico, 8mm",
             source_file="catalogo-2024.pdf",
             page=12,
+            codigo_proveedor="AMX",
         ),
     )
 
@@ -252,3 +254,37 @@ def test_rag_client_injected_client_is_used_directly():
     client.query("tarugos")
 
     assert seen == ["http://inj/api/v1/query"]
+
+
+def test_price_lookup_200_maps_price_and_supplier_query_parameter():
+    """A successful price lookup returns the offer and forwards the supplier code."""
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"codigo": "AT-5044", "precio": 135.5, "moneda": "usd"})
+
+    client = _client(handler)
+
+    assert client.price_lookup("AT-5044", codigo_proveedor="AMX") == RagPrice(135.5, "USD")
+    assert seen["url"] == "http://rag.test/api/v1/products/AT-5044?codigo_proveedor=AMX"
+
+
+def test_price_lookup_404_returns_none():
+    """A missing supplier product is a normal lookup miss."""
+    client = _client(lambda request: httpx.Response(404, json={"detail": "not found"}))
+
+    assert client.price_lookup("UNKNOWN", codigo_proveedor="AMX") is None
+
+
+def test_price_lookup_transport_and_server_errors_raise_domain_error():
+    """Transport and server failures never leak raw HTTP exceptions."""
+    transport_client = _client(
+        lambda request: (_ for _ in ()).throw(httpx.ConnectError("connection refused"))
+    )
+    with pytest.raises(RagProductError, match="connection refused"):
+        transport_client.price_lookup("AT-5044")
+
+    server_client = _client(lambda request: httpx.Response(503, text="unavailable"))
+    with pytest.raises(RagProductError, match="HTTP 503"):
+        server_client.price_lookup("AT-5044")
