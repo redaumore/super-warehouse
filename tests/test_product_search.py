@@ -20,6 +20,8 @@ from src.agents.product_search import (
     PrecedenceProductSearcher,
     ProductEntry,
     ProductSource,
+    is_finalize,
+    parse_finalize,
     parse_product_add,
 )
 from src.config import Settings
@@ -260,3 +262,20 @@ def test_chain_normalizes_sku_from_real_client():
 
     assert result.source is ProductSource.RAG
     assert result.entries[0].sku == "AMX-AT-5044"
+
+
+def test_parse_finalize_extracts_customer_name_from_non_empty_draft():
+    """A finalize command returns its customer name only when a draft exists."""
+    draft = ((_entry(), 2),)
+
+    assert parse_finalize("cerrá el pedido para Ferretería Don Juan", draft) == (
+        "Ferretería Don Juan"
+    )
+    assert parse_finalize("finalizar orden: Cliente Uno", draft) == "Cliente Uno"
+    assert parse_finalize("cerrá el pedido para Cliente Uno", ()) is None
+
+
+def test_is_finalize_recognizes_command_without_customer_name():
+    """The handler can ask for a customer when a draft is being finalized anonymously."""
+    assert is_finalize("cerrá el pedido") is True
+    assert is_finalize("quiero más clavos") is False

@@ -104,6 +104,10 @@ def route_message(message: InboundMessage, state: ConversationState | None) -> R
         # The owner is mid Case B supplier selection: the reply confirms the
         # chosen suppliers and accumulates the purchase order(s).
         return RoutingDecision(agent=AgentName.SOURCING, context_loaded=True)
+    if state is not None and state.draft_items:
+        # The product-query draft owns the next text turn until it is finalized,
+        # even though no persisted order exists yet.
+        return RoutingDecision(agent=AgentName.CUSTOMER, context_loaded=True)
     if state is not None and state.order_id is not None:
         if state.items:
             return RoutingDecision(agent=AgentName.SALES, context_loaded=True)

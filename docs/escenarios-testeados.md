@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 282, agrupados en 28 dominios.
+**Total de escenarios:** 284, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -18,7 +18,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
-- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 9
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -172,7 +172,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - 'agregalo' con pedido abierto agrega el producto al draft sin llamar al LLM. _(`test_add_intent_with_open_order_appends_draft_and_clears_options`)_
 - 'sumá 5 de eso' agrega 5 unidades del último producto mostrado al draft. _(`test_add_intent_with_quantity_appends_draft_with_qty`)_
 - 'el 2' selecciona el segundo resultado mostrado. _(`test_add_intent_numbered_reference_picks_displayed_result`)_
-- 'agregalo' sin pedido abierto ofrece crear un pedido y no agrega a ninguno. _(`test_add_intent_without_open_order_offers_to_create`)_
+- An add intent starts the draft even when no persisted order exists yet. _(`test_add_intent_without_open_order_starts_draft`)_
 - Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
 - Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
 
@@ -241,6 +241,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un SQLAlchemyError del hop local no propaga: el RAG igual se consulta. _(`test_local_sqlalchemy_error_still_calls_rag`)_
 - Hop local caído + RAG caído resuelve ERROR (la cadena nunca lanza). _(`test_local_error_and_rag_error_is_error`)_
 - La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
+- A finalize command returns its customer name only when a draft exists. _(`test_parse_finalize_extracts_customer_name_from_non_empty_draft`)_
+- The handler can ask for a customer when a draft is being finalized anonymously. _(`test_is_finalize_recognizes_command_without_customer_name`)_
 
 ## Percepción (voz e imagen)
 

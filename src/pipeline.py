@@ -88,9 +88,11 @@ def _sourcing_deps() -> SourcingDeps | None:
     settings = get_settings()
     if not (settings.owner_telegram_chat_id or settings.owner_whatsapp_phone):
         return None
+    rag_client = RagProductClient()
     return SourcingDeps(
         session_factory=SessionLocal,
         searcher=FakeSupplierCatalogSearcher(),
+        rag_client=rag_client,
     )
 
 
@@ -133,7 +135,9 @@ def build_orchestrator(
             searcher=(
                 searcher
                 if searcher is not None
-                else PrecedenceProductSearcher(DbCatalogSearcher(), RagProductClient())
+                else PrecedenceProductSearcher(
+                    DbCatalogSearcher(), sourcing.rag_client if sourcing else RagProductClient()
+                )
             ),
             sourcing=sourcing,
         ),

@@ -63,6 +63,16 @@ def test_fresh_text_without_pending_selection_routes_to_customer():
     assert decision.agent is AgentName.CUSTOMER
 
 
+def test_draft_carrying_state_routes_to_customer_before_sales_or_disambiguation():
+    """A product-selection draft owns the next text turn before an order exists."""
+    state = _state(order_id=None, draft_items=((object(), 1),))
+
+    decision = route_message(_message(text="cerrá el pedido para Cliente"), state)
+
+    assert decision.agent is AgentName.CUSTOMER
+    assert decision.context_loaded is True
+
+
 def test_parse_step_extracts_order_before_customer_agent():
     """El paso de parseo extrae la orden antes de llegar al Customer agent."""
     store = ConversationStore()

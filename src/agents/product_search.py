@@ -57,6 +57,7 @@ class ProductEntry:
     specs: str | None = None
     source_file: str | None = None
     page: int | None = None
+    codigo_proveedor: str | None = None
 
 
 @dataclass(frozen=True)
@@ -146,15 +147,22 @@ def _entry_from_rag(product: RagProduct) -> ProductEntry:
         price=product.price,
         currency=product.currency,
         unit=product.unit,
-        specs=product.specs,
-        source_file=product.source_file,
-        page=product.page,
-    )
+            specs=product.specs,
+            source_file=product.source_file,
+            page=product.page,
+            codigo_proveedor=product.codigo_proveedor,
+        )
 
 
 _NUMBERED_REF_RE = re.compile(r"\bel\s+(\d+)\b")
 _QUANTITY_ADD_RE = re.compile(r"\b(?:suma|agrega)(?:le|les|los|las)?\s+(\d+)\s+de\s+eso\w*")
 _DIRECT_ADD_RE = re.compile(r"\b(?:agregalo|agregala|agregalos|agregalas|sumalo|sumala)\b")
+_FINALIZE_RE = re.compile(
+    r"^\s*(?:cerr(?:a|á)|cierra|cerrar|finaliz(?:a|á)|finaliza|finalizar|"
+    r"termin(?:a|á)|termina|terminar|confirm(?:a|á)|confirma|confirmar)\s+"
+    r"(?:el\s+)?(?:pedido|orden)(?:\s*(?::|para|de)\s*(.+?))?\s*[.!?]*$",
+    re.IGNORECASE,
+)
 
 
 def parse_product_add(text: str, options: Sequence[ProductEntry]) -> tuple[int, int] | None:
@@ -180,3 +188,27 @@ def parse_product_add(text: str, options: Sequence[ProductEntry]) -> tuple[int, 
     if _DIRECT_ADD_RE.search(norm) is not None:
         return (0, 1)
     return None
+
+
+def is_finalize(text: str) -> bool:
+    """Return whether ``text`` is a finalize command, with or without a name."""
+    return _FINALIZE_RE.match(text or "") is not None
+
+
+def parse_finalize(
+    text: str, draft_items: Sequence[tuple[ProductEntry, int]]
+) -> str | None:
+    """Extract the customer name from a finalize command for a non-empty draft.
+
+    The parser deliberately requires draft lines so ordinary requests such as
+    ``finalizar el pedido`` cannot create an empty order. A command without a
+    customer name is still recognized by :func:`is_finalize`; the customer
+    handler can then use an already attached session customer or ask for one.
+    """
+    if not draft_items:
+        return None
+    match = _FINALIZE_RE.match(text or "")
+    if match is None or match.group(1) is None:
+        return None
+    name = " ".join(match.group(1).strip(" .!? ").split())
+    return name or None

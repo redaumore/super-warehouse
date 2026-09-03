@@ -563,8 +563,8 @@ def test_add_intent_numbered_reference_picks_displayed_result():
     assert outcome.state.draft_items == ((second, 1),)
 
 
-def test_add_intent_without_open_order_offers_to_create():
-    """'agregalo' sin pedido abierto ofrece crear un pedido y no agrega a ninguno."""
+def test_add_intent_without_open_order_starts_draft():
+    """An add intent starts the draft even when no persisted order exists yet."""
     fake = FakeResponder()
     entry = _entry("SKU-001", "Tarugo Fischer 8mm")
     state = ConversationState(sender_id=SENDER, product_options=(entry,))
@@ -573,9 +573,9 @@ def test_add_intent_without_open_order_offers_to_create():
     outcome = handler(_message(text="agregalo"), state, _decision())
 
     assert fake.calls == []
-    assert outcome.reply == OFFER_TO_CREATE_REPLY
+    assert outcome.reply == ADDED_TO_ORDER_REPLY.format(name="Tarugo Fischer 8mm", qty=1)
     assert outcome.state is not None
-    assert outcome.state.draft_items == ()
+    assert outcome.state.draft_items == ((entry, 1),)
     assert outcome.state.product_options == ()
 
 
