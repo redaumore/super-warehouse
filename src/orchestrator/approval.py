@@ -49,6 +49,10 @@ class SheetsRegistrationError(Exception):
     """
 
 
+class PendingConversionError(Exception):
+    """An order cannot be approved while one or more prices lack conversion."""
+
+
 @dataclass(frozen=True)
 class ApprovalResult:
     """Outcome of registering an approved order."""
@@ -132,6 +136,10 @@ def register_approved_order(
     ``SheetsRegistrationError`` so the caller rolls the approval back — the
     order stays PENDING rather than half-registered.
     """
+    if order.conversion_pending:
+        raise PendingConversionError(
+            f"order {order.order_id} is pending currency conversion"
+        )
     reservations = _active_reservations(session, order)
     converted = _convert_reservations(session, order, reservations)
     total = order_total(order)
@@ -172,6 +180,10 @@ def approve_and_register(
     quarantine propagates as ``SheetsRegistrationError`` for the caller to
     roll back.
     """
+    if order.conversion_pending:
+        raise PendingConversionError(
+            f"order {order.order_id} is pending currency conversion"
+        )
     approve_order(session, order, now=now)
     return register_approved_order(
         session,
