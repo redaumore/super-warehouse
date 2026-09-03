@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 289, agrupados en 28 dominios.
+**Total de escenarios:** 291, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,7 +12,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 7
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 8
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
@@ -27,7 +27,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 18
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 19
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
@@ -113,6 +113,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El total del pedido suma precio final por cantidad, redondeado a centavos. _(`test_order_total_sums_final_price_times_quantity`)_
 - Una línea ajustada aporta su precio final rebajado al total. _(`test_order_total_with_adjusted_line`)_
 - El resumen de ítems lista cantidad por SKU separado por punto y coma. _(`test_build_items_summary_lists_each_line`)_
+- Sheets append is skipped at draft save and called once during approval registration. _(`test_sheets_append_belongs_to_approval_not_draft_persistence`)_
 - Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
 - Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
 - Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
@@ -345,6 +346,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
+- The customer-order migration downgrades, upgrades, and preserves legacy Case A writes. _(`test_customer_order_migration_round_trips_and_keeps_case_a_persistable`)_
 
 ## Teléfonos y clientes
 
