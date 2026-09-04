@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 296, agrupados en 28 dominios.
+**Total de escenarios:** 302, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -13,7 +13,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 8
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 24
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
@@ -139,6 +139,20 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
 - La respuesta que produce un agente viaja en el resultado del turno. _(`test_orchestrator_surfaces_agent_reply`)_
+- El gatillo "hola bob" descarta el estado previo y responde el saludo fijo. _(`test_session_reset_drops_previous_state_and_greets`)_
+- El reset borra awaiting_decision y draft: el próximo texto va a Customer. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
+- Mayúsculas y puntuación final no impiden el reset. _(`test_session_reset_variants_match`)_
+  - Hola Bob!
+- Una oración que contiene las palabras no resetea: sigue el flujo normal. _(`test_sentence_containing_trigger_words_does_not_reset`)_
+  - decile hola a Bob
+  - hola bob, cómo va todo
+- Una nota de voz nunca dispara el reset, aunque su texto sea el gatillo. _(`test_voice_message_does_not_trigger_session_reset`)_
+- El matcher solo acepta el mensaje completo y exacto del gatillo. _(`test_is_session_reset_anchored_whole_message`)_
+  - hola bob
+  - Hola Bob!
+  - (vacío)
+  - decile hola a Bob
+  - hola bob, cómo va todo
 
 ## Pipeline de orquestación (walking skeleton)
 

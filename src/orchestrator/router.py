@@ -27,6 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from src.agents.commands import RESET_GREETING, is_session_reset
 from src.agents.intake import OrderParser
 from src.channels.base import InboundMessage
 from src.orchestrator.session import ConversationState, ConversationStore
@@ -143,7 +144,23 @@ class Orchestrator:
         extracted order rides the state so the Customer agent can classify it
         into Case A/B/C instead of answering as plain chat. The agent's
         optional reply rides the turn result back to the pipeline.
+
+        The session-reset trigger ("hola bob", case-insensitive, whole
+        message, optional trailing punctuation) is checked first: it drops
+        the sender's in-memory conversation state — drafts, displayed
+        products, pending menus and awaiting decisions — seeds a fresh
+        conversation, and answers with the fixed greeting. It works from ANY
+        state and never touches persisted DB orders. Media messages (voice,
+        image) never trigger the reset.
         """
+        if message.media_type is None and is_session_reset((message.text or "").strip()):
+            self.store.drop(message.sender_id)
+            fresh_state = ConversationState(sender_id=message.sender_id)
+            self.store.put(fresh_state)
+            return TurnResult(
+                decision=RoutingDecision(agent=AgentName.CUSTOMER),
+                reply=RESET_GREETING,
+            )
         state = self.store.get(message.sender_id)
         decision = route_message(message, state)
         if (
