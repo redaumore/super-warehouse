@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-catalog-pipeline"
+version = "1.0.0"
+description = "Pipeline RAG industrial multi-proveedor con FastAPI, PostgreSQL + pgvector y GPT-5.6 Luna"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Rolando Daumas", email = "redaumore@gmail.com" }
+]
+keywords = ["rag", "fastapi", "pgvector", "postgresql", "embeddings", "catalogs"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "psycopg[binary]>=3.2.0",
+    "pgvector>=0.3.0",
+    "pymupdf>=1.24.0",
+    "openai>=1.45.0",
+    "google-genai>=0.1.0",
+    "tiktoken>=0.7.0",
+    "numpy>=1.26.0",
+    "torch>=2.2.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.30.0",
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.5.0",
+    "tqdm>=4.66.0",
+    "httpx>=0.27.0",
+    "requests>=2.32.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+    "pyright>=1.1.0"
+]
+
+[project.scripts]
+rag-cli = "cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools]
+py-modules = ["cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
