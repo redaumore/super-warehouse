@@ -369,7 +369,7 @@ def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
             line["moneda"] or "—",
             line["precio_original"] or "—",
         ]
-        for line in detail["lines"]
+        for line in cast(list[dict[str, object]], detail["lines"])
     ]
 
 

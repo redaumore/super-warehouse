@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from src.agents.inventory import reserve_stock
 from src.db.models import Cliente, Order, OrderEstado, OrderItem, SourcingState
 from src.integrations.rag import normalize_rag_sku
 from src.pricing.order_pricing import PricedLine, PricedOrder
-from src.agents.inventory import reserve_stock
 
 
 def _source_value(source: str | object) -> str:
@@ -28,7 +29,7 @@ def persist_draft_order(
     session: Session,
     customer: Cliente,
     priced: PricedOrder,
-    delivery_date=None,
+    delivery_date: date | None = None,
 ) -> Order:
     """Persist a priced draft and reserve stock only for LOCAL lines.
 

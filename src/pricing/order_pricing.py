@@ -10,15 +10,15 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, TypeAlias
+from typing import Any
 
 from src.pricing.engine import compute_base, compute_final
 
 _CENT = Decimal("0.01")
 
-PriceInput: TypeAlias = Decimal | float | int
-RateSource: TypeAlias = Callable[[str], PriceInput | None]
-MarginSource: TypeAlias = Callable[[str | None], PriceInput | None]
+type PriceInput = Decimal | float | int
+type RateSource = Callable[[str], PriceInput | None]
+type MarginSource = Callable[[str | None], PriceInput | None]
 
 
 @dataclass(frozen=True)

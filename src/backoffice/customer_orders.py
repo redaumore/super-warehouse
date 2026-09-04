@@ -8,6 +8,7 @@ owns the transaction boundary and commits successful actions.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -150,7 +151,7 @@ def set_default_margin(session: Session, margin: Decimal | float) -> Decimal:
     return value
 
 
-def _supplier_margin_source(session: Session):
+def _supplier_margin_source(session: Session) -> Callable[[str | None], Decimal | None]:
     """Resolve a stored supplier code or provider name for a pending line."""
 
     def resolve(supplier: str | None) -> Decimal | None:
