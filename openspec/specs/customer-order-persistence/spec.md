@@ -8,41 +8,39 @@ Persist the chat product-selection draft as a customer order: source-aware prici
 
 ### Requirement: Finalize draft into a persisted order
 
-The system MUST, on the finalize intent, persist the draft as an `Order` with one `OrderItem` per line and MUST clear the draft afterwards. The customer MUST be the session customer when set, else the system MUST ask. The customer MUST exist in `clientes`; when not found, the system MUST offer in-chat minimal creation (name and phone, Base price list).
+The system MUST persist the draft as an `Order` with `estado=DRAFT` at the FIRST product add, with one `OrderItem` per line and the customer resolved or created at that moment. The confirm intent MUST transition Draft → Confirmed. The customer MUST exist in `clientes`; when not found, the system MUST offer in-chat minimal creation (name and phone, Base price list).
 
-#### Scenario: Session customer attached
+(Previously: the draft was memory-only and persisted only at finalize as PENDING_APPROVAL, with the customer resolved at finalize.)
 
-- GIVEN a conversation with `customer_id` set
-- WHEN the customer finalizes
-- THEN an Order with OrderItems is persisted
-- AND the draft is cleared
+#### Scenario: Draft persisted at first add
 
-#### Scenario: Customer asked at finalization
-
-- GIVEN a draft with no session customer
-- WHEN the customer finalizes
-- THEN the system asks for the customer before persisting
+- GIVEN a customer adding their first product
+- WHEN the product is added
+- THEN an Order with estado=DRAFT is persisted
+- AND the customer is resolved or created and attached
 
 #### Scenario: Unknown customer created minimally
 
-- GIVEN a finalize naming an unknown client
+- GIVEN a first add naming an unknown client
 - WHEN the customer confirms minimal creation
-- THEN the client is created on the Base list and attached
+- THEN the client is created on the Base list and attached to the draft
 
 ### Requirement: Source-aware base pricing at finalize
 
-The system MUST price each line by source at finalize: LOCAL lines use `costo_proveedor` plus the order-time margin, never `precio_lista_base`; RAG lines use the agent-response price (fallback: the RAG price endpoint) plus the supplier margin from `codigo_proveedor` → `suppliers.code`, or the default margin setting when unmapped.
+The system MUST price each line by source at confirm: LOCAL lines use `costo_proveedor` plus the order-time margin, never `precio_lista_base`; RAG lines use the agent-response price plus the supplier margin from `codigo_proveedor` → `suppliers.code`, or the default margin setting when unmapped.
+
+(Previously: pricing ran at finalize; it now runs on the confirm transition.)
 
 #### Scenario: Local line priced from cost
 
 - GIVEN a LOCAL line in the draft
-- WHEN the order is priced
+- WHEN the order is confirmed
 - THEN the base is `costo_proveedor × (1 + margin)`, never `precio_lista_base`
 
 #### Scenario: Unmapped supplier uses default margin
 
 - GIVEN a RAG line whose `codigo_proveedor` matches no `suppliers.code`
-- WHEN the order is priced
+- WHEN the order is confirmed
 - THEN the default margin setting is applied
 
 ### Requirement: Frozen RAG line snapshots
@@ -78,22 +76,24 @@ The system MUST convert line prices to ARS when the line currency is not ARS, vi
 - THEN the order is saved pending-conversion
 - AND totals are recomputed when the rate loads
 
-### Requirement: Save side effects (stock now, Sheets at approval)
+### Requirement: Save side effects (reserve and sync at confirm)
 
-The system MUST reserve stock for LOCAL lines at save time; RAG lines MUST NOT reserve stock or sync stock. Sheets sync MUST remain on the existing Case A approval path (register_approved_order), not at save.
+The system MUST reserve and deduct stock for LOCAL lines and sync Sheets during the confirm transition, not at draft save. RAG lines MUST NOT reserve stock or sync stock.
 
-#### Scenario: Local lines reserve stock at save
+(Previously: stock was reserved for LOCAL lines at save and Sheets synced at approval.)
 
-- GIVEN an order with LOCAL lines
-- WHEN the order is saved
-- THEN stock is reserved for those lines
-- AND Sheets is not synced at save
+#### Scenario: Local lines reserve at confirm
+
+- GIVEN an order with LOCAL lines being confirmed
+- WHEN confirm runs
+- THEN stock is reserved and then deducted for those lines
+- AND Sheets is synced at confirm
 
 #### Scenario: RAG lines skip stock
 
 - GIVEN an order with RAG lines
-- WHEN the order is saved
-- THEN no stock is reserved or synced
+- WHEN confirm runs
+- THEN no stock is reserved or synced for RAG lines
 
 ### Requirement: Order retrieval with lines and totals
 
@@ -104,3 +104,35 @@ The system MUST retrieve persisted orders with lines and ARS totals for the Cust
 - GIVEN a persisted order
 - WHEN the backoffice requests its detail
 - THEN its lines, prices, and totals are returned
+
+### Requirement: Single draft per customer
+
+The system MUST enforce at most one DRAFT Order per customer. A concurrent second draft-add for the same customer MUST fail safely without corrupting the existing draft.
+
+#### Scenario: Second draft rejected
+
+- GIVEN a customer with an existing DRAFT order
+- WHEN a second draft is created for them
+- THEN it is rejected and the existing draft is preserved
+
+#### Scenario: Concurrent add races safely
+
+- GIVEN two adds racing to create a first draft for the same customer
+- WHEN both attempt to persist
+- THEN exactly one draft survives and the other fails cleanly
+
+### Requirement: Add and remove products on a persisted draft
+
+The system MUST let products be added to and removed from a persisted Draft across time, updating `OrderItem` rows accordingly.
+
+#### Scenario: Remove product is real
+
+- GIVEN a persisted Draft with items
+- WHEN a product is removed
+- THEN its OrderItem is deleted and the draft persists
+
+#### Scenario: Add product after resume
+
+- GIVEN a persisted Draft resumed in a later session
+- WHEN a product is added
+- THEN the new OrderItem is appended to the same draft

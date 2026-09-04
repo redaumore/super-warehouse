@@ -26,31 +26,45 @@ The system MUST place a soft-lock reservation on ordered stock when a quotation 
 
 ### Requirement: Owner approval with adjustments
 
-The system MUST process the owner's approval response, applying any requested adjustments (e.g. an extra discount on specific items).
+The system MUST process the owner's confirm response as the approval ceremony, applying any requested adjustments before the order leaves Confirmed. Confirm MUST refuse a stale quote with `RequiresRequoteError` when the reservation TTL has expired.
 
-#### Scenario: Approval with a custom adjustment
+(Previously: approval was a separate post-finalize step.)
+
+#### Scenario: Confirm with adjustment
 
 - GIVEN the owner replies "aprobá pero hacé un 5% de descuento extra en clavos"
-- WHEN the response is processed
-- THEN the order is approved
-- AND the requested adjustment is applied to the affected items before registration
+- WHEN confirm runs
+- THEN the order is confirmed and the adjustment is applied before registration
 
-#### Scenario: Plain approval
+#### Scenario: Plain confirm
 
 - GIVEN the owner replies "sí, aprobá" with no adjustments
-- WHEN the response is processed
-- THEN the order is approved with the previously quoted prices unchanged
+- WHEN confirm runs
+- THEN the order is confirmed at the quoted prices
 
-### Requirement: Rejection releases reservations
+#### Scenario: Stale quote refused
 
-The system MUST immediately release all soft-lock reservations when the owner rejects an order.
+- GIVEN a Draft whose reservation TTL has expired
+- WHEN the owner confirms
+- THEN the system refuses with RequiresRequoteError and re-quotes
 
-#### Scenario: Order rejected
+### Requirement: Cancellation releases or restores stock
 
-- GIVEN the owner rejects a quoted order
-- WHEN the rejection is processed
-- THEN all reservations for that order are released immediately
-- AND the reserved stock becomes available to other customers
+The system MUST cancel an order from Draft, Confirmed, Picking, or Ready for delivery. Cancel from Draft/Confirmed MUST release ACTIVE reservations; cancel from Picking/Ready for delivery MUST restore deducted stock and record a `StockAdjustment` row.
+
+(Previously: only rejection from Pending Approval released reservations; no late-cancel restore existed.)
+
+#### Scenario: Cancel before fulfillment releases reservations
+
+- GIVEN a Draft or Confirmed order with active reservations
+- WHEN it is canceled
+- THEN the reservations are released immediately
+
+#### Scenario: Late cancel restores deducted stock
+
+- GIVEN a Picking or Ready for delivery order with deducted stock
+- WHEN it is canceled
+- THEN the deducted stock is restored and a StockAdjustment row is recorded
 
 ### Requirement: Auto-release after 30-minute TTL
 
@@ -70,50 +84,68 @@ The system MUST automatically release reservations when the owner does not appro
 - THEN the system does not proceed on stale reservations
 - AND re-quotes or re-confirms availability before registration
 
-### Requirement: Register approved orders
+### Requirement: Register confirmed orders
 
-The system MUST, on approval, write the order to Google Sheets, deduct stock definitively, and confirm to the customer.
+The system MUST, on confirm, write the order to Google Sheets, convert the soft-lock to a definitive stock deduction, and confirm to the customer — atomically. If the Sheets write fails, the order MUST remain Confirmed, the row quarantined, and the failure surfaced to the owner.
 
-#### Scenario: Approved order registered end-to-end
+(Previously: registration ran on approval and reverted the order to pending on Sheets failure.)
 
-- GIVEN an order is approved by the owner
-- WHEN registration runs
-- THEN the order row is written to Google Sheets
-- AND the soft-lock is converted to a definitive stock deduction
-- AND a confirmation is sent to the customer
+#### Scenario: Confirmed order registered end-to-end
 
-#### Scenario: Registration failure is surfaced
+- GIVEN a Draft being confirmed
+- WHEN the confirm ceremony runs
+- THEN the row is written to Sheets, the soft-lock becomes a deduction, and the customer is confirmed
 
-- GIVEN the Sheets write or stock deduction fails
-- WHEN registration errors
-- THEN the failure is surfaced to the owner
-- AND the order is not left in a half-registered state without notice
+#### Scenario: Sheets failure keeps order confirmed
+
+- GIVEN the Sheets append fails during confirm
+- WHEN confirm errors
+- THEN the order stays Confirmed, the write is quarantined, and the failure is surfaced
 
 ### Requirement: Track order state machine
 
-The system MUST track each order through exactly one of the four approval states: Pending Approval, Approved, In Dispatch, or Rejected. Sourcing/fulfillment status is a separate axis (`SourcingState`: PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) stored in its own column and MUST NOT change or replace the four approval states. The system MUST also store a `delivery_date` on the order.
+The system MUST track each order through exactly one of six states: Draft, Confirmed, Picking, Ready for delivery, Canceled, or Closed, and MUST enforce these transitions, rejecting all others:
 
-#### Scenario: State transitions on the happy path
+| From | To | Trigger |
+|---|---|---|
+| Draft | Draft | add / remove product |
+| Draft | Confirmed | confirm |
+| Draft | Canceled | cancel order |
+| Confirmed | Draft | modify |
+| Confirmed | Picking | start picking |
+| Confirmed | Canceled | cancel order |
+| Picking | Ready for delivery | complete picking |
+| Picking | Canceled | cancel order |
+| Ready for delivery | Closed | deliver |
+| Ready for delivery | Canceled | cancel order |
 
-- GIVEN a new order
-- WHEN it is quoted and awaits the owner
-- THEN it is in Pending Approval
-- AND upon approval it moves to Approved
-- AND upon dispatch it moves to In Dispatch
+Sourcing remains a separate axis (`SourcingState`: PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) and MUST NOT change the order state. The system MUST store a `delivery_date`.
 
-#### Scenario: Rejection path
+(Previously: four approval states — Pending Approval, Approved, In Dispatch, Rejected.)
 
-- GIVEN an order in Pending Approval
-- WHEN the owner rejects it
-- THEN it moves to Rejected
-- AND its reservations are released
+#### Scenario: Happy path
 
-#### Scenario: Sourcing axis is independent of approval
+- GIVEN a Draft order
+- WHEN it is confirmed, started picking, completed picking, then delivered
+- THEN it moves Draft → Confirmed → Picking → Ready for delivery → Closed
+
+#### Scenario: Modify loops back to draft
+
+- GIVEN a Confirmed order
+- WHEN the owner modifies it
+- THEN it returns to Draft
+
+#### Scenario: Illegal transition rejected
+
+- GIVEN an order in Ready for delivery
+- WHEN a transition other than deliver or cancel order is attempted
+- THEN the system rejects it and the state is unchanged
+
+#### Scenario: Sourcing axis independent
 
 - GIVEN an order whose sourcing is PENDING_ASSEMBLY, IN_PREPARATION, or CANCELLED
-- WHEN the approval flow runs
-- THEN the four approval states progress independently
-- AND the sourcing value does not alter the approval state
+- WHEN order-state transitions run
+- THEN the six states progress independently of the sourcing value
 
 ### Requirement: Quote response SLA
 
@@ -146,3 +178,13 @@ The system SHALL support owner approval by voice, targeting at least 90% of appr
 - GIVEN approvals during the pilot
 - WHEN the share of voice-based approvals is measured
 - THEN the target is at least 90% of approvals by voice
+
+### Requirement: Modify confirmed order
+
+The system MUST support Confirmed → Draft (modify) with defined, atomic, and tested reconciliation of Google Sheets, stock, and reservations. The mechanism is a design decision; the spec REQUIRES deterministic, tested behavior with no stock leak or double-count.
+
+#### Scenario: Modify reconciles side effects
+
+- GIVEN a Confirmed order with converted reservations and a Sheets row
+- WHEN the owner modifies it
+- THEN it returns to Draft and Sheets, stock, and reservations reconcile atomically
