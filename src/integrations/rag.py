@@ -198,9 +198,7 @@ class RagProductClient:
             else None
         )
         try:
-            response = self._holder.client.get(
-                f"/api/v1/products/{clean_sku}", params=params
-            )
+            response = self._holder.client.get(f"/api/v1/products/{clean_sku}", params=params)
         except httpx.HTTPError as exc:
             raise RagProductError(f"rag price lookup failed for {clean_sku!r}: {exc}") from exc
         if response.status_code == 404:

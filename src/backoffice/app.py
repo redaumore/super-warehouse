@@ -378,8 +378,7 @@ def _exchange_rates_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_exchange_rates(session)
     return [
-        [row["currency"], row["rate_to_ars"], row["updated_at"], row["editable"]]
-        for row in rows
+        [row["currency"], row["rate_to_ars"], row["updated_at"], row["editable"]] for row in rows
     ]
 
 
@@ -673,9 +672,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 label="Customer Orders",
             )
             customer_orders_refresh = gr.Button("Refresh orders")
-            customer_orders_refresh.click(
-                _customer_orders_grid, outputs=customer_orders_grid
-            )
+            customer_orders_refresh.click(_customer_orders_grid, outputs=customer_orders_grid)
             with gr.Row():
                 customer_order_id = gr.Number(label="Order ID", precision=0)
                 customer_order_detail_button = gr.Button("Show line detail")
@@ -731,9 +728,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
 
             gr.Markdown("### Default RAG margin")
             with gr.Row():
-                default_margin = gr.Number(
-                    label="Default margin (%)", value=_default_margin_value
-                )
+                default_margin = gr.Number(label="Default margin (%)", value=_default_margin_value)
                 default_margin_save = gr.Button("Save default margin")
             default_margin_status = gr.Textbox(label="Default-margin status", interactive=False)
             default_margin_save.click(

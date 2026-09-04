@@ -248,9 +248,7 @@ def test_migration_enables_pgvector_extension(db_engine):
     assert row == 1
 
 
-def test_customer_order_migration_round_trips_and_keeps_case_a_persistable(
-    db_engine, clean_schema
-):
+def test_customer_order_migration_round_trips_and_keeps_case_a_persistable(db_engine, clean_schema):
     """The customer-order migration downgrades, upgrades, and preserves legacy Case A writes."""
     alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
     config = AlembicConfig(str(alembic_ini))

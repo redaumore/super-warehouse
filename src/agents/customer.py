@@ -483,9 +483,7 @@ def _rate_source(session: Session) -> Callable[[str], Decimal | None]:
         code = currency.strip().upper()
         if code == "ARS":
             return Decimal(1)
-        return session.scalar(
-            select(ExchangeRate.rate_to_ars).where(ExchangeRate.currency == code)
-        )
+        return session.scalar(select(ExchangeRate.rate_to_ars).where(ExchangeRate.currency == code))
 
     return rate
 
@@ -527,9 +525,7 @@ def _draft_pricing_lines(
     for entry, quantity in base.draft_items:
         source = getattr(entry.source, "value", entry.source)
         if str(source).upper() == ProductSource.LOCAL.value:
-            product = session.scalar(
-                select(Catalogo).where(Catalogo.codigo_interno == entry.sku)
-            )
+            product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == entry.sku))
             if product is None:
                 raise DraftPricingError(f"local product not found for SKU {entry.sku}")
             lines.append(
@@ -656,7 +652,9 @@ def _create_customer_for_draft(
 
     normalized = normalize_phone(telefono)
     if normalized is None:
-        return AgentOutcome(state=base, reply=f"I could not create the customer: invalid phone {telefono}")
+        return AgentOutcome(
+            state=base, reply=f"I could not create the customer: invalid phone {telefono}"
+        )
     customer = session.scalar(select(Cliente).where(Cliente.telefono_norm == normalized))
     if customer is None:
         try:
@@ -694,7 +692,9 @@ def _run_finalize_turn(
         if base.customer_disambiguation_pending:
             candidate = parse_customer_pick(text, base.customer_candidates)
             if candidate is None:
-                return AgentOutcome(state=base, reply=format_customer_menu(base.customer_candidates))
+                return AgentOutcome(
+                    state=base, reply=format_customer_menu(base.customer_candidates)
+                )
             customer = session.get(Cliente, candidate.customer_id)
             if customer is None:
                 return AgentOutcome(state=base, reply="The selected customer no longer exists.")
@@ -714,7 +714,9 @@ def _run_finalize_turn(
                     customer_disambiguation_pending=True,
                     customer_candidates=resolution.candidates,
                 )
-                return AgentOutcome(state=updated, reply=format_customer_menu(resolution.candidates))
+                return AgentOutcome(
+                    state=updated, reply=format_customer_menu(resolution.candidates)
+                )
             if resolution.kind is CustomerResolutionKind.NOT_FOUND:
                 return AgentOutcome(
                     state=base,

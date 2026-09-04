@@ -96,7 +96,9 @@ def shop(db_session):
             descuento_particular_pct=Decimal(0),
         )
     )
-    db_session.add(Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0)))
+    db_session.add(
+        Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0))
+    )
     db_session.add(
         Catalogo(
             id=1,
@@ -196,7 +198,10 @@ def test_finalize_rag_without_rate_saves_pending_snapshot(shop):
     assert item.source == "RAG"
     assert item.moneda == "USD"
     assert item.precio_original == Decimal("10.0000")
-    assert shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id)) is None
+    assert (
+        shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
+        is None
+    )
 
 
 def test_finalize_unknown_customer_then_create_attaches_waiting_draft(shop):

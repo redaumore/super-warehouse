@@ -161,7 +161,9 @@ def _currency_value(currency: object) -> str:
     return value or "ARS"
 
 
-def _resolve_rate(rate: RateSource | Mapping[str, PriceInput] | PriceInput | None, currency: str) -> Decimal | None:
+def _resolve_rate(
+    rate: RateSource | Mapping[str, PriceInput] | PriceInput | None, currency: str
+) -> Decimal | None:
     if currency == "ARS":
         return Decimal(1)
     if rate is None:
@@ -238,7 +240,9 @@ def _price_line(
         else:
             base = compute_base(
                 _quantize(original * conversion_rate),
-                _resolve_margin(supplier_margin, str(code) if code is not None else None, default_margin),
+                _resolve_margin(
+                    supplier_margin, str(code) if code is not None else None, default_margin
+                ),
             )
     else:
         raise ValueError(f"unsupported order line source: {source}")

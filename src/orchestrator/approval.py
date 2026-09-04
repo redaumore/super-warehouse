@@ -137,9 +137,7 @@ def register_approved_order(
     order stays PENDING rather than half-registered.
     """
     if order.conversion_pending:
-        raise PendingConversionError(
-            f"order {order.order_id} is pending currency conversion"
-        )
+        raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
     reservations = _active_reservations(session, order)
     converted = _convert_reservations(session, order, reservations)
     total = order_total(order)
@@ -181,9 +179,7 @@ def approve_and_register(
     roll back.
     """
     if order.conversion_pending:
-        raise PendingConversionError(
-            f"order {order.order_id} is pending currency conversion"
-        )
+        raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
     approve_order(session, order, now=now)
     return register_approved_order(
         session,

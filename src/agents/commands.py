@@ -18,9 +18,7 @@ NEW_CUSTOMER = "nuevo cliente <nombre> <teléfono>"
 APPROVE = "aprobá"
 REJECT = "rechazá"
 RESET_SESSION = "hola bob"
-RESET_GREETING = (
-    "¡Hola! Arrancamos de cero: decime el cliente, los productos y las cantidades."
-)
+RESET_GREETING = "¡Hola! Arrancamos de cero: decime el cliente, los productos y las cantidades."
 
 _SESSION_RESET_RE = re.compile(r"^\s*hola\s+bob\s*[.!]*\s*$", re.IGNORECASE)
 

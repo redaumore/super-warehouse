@@ -268,9 +268,7 @@ def test_session_reset_clears_pending_decision_and_draft_for_next_turn():
     (pending decision) or the product-query draft. Exercised through two
     ``handle_inbound`` turns.
     """
-    draft = (
-        (ProductEntry(sku="CLV-001", name="Clavo 1 pulgada", source=ProductSource.LOCAL), 3),
-    )
+    draft = ((ProductEntry(sku="CLV-001", name="Clavo 1 pulgada", source=ProductSource.LOCAL), 3),)
     store = ConversationStore()
     store.put(
         _state(

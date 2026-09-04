@@ -159,9 +159,7 @@ def _supplier_margin_source(session: Session) -> Callable[[str | None], Decimal 
             return None
         value = supplier.strip()
         margin = session.scalar(
-            select(Supplier.default_margin_pct).where(
-                func.upper(Supplier.code) == value.upper()
-            )
+            select(Supplier.default_margin_pct).where(func.upper(Supplier.code) == value.upper())
         )
         if margin is not None:
             return margin

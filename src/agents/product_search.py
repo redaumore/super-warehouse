@@ -153,11 +153,11 @@ def _entry_from_rag(product: RagProduct) -> ProductEntry:
         price=product.price,
         currency=product.currency,
         unit=product.unit,
-            specs=product.specs,
-            source_file=product.source_file,
-            page=product.page,
-            codigo_proveedor=product.codigo_proveedor,
-        )
+        specs=product.specs,
+        source_file=product.source_file,
+        page=product.page,
+        codigo_proveedor=product.codigo_proveedor,
+    )
 
 
 _NUMBERED_REF_RE = re.compile(r"\bel\s+(\d+)\b")
@@ -252,9 +252,7 @@ def is_finalize(text: str) -> bool:
     return _FINALIZE_RE.match(text or "") is not None
 
 
-def parse_finalize(
-    text: str, draft_items: Sequence[tuple[ProductEntry, int]]
-) -> str | None:
+def parse_finalize(text: str, draft_items: Sequence[tuple[ProductEntry, int]]) -> str | None:
     """Extract the customer name from a finalize command for a non-empty draft.
 
     The parser deliberately requires draft lines so ordinary requests such as

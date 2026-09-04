@@ -57,7 +57,9 @@ def customer_ctx(db_session):
             descuento_particular_pct=Decimal(0),
         )
     )
-    db_session.add(Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0)))
+    db_session.add(
+        Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0))
+    )
     db_session.add(
         Catalogo(
             id=1,
@@ -189,7 +191,9 @@ def test_persist_draft_order_keeps_totals_null_when_conversion_is_pending(custom
     assert order.conversion_pending is True
     assert order.subtotal is None
     assert order.total is None
-    assert session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id)).sku == "USD-1"
+    assert (
+        session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id)).sku == "USD-1"
+    )
 
 
 def test_persist_draft_order_normalizes_doubled_prefix_sku(customer_ctx):
