@@ -9,6 +9,7 @@ it is down.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from src.backoffice.app import (
     _ingest_confirm,
     _ingest_preview,
     _register_client,
+    _save_exchange_rate,
     build_app,
 )
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
@@ -534,3 +536,51 @@ def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
     assert len(grid) == 1
     assert grid[0][1] == "Clavos Paris 2 Pulgadas"
     assert "1 filas extraídas" in message
+
+
+def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
+    """The app-level rate save bumps updated_at and recomputes pending orders."""
+    db_session = shop_ctx["session"]
+    db_session.add(AppSetting(key="default_margin_pct", value="20"))
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.PENDING_APPROVAL,
+        conversion_pending=True,
+    )
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-1",
+            cantidad=2,
+            base_price=Decimal(0),
+            final_price=Decimal(0),
+            adjustment=Decimal(0),
+            name="RAG item",
+            source="RAG",
+            supplier="UNMAPPED",
+            moneda="USD",
+            precio_original=Decimal("10.00"),
+        )
+    )
+    db_session.commit()
+
+    with patch("src.backoffice.customer_orders.datetime") as fake_datetime:
+        fake_datetime.now.side_effect = [
+            datetime(2024, 1, 1, tzinfo=UTC),
+            datetime(2024, 6, 1, tzinfo=UTC),
+        ]
+        first_message, first_rates, _ = _save_exchange_rate("USD", "1000.00")
+        second_message, second_rates, _ = _save_exchange_rate("USD", "1100.00")
+
+    assert "recomputed 1 pending order(s)" in first_message
+    assert "recomputed 0 pending order(s)" in second_message
+    assert first_rates[-1][0] == "USD"
+    assert first_rates[-1][2] == datetime(2024, 1, 1, tzinfo=UTC)
+    assert second_rates[-1][2] == datetime(2024, 6, 1, tzinfo=UTC)
+    with SessionLocal() as session:
+        reloaded = session.get(Order, order.order_id)
+        assert reloaded.conversion_pending is False
+        assert reloaded.subtotal == Decimal("24000.00")
+        assert reloaded.total == Decimal("24000.00")

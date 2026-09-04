@@ -5,21 +5,21 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select
 from sqlalchemy.exc import OperationalError
 
+from src.agents.customer import _supplier_margin_source
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
     Inventory,
     ListaPrecios,
-    Order,
     OrderItem,
     StockReservation,
     Supplier,
 )
-from src.pricing.order_pricing import PricedLine, PricedOrder
+from src.pricing.order_pricing import PricedLine, PricedOrder, PricingLine, compute_order
 from src.sourcing.draft_order import persist_draft_order
 
 
@@ -123,6 +123,46 @@ def test_persist_draft_order_reserves_local_and_keeps_rag_snapshot(customer_ctx)
     assert items[1].precio_original == Decimal("135.5000")
 
 
+def test_supplier_margin_edit_keeps_persisted_order_lines_frozen(customer_ctx):
+    """Editing a supplier margin afterwards never re-prices persisted order lines."""
+    session, customer = customer_ctx
+    supplier = session.get(Supplier, 1)
+    supplier.default_margin_pct = Decimal("0.25")
+    session.flush()
+
+    priced = compute_order(
+        (
+            PricingLine(
+                sku="RAG-SUP-1",
+                cantidad=1,
+                source="RAG",
+                name="RAG item",
+                price=Decimal("100.00"),
+                currency="ARS",
+                supplier="SUP",
+                codigo_proveedor="SUP",
+            ),
+        ),
+        supplier_margin=_supplier_margin_source(session),
+        default_margin=Decimal("0.20"),
+    )
+    assert priced.lines[0].base_ars == Decimal("125.00")  # 100 × 1.25 at persist time
+
+    order = persist_draft_order(session, customer, priced)
+    session.commit()
+
+    # Editing the supplier margin after persistence must not touch the snapshot.
+    supplier.default_margin_pct = Decimal("0.50")
+    session.commit()
+
+    session.refresh(order)
+    item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.base_price == Decimal("125.00")
+    assert item.final_price == Decimal("125.00")
+    assert order.subtotal == Decimal("125.00")
+    assert order.total == Decimal("125.00")
+
+
 def test_persist_draft_order_keeps_totals_null_when_conversion_is_pending(customer_ctx):
     """Pending conversion stores snapshots and leaves order totals unset."""
     session, customer = customer_ctx
@@ -150,3 +190,31 @@ def test_persist_draft_order_keeps_totals_null_when_conversion_is_pending(custom
     assert order.subtotal is None
     assert order.total is None
     assert session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id)).sku == "USD-1"
+
+
+def test_persist_draft_order_normalizes_doubled_prefix_sku(customer_ctx):
+    """A doubled supplier prefix in a RAG SKU is stored collapsed to one prefix."""
+    session, customer = customer_ctx
+    priced = PricedOrder(
+        lines=(
+            PricedLine(
+                sku="AMX-AMX-AT-5044",
+                cantidad=1,
+                base_ars=Decimal("120.00"),
+                final_ars=Decimal("120.00"),
+                moneda="ARS",
+                source="RAG",
+                name="RAG item",
+                supplier="AMX",
+                precio_original=Decimal("100.00"),
+                codigo_proveedor="AMX",
+            ),
+        ),
+        subtotal=Decimal("120.00"),
+        total=Decimal("120.00"),
+    )
+
+    order = persist_draft_order(session, customer, priced)
+
+    item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.sku == "AMX-AT-5044"

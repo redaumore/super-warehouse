@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 302, agrupados en 28 dominios.
+**Total de escenarios:** 304, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -27,12 +27,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 19
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 20
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 28
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 29
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -397,6 +397,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
 - The customer-order migration downgrades, upgrades, and preserves legacy Case A writes. _(`test_customer_order_migration_round_trips_and_keeps_case_a_persistable`)_
+- A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it. _(`test_migration_seeded_default_margin_is_read_by_pricing`)_
 
 ## Teléfonos y clientes
 
@@ -474,6 +475,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Confirmar una fila nueva desde la UI la crea en el catálogo. _(`test_app_ingest_confirm_creates_new_product`)_
 - La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
 - La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
+- The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
 
 ## Feature flags por fase
 

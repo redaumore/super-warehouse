@@ -10,11 +10,13 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from alembic import command
+from src.agents.customer import _default_margin
+from src.backoffice.customer_orders import get_default_margin
 from src.db.models import (
     Base,
     Catalogo,
@@ -30,6 +32,7 @@ from src.db.models import (
     SupplierStatus,
 )
 from src.orchestrator.session import ResolvedItem
+from src.pricing.order_pricing import PricingLine, compute_order
 from src.sourcing.case_a import persist_case_a_order
 
 
@@ -342,5 +345,44 @@ def test_customer_order_migration_round_trips_and_keeps_case_a_persistable(
             assert persisted.estado is OrderEstado.PENDING_APPROVAL
             assert persisted.items[0].sku == "LEG-001"
             assert quote.total == Decimal("135.00")
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_migration_seeded_default_margin_is_read_by_pricing(db_engine, clean_schema):
+    """A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it."""
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    config = AlembicConfig(str(alembic_ini))
+    previous_revision = "46bdbdc4a575"
+
+    command.downgrade(config, previous_revision)
+    command.upgrade(config, "head")
+    try:
+        Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+        with Session() as session:
+            # First read on the fresh database must see the seeded 20%, with no
+            # test-inserted row involved.
+            assert get_default_margin(session) == Decimal(20)
+            assert _default_margin(session) == Decimal("0.20")
+
+            # The code path that applies it: an unmapped RAG supplier falls back
+            # to the seeded default, so 100.00 → 120.00.
+            priced = compute_order(
+                (
+                    PricingLine(
+                        sku="RAG-UNMAPPED-1",
+                        cantidad=1,
+                        source="RAG",
+                        name="RAG item",
+                        price=Decimal("100.00"),
+                        currency="ARS",
+                        supplier="UNMAPPED",
+                        codigo_proveedor="UNMAPPED",
+                    ),
+                ),
+                supplier_margin=lambda code: None,
+                default_margin=_default_margin(session),
+            )
+            assert priced.lines[0].base_ars == Decimal("120.00")
     finally:
         command.upgrade(config, "head")
