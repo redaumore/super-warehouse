@@ -1,4 +1,13 @@
-"""Persistence for source-aware orders assembled from chat draft lines."""
+"""Persistence for source-aware orders assembled from chat draft lines.
+
+The draft is persisted as an ``Order`` with ``estado=DRAFT`` (design AD2: Draft
+is a persisted order row, never a memory-only buffer) with one ``OrderItem``
+per line. The customer is resolved or created at the first add that knows it.
+
+Reservations are deliberately NOT created here: per design AD10 the ACTIVE
+soft-lock is created at the quote step (``cerrá el pedido``) and converted +
+deducted at confirm — see ``src/agents/customer.py``.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +16,6 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from src.agents.inventory import reserve_stock
 from src.db.models import Cliente, Order, OrderEstado, OrderItem, SourcingState
 from src.integrations.rag import normalize_rag_sku
 from src.pricing.order_pricing import PricedLine, PricedOrder
@@ -31,15 +39,15 @@ def persist_draft_order(
     priced: PricedOrder,
     delivery_date: date | None = None,
 ) -> Order:
-    """Persist a priced draft and reserve stock only for LOCAL lines.
+    """Persist a priced draft as a DRAFT order (no reservations, no Sheets).
 
     RAG lines are immutable snapshots and deliberately do not require a catalog
-    row or create a stock reservation. Sheets registration remains in the
-    existing approval flow and is never called here.
+    row or create a stock reservation. Stock is soft-locked at the quote step
+    (AD10) and Sheets registration runs on the confirm ceremony — never here.
     """
     order = Order(
         customer_id=customer.customer_id,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         sourcing_state=SourcingState.PENDING_ASSEMBLY,
         delivery_date=delivery_date,
         subtotal=priced.subtotal,
@@ -51,19 +59,10 @@ def persist_draft_order(
 
     for line in priced.lines:
         source = _source_value(line.source)
-        sku = _stored_sku(line)
-        if source == "LOCAL":
-            reserve_stock(
-                session,
-                sku,
-                customer.customer_id,
-                line.cantidad,
-                order_id=order.order_id,
-            )
         session.add(
             OrderItem(
                 order_id=order.order_id,
-                sku=sku,
+                sku=_stored_sku(line),
                 cantidad=line.cantidad,
                 base_price=line.base_ars,
                 final_price=line.final_ars,

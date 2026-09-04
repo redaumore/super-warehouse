@@ -1,21 +1,31 @@
-"""Order lifecycle: state machine and reservation release rules."""
+"""Order lifecycle: six-state machine and reservation release rules."""
 
 from src.order_lifecycle.state import (
     InvalidTransitionError,
     RequiresRequoteError,
-    approve_order,
+    add_draft_item,
+    cancel_order,
+    complete_picking,
+    confirm_order,
+    deliver_order,
     expire_reservations,
-    mark_dispatched,
-    reject_order,
+    modify_order,
+    remove_draft_item,
     requires_requote,
+    start_picking,
 )
 
 __all__ = [
     "InvalidTransitionError",
     "RequiresRequoteError",
-    "approve_order",
+    "add_draft_item",
+    "cancel_order",
+    "complete_picking",
+    "confirm_order",
+    "deliver_order",
     "expire_reservations",
-    "mark_dispatched",
-    "reject_order",
+    "modify_order",
+    "remove_draft_item",
     "requires_requote",
+    "start_picking",
 ]

@@ -43,7 +43,7 @@ import phonenumbers
 from phonenumbers import PhoneNumber, PhoneNumberFormat
 from phonenumbers.phonenumberutil import NumberParseException
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.agents.commands import (
@@ -77,14 +77,16 @@ from src.agents.product_search import (
     is_finalize,
     parse_finalize,
     parse_product_add,
+    parse_product_remove,
 )
 from src.agents.sales import Quote
 from src.channels.base import InboundMessage
-from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, Supplier
+from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, OrderEstado, Supplier
 from src.db.session import SessionLocal
 from src.integrations.rag import RagProductClient
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem, SourcingNeedItem
+from src.order_lifecycle.state import remove_draft_item
 from src.pricing.order_pricing import (
     MarginSource,
     MissingRateError,
@@ -341,11 +343,15 @@ class SourcingDeps:
 def format_case_a_reply(
     order: Order, quote: Quote, delivery_date: date | None, customer_name: str | None = None
 ) -> str:
-    """Owner confirmation for a full-stock (Case A) order, in the owner's chat."""
+    """Owner confirmation for a full-stock (Case A) order, in the owner's chat.
+
+    The quote step (Draft stays DRAFT) shows the total and asks for the
+    confirm; the "confirmado" wording belongs to the confirm ceremony reply.
+    """
     who = f" de {customer_name}" if customer_name else ""
     date_part = f" Fecha estimada de entrega: {delivery_date.isoformat()}." if delivery_date else ""
     return (
-        f"Pedido #{order.order_id}{who} confirmado, tenemos todo el stock. "
+        f"Pedido #{order.order_id}{who}: tenemos todo el stock. "
         f"Total estimado: {quote.total:.2f} ARS.{date_part} "
         "¿Lo aprobás? Respondé 'aprobá' o 'rechazá'."
     )
@@ -610,18 +616,78 @@ def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> 
     )
 
 
+def _existing_draft(session: Session, customer_id: int) -> Order | None:
+    """The customer's open DRAFT order, if any (single-draft app guard)."""
+    return session.scalar(
+        select(Order).where(Order.customer_id == customer_id, Order.estado == OrderEstado.DRAFT)
+    )
+
+
+def _reserve_quote_lines(
+    session: Session, customer: Cliente, order: Order, priced: PricedOrder
+) -> None:
+    """AD10: the quote step soft-locks LOCAL lines with an ACTIVE reservation.
+
+    RAG lines are supplier snapshots and never reserve stock; the Draft stays
+    DRAFT. The confirm ceremony converts these reservations and deducts stock.
+    """
+    from src.agents.inventory import reserve_stock
+
+    for line in priced.lines:
+        source = getattr(line.source, "value", line.source)
+        if str(source).upper() != "LOCAL":
+            continue
+        reserve_stock(
+            session,
+            line.sku,
+            customer.customer_id,
+            line.cantidad,
+            order_id=order.order_id,
+        )
+
+
 def _persist_finalized_draft(
     session: Session,
     customer: Cliente,
     base: ConversationState,
     rag_client: RagProductClient | None,
 ) -> AgentOutcome:
-    """Price, persist, and close a draft for a resolved customer."""
+    """Price, persist, and reserve a draft for a resolved customer (quote step).
+
+    The first add that knows the customer persists an ``Order`` with
+    ``estado=DRAFT`` (design AD2). Per AD10 the quote step soft-locks the LOCAL
+    lines with an ACTIVE reservation while the Draft stays DRAFT; RAG lines
+    never reserve. The single-draft rule (spec: at most one DRAFT per customer)
+    is enforced by an app guard plus the ``uq_orders_one_draft_per_customer``
+    partial index as the DB backstop for the add race.
+    """
     try:
         priced = _price_draft(session, customer, base, rag_client)
     except DraftPricingError as exc:
         return AgentOutcome(state=base, reply=f"I could not price the draft: {exc}")
-    order = persist_draft_order(session, customer, priced)
+    existing = _existing_draft(session, customer.customer_id)
+    if existing is not None:
+        return AgentOutcome(
+            state=base,
+            reply=(
+                f"{customer.nombre_comercial} ya tiene un pedido abierto "
+                f"(pedido #{existing.order_id}); no creé otro. "
+                "Continuá con ese pedido y después confirmalo."
+            ),
+        )
+    try:
+        order = persist_draft_order(session, customer, priced)
+        _reserve_quote_lines(session, customer, order, priced)
+    except IntegrityError:
+        # The single-draft race: another session persisted the DRAFT first.
+        session.rollback()
+        return AgentOutcome(
+            state=base,
+            reply=(
+                f"{customer.nombre_comercial} ya tiene un pedido abierto; "
+                "no creé otro. Continuá con el pedido existente."
+            ),
+        )
     session.commit()
     updated = base.with_updates(
         customer_id=customer.customer_id,
@@ -668,6 +734,68 @@ def _create_customer_for_draft(
             session.rollback()
             return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
     return _persist_finalized_draft(session, customer, base, rag_client)
+
+
+def _remove_target_matches(needle: str, name: str | None, sku: str) -> bool:
+    """True when a normalized remove target names the line (name or SKU)."""
+    return (name is not None and needle in normalize_text(name)) or needle in normalize_text(sku)
+
+
+def _resolve_persisted_line(session: Session, order: Order, needle: str) -> str | None:
+    """Resolve a remove target against the persisted OrderItem rows."""
+    from src.db.models import OrderItem
+
+    items = session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)).all()
+    for item in items:
+        if _remove_target_matches(needle, item.name, item.sku):
+            return item.sku
+    return None
+
+
+def _run_remove_product_turn(
+    message: InboundMessage,
+    base: ConversationState,
+    deps: SourcingDeps | None,
+) -> AgentOutcome | None:
+    """Handle the remove-product command; ``None`` when the text is not one.
+
+    Removes the referenced line from the in-memory draft (``draft_items``) or —
+    when the conversation resumed a persisted DRAFT order — from its
+    ``OrderItem`` rows via ``remove_draft_item`` (an empty Draft stays DRAFT,
+    spec: remove product is real and the draft persists).
+    """
+    target = parse_product_remove(message.text or "")
+    if target is None:
+        return None
+    needle = normalize_text(target)
+    kept: list[tuple[ProductEntry, int]] = []
+    removed: list[str] = []
+    for entry, qty in base.draft_items:
+        if _remove_target_matches(needle, entry.name, entry.sku):
+            removed.append(entry.name or entry.sku)
+        else:
+            kept.append((entry, qty))
+    if removed:
+        return AgentOutcome(
+            state=base.with_updates(draft_items=tuple(kept)),
+            reply=f"Listo: saqué {' y '.join(removed)} del pedido en curso.",
+        )
+    if base.order_id is not None and deps is not None:
+        with deps.session_factory() as session:
+            order = session.get(Order, base.order_id)
+            if order is not None and order.estado is OrderEstado.DRAFT:
+                sku = _resolve_persisted_line(session, order, needle)
+                if sku is not None:
+                    remove_draft_item(session, order, sku)
+                    session.commit()
+                    return AgentOutcome(
+                        state=base,
+                        reply=f"Listo: saqué {sku} del pedido #{order.order_id}.",
+                    )
+    return AgentOutcome(
+        state=base,
+        reply="No encontré ese artículo en el pedido en curso.",
+    )
 
 
 def _run_finalize_turn(
@@ -805,52 +933,75 @@ def _run_sourcing_turn(
 
         resolved = _resolve_items(session, parsed.items)
         sourcing = classify_case(resolved, lambda sku: available_stock(session, sku), deps.searcher)
-        if sourcing.case is SourcingCase.A:
-            order, quote = persist_case_a_order(
-                session, customer, resolved, delivery_date=parsed.delivery_date
+        # AD4: at most one DRAFT per customer — refuse a second open order
+        # before writing anything (the partial unique index is the backstop).
+        existing = _existing_draft(session, customer.customer_id)
+        if existing is not None:
+            return AgentOutcome(
+                state=pending_cleared.with_updates(parsed_order=None),
+                reply=(
+                    f"{customer.nombre_comercial} ya tiene un pedido abierto "
+                    f"(pedido #{existing.order_id}); no creé otro. "
+                    "Continuá con ese pedido y después confirmalo."
+                ),
             )
-            reply = format_case_a_reply(
-                order, quote, parsed.delivery_date, customer.nombre_comercial
-            )
-            updated = pending_cleared.with_updates(
-                customer_id=customer.customer_id,
-                order_id=order.order_id,
-                items=tuple(resolved),
-                awaiting_decision=True,
-                parsed_order=None,
-            )
-        elif sourcing.case is SourcingCase.B:
-            from src.sourcing.case_b import persist_case_b_order
+        try:
+            if sourcing.case is SourcingCase.A:
+                order, quote = persist_case_a_order(
+                    session, customer, resolved, delivery_date=parsed.delivery_date
+                )
+                reply = format_case_a_reply(
+                    order, quote, parsed.delivery_date, customer.nombre_comercial
+                )
+                updated = pending_cleared.with_updates(
+                    customer_id=customer.customer_id,
+                    order_id=order.order_id,
+                    items=tuple(resolved),
+                    awaiting_decision=True,
+                    parsed_order=None,
+                )
+            elif sourcing.case is SourcingCase.B:
+                from src.sourcing.case_b import persist_case_b_order
 
-            order = persist_case_b_order(
-                session, customer, delivery_date=parsed.delivery_date, missing=sourcing.missing
-            )
-            needs = tuple(
-                SourcingNeedItem(sku=m.sku, missing_quantity=m.missing_quantity)
-                for m in sourcing.missing
-            )
-            candidates = tuple(c for m in sourcing.missing for c in m.candidates)
-            reply = format_case_b_reply(order, sourcing.missing)
-            updated = pending_cleared.with_updates(
-                customer_id=customer.customer_id,
-                order_id=order.order_id,
-                items=tuple(resolved),
-                parsed_order=None,
-                sourcing_selection_pending=True,
-                sourcing_needs=needs,
-                sourcing_candidates=candidates,
-            )
-        else:
-            from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
+                order = persist_case_b_order(
+                    session, customer, delivery_date=parsed.delivery_date, missing=sourcing.missing
+                )
+                needs = tuple(
+                    SourcingNeedItem(sku=m.sku, missing_quantity=m.missing_quantity)
+                    for m in sourcing.missing
+                )
+                candidates = tuple(c for m in sourcing.missing for c in m.candidates)
+                reply = format_case_b_reply(order, sourcing.missing)
+                updated = pending_cleared.with_updates(
+                    customer_id=customer.customer_id,
+                    order_id=order.order_id,
+                    items=tuple(resolved),
+                    parsed_order=None,
+                    sourcing_selection_pending=True,
+                    sourcing_needs=needs,
+                    sourcing_candidates=candidates,
+                )
+            else:
+                from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
 
-            order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
-            cancel_for_no_supplier(session, order)
-            reply = format_case_c_reply(order, sourcing.missing, customer.nombre_comercial)
-            updated = pending_cleared.with_updates(
-                customer_id=customer.customer_id,
-                order_id=order.order_id,
-                items=tuple(resolved),
-                parsed_order=None,
+                order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
+                cancel_for_no_supplier(session, order, actor="owner")
+                reply = format_case_c_reply(order, sourcing.missing, customer.nombre_comercial)
+                updated = pending_cleared.with_updates(
+                    customer_id=customer.customer_id,
+                    order_id=order.order_id,
+                    items=tuple(resolved),
+                    parsed_order=None,
+                )
+        except IntegrityError:
+            # The single-draft race: another session persisted the DRAFT first.
+            session.rollback()
+            return AgentOutcome(
+                state=pending_cleared.with_updates(parsed_order=None),
+                reply=(
+                    f"{customer.nombre_comercial} ya tiene un pedido abierto; "
+                    "no creé otro. Continuá con el pedido existente."
+                ),
             )
         # The sourcing turn owns its transaction: persist the flow's writes so
         # they survive the session close (the pipeline runs fire-and-forget).
@@ -898,6 +1049,11 @@ def build_handler(
         history = state.history if state is not None else ()
         base = state if state is not None else ConversationState(sender_id=message.sender_id)
         text = (message.text or "").strip()
+        # The remove-product command short-circuits before any add-intent or
+        # LLM turn ("sacá el 2" must remove, never re-add the numbered option).
+        remove_outcome = _run_remove_product_turn(message, base, sourcing)
+        if remove_outcome is not None:
+            return remove_outcome
         if sourcing is not None and (
             (base.customer_disambiguation_pending and base.draft_items)
             or is_finalize(text)

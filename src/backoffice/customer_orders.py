@@ -2,8 +2,12 @@
 
 The module keeps the Customer Orders tab independent from Gradio. Order rows
 and line details are returned as plain dictionaries, while exchange-rate and
-default-margin actions mutate only the supplied SQLAlchemy session. The UI
-owns the transaction boundary and commits successful actions.
+default-margin actions mutate only the supplied SQLAlchemy session. The
+fulfillment actions (start picking, complete picking, deliver, cancel) wrap
+the lifecycle transitions and COMMIT inside — the po.py pattern — so the tab
+persists the owner's execution even though the Gradio handler closes its
+short-lived ``SessionLocal`` at the end of the with-block. The UI owns the
+transaction boundary for every other action.
 """
 
 from __future__ import annotations
@@ -16,6 +20,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db.models import AppSetting, ExchangeRate, Order, Supplier
+from src.order_lifecycle.state import (
+    cancel_order,
+    complete_picking,
+    deliver_order,
+    start_picking,
+)
 from src.pricing.order_pricing import MissingRateError, PricingLine, compute_order
 
 _DEFAULT_MARGIN_KEY = "default_margin_pct"
@@ -207,6 +217,59 @@ def _pricing_lines(order: Order) -> tuple[PricingLine, ...]:
         else:
             raise ValueError(f"unsupported persisted order line source: {source}")
     return tuple(lines)
+
+
+# --------------------------------------------------- fulfillment actions (6.x)
+
+# The fulfillment actions legal for each order state (backoffice spec: only
+# legal next-state actions are shown on the Customer Orders tab).
+_LEGAL_ACTIONS: dict[str, tuple[str, ...]] = {
+    "DRAFT": ("cancel_order",),
+    "CONFIRMED": ("start_picking", "cancel_order"),
+    "PICKING": ("complete_picking", "cancel_order"),
+    "READY_FOR_DELIVERY": ("deliver_order", "cancel_order"),
+    "CANCELED": (),
+    "CLOSED": (),
+}
+
+
+def legal_actions(estado: str) -> tuple[str, ...]:
+    """The fulfillment actions legal for an order state, in display order."""
+    return _LEGAL_ACTIONS.get(str(estado).upper(), ())
+
+
+def start_picking_action(session: Session, order_id: int) -> str:
+    """Execute Confirmed → Picking and commit (po.py pattern)."""
+    start_picking(session, _order_or_raise(session, order_id))
+    session.commit()
+    return f"Pedido #{order_id} → Picking."
+
+
+def complete_picking_action(session: Session, order_id: int) -> str:
+    """Execute Picking → Ready for delivery and commit."""
+    complete_picking(session, _order_or_raise(session, order_id))
+    session.commit()
+    return f"Pedido #{order_id} → Ready for delivery."
+
+
+def deliver_order_action(session: Session, order_id: int) -> str:
+    """Execute Ready for delivery → Closed (stores delivery_date) and commit."""
+    order = _order_or_raise(session, order_id)
+    deliver_order(session, order)
+    session.commit()
+    date_part = f" (entrega {order.delivery_date.isoformat()})" if order.delivery_date else ""
+    return f"Pedido #{order_id} → Closed{date_part}."
+
+
+def cancel_order_action(session: Session, order_id: int) -> str:
+    """Execute the cancel transition with the backoffice as actor and commit.
+
+    Draft/Confirmed release ACTIVE reservations; Picking/Ready for delivery
+    restore the deducted stock with the audit trail (actor ``backoffice``).
+    """
+    cancel_order(session, _order_or_raise(session, order_id), actor="backoffice")
+    session.commit()
+    return f"Pedido #{order_id} cancelado."
 
 
 def recompute_pending_conversion(session: Session) -> int:

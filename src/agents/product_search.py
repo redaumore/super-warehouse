@@ -211,6 +211,31 @@ _FINALIZE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Remove-product command: "sacá los clavos", "quitá el 2", "borrá la pintura".
+# Anchored whole-message match — a product mention inside a longer sentence
+# stays an LLM turn. The target is the remaining phrase (or a numbered
+# reference to the last displayed options).
+_REMOVE_RE = re.compile(
+    r"^\s*(?:sac(?:a|á)|quit(?:a|á)|elimin(?:a|á)|borr(?:a|á))\s+"
+    r"(?:(?:el|la|lo|los|las|del|de\s+la|de\s+los|de\s+las)\s+)?"
+    r"(.+?)\s*[.!?]*$",
+    re.IGNORECASE,
+)
+
+
+def parse_product_remove(text: str) -> str | None:
+    """Extract the target phrase of a remove command; ``None`` when not one.
+
+    Returns the normalized target ("los clavos" → "clavos"). The caller
+    resolves it against the draft lines (in-memory entries or persisted
+    ``OrderItem`` rows) by name/SKU containment.
+    """
+    match = _REMOVE_RE.match(text or "")
+    if match is None:
+        return None
+    target = " ".join(match.group(1).strip().strip(".!?").split())
+    return target or None
+
 
 def parse_product_add(text: str, options: Sequence[ProductEntry]) -> tuple[int, int] | None:
     """Parse an add-to-order intent; ``None`` when the text is not an add phrase.

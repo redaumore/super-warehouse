@@ -54,16 +54,21 @@ Availability = Callable[[str], int]
 def classify_case(
     items: tuple[ResolvedItem, ...],
     availability: Availability,
-    searcher: SupplierCatalogSearcher,
+    searcher: SupplierCatalogSearcher | None,
 ) -> SourcingDecision:
-    """Classify a resolved order into Case A/B/C from availability + suppliers."""
+    """Classify a resolved order into Case A/B/C from availability + suppliers.
+
+    A ``None`` searcher means no supplier candidates are known: any missing
+    item then classifies as Case C (the safe degraded behavior — an order with
+    stock gaps and no reachable suppliers cannot be fulfilled).
+    """
     missing: list[MissingItem] = []
     for item in items:
         on_hand = max(0, availability(item.sku))
         if on_hand >= item.cantidad:
             continue
         need = item.cantidad - on_hand
-        candidates = searcher.search(sku=item.sku, description=item.description)
+        candidates = searcher.search(sku=item.sku, description=item.description) if searcher else ()
         missing.append(
             MissingItem(
                 sku=item.sku,

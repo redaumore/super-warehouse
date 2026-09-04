@@ -29,6 +29,7 @@ from typing import Protocol
 
 from src.agents.commands import RESET_GREETING, is_session_reset
 from src.agents.intake import OrderParser
+from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
 from src.orchestrator.session import ConversationState, ConversationStore
 
@@ -96,6 +97,10 @@ def route_message(message: InboundMessage, state: ConversationState | None) -> R
     text = (message.text or "").strip()
     if not text:
         # Nothing to route on: text-less, media-less message.
+        return RoutingDecision(agent=AgentName.CUSTOMER, context_loaded=state is not None)
+    if parse_product_remove(text) is not None:
+        # The remove-product command belongs to the Customer agent whenever an
+        # order/draft context exists (in-memory draft or rehydrated DRAFT).
         return RoutingDecision(agent=AgentName.CUSTOMER, context_loaded=state is not None)
     if state is not None and state.awaiting_decision:
         # The owner conversation owns every reply while a decision is pending:

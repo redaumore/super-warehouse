@@ -173,7 +173,7 @@ def order_ctx(db_session):
     )
     db_session.flush()
     seed_inventory(db_session)
-    order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()
     return {"session": db_session, "order": order, "sku": "CLV-001"}

@@ -17,9 +17,9 @@ enabled: the parse step extracts structured order fields (customer name, items,
 delivery date) before the Customer agent, the Customer handler resolves the
 customer by name and classifies each order into Case A/B/C, the SOURCING agent
 handles the owner's supplier-selection replies, and the DISPATCH agent runs the
-real approval flow (``parse_decision`` → ``apply_decision`` →
-``register_approved_order`` with the ``SheetsWriter``). The conversation store
-is wired to rehydrate expired conversations from the database (latest open
+confirm ceremony (``parse_decision`` → ``apply_decision`` →
+``confirm_and_register`` with the ``SheetsWriter``). The conversation store
+is wired to rehydrate expired conversations from the database (latest DRAFT
 order across customers), so multi-turn flows survive the 30-minute in-memory
 TTL. Clearing both owner keys disables the parse step and keeps the legacy
 conversational intake.
@@ -148,7 +148,9 @@ def build_orchestrator(
         dispatcher = (
             dispatch
             if dispatch is not None
-            else build_dispatch_handler(SessionLocal, sheets or SheetsWriter())
+            else build_dispatch_handler(
+                SessionLocal, sheets or SheetsWriter(), searcher=sourcing.searcher
+            )
         )
         orchestrator.register(AgentName.DISPATCH, dispatcher)
     return orchestrator

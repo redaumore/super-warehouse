@@ -197,26 +197,26 @@ async def test_owner_turn_flows_to_case_a_quote_and_approval(shop):
     assert len(channel.sent) == 1
     sender, reply = channel.sent[0]
     assert sender == OWNER_WHATSAPP
-    assert "Pedido #1 de Ferretería Don Juan confirmado" in reply
+    assert "Pedido #1 de Ferretería Don Juan" in reply
     assert "aprobá" in reply
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
     assert order is not None
-    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert order.estado is OrderEstado.DRAFT  # persisted at the first add
 
-    # The owner's approval reply routes to the wired DISPATCH and registers.
+    # The owner's confirm reply routes to the wired DISPATCH and registers.
     with _pipeline_patches(channel, orchestrator, settings):
         await handle_inbound(
             InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="aprobá")
         )
 
     assert len(channel.sent) == 2
-    assert "aprobado" in channel.sent[1][1]
+    assert "confirmado" in channel.sent[1][1]
     assert sheets.rows == [(order.order_id, "10 × CLV-PRS-2")]
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-PRS-2"))
     assert on_hand.quantity_on_hand == 40
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
-    assert order.estado is OrderEstado.APPROVED
+    assert order.estado is OrderEstado.CONFIRMED
 
 
 async def test_non_owner_sender_rejected_before_routing(shop):
@@ -260,7 +260,7 @@ async def test_telegram_owner_gate_accepts_configured_chat_id(shop):
 
     # The owner's order flowed; the impostor was rejected before routing.
     assert channel.sent[0][0] == OWNER_TELEGRAM
-    assert "Pedido #1 de Ferretería Don Juan confirmado" in channel.sent[0][1]
+    assert "Pedido #1 de Ferretería Don Juan" in channel.sent[0][1]
     assert channel.sent[1] == ("987654321", rejection_reply())
     orders = session.scalars(select(Order)).all()
     assert len(orders) == 1  # only the owner's order exists

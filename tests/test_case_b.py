@@ -28,6 +28,7 @@ from src.db.models import (
     Cliente,
     ListaPrecios,
     Order,
+    OrderEstado,
     SourcingNeed,
     SourcingState,
     Supplier,
@@ -162,7 +163,8 @@ def test_partial_order_lists_missing_items_and_suppliers(shop):
     assert "2) Supplier Y" in reply  # type: ignore[operator]
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
-    assert order.sourcing_state is SourcingState.IN_PREPARATION  # set at detection
+    assert order.estado is OrderEstado.DRAFT  # a Draft awaiting the confirm ceremony
+    assert order.sourcing_state is SourcingState.PENDING_ASSEMBLY  # IN_PREPARATION on selection
     need = session.scalar(select(SourcingNeed).where(SourcingNeed.order_id == order.order_id))
     assert need.sku == "CLV-PRS-2"
     assert need.missing_quantity == 6
@@ -184,6 +186,7 @@ def test_owner_selection_accumulates_open_po(shop):
     assert result.decision.agent is AgentName.SOURCING
     assert "PO #1" in result.reply  # type: ignore[operator]
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
+    assert order.estado is OrderEstado.CONFIRMED  # the order enters CONFIRMED on selection
     assert order.sourcing_state is SourcingState.IN_PREPARATION
     need = session.scalar(select(SourcingNeed).where(SourcingNeed.order_id == order.order_id))
     assert need.supplier_id == 1
@@ -257,3 +260,32 @@ def test_invalid_selection_number_asks_again(shop):
     need = session.scalar(select(SourcingNeed))
     assert need.supplier_id is None
     assert session.scalar(select(SupplierPurchaseOrder)) is None
+
+
+def test_cancel_case_b_order_never_touches_pos_or_needs(shop):
+    """Cancelar un pedido Case B no toca POs abiertos ni SourcingNeed (AD9)."""
+    session = shop["session"]
+    orchestrator = _orchestrator(session)
+    orchestrator.handle_inbound(_message(ORDER_MESSAGE))
+    orchestrator.handle_inbound(_message("1"))  # selection → OPEN PO accumulated
+
+    order = session.scalar(select(Order).order_by(Order.order_id.desc()))
+    assert order.estado is OrderEstado.CONFIRMED
+    from src.order_lifecycle.state import cancel_order
+
+    cancel_order(session, order, actor="owner")
+    session.flush()
+
+    assert order.estado is OrderEstado.CANCELED
+    # AD9: the shared OPEN PO and its accumulated line survive untouched.
+    po = session.scalar(select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 1))
+    assert po is not None
+    assert po.estado is SupplierPurchaseOrderState.OPEN
+    item = session.scalar(
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po.po_id)
+    )
+    assert item.quantity == 6  # no orphaned supplier work: the PO keeps its line
+    # The SourcingNeed keeps the selection (informational axis, never cancelled).
+    need = session.scalar(select(SourcingNeed).where(SourcingNeed.order_id == order.order_id))
+    assert need is not None
+    assert need.supplier_id == 1

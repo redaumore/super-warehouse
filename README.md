@@ -2,7 +2,7 @@
 
 WhatsApp/Telegram order intake for a hardware store, owner-first: the OWNER is
 the only chat actor. The owner texts or sends voice notes naming the customer,
-agents turn them into quotes, the owner approves in chat, and approved orders
+agents turn them into quotes, the owner confirms in chat, and confirmed orders
 register to Google Sheets while stock deducts. Every inbound message is gated
 against the owner sender allowlist before routing; non-owner senders get a
 polite rejection. A Gradio backoffice handles catalog, clients, live orders and
@@ -69,7 +69,7 @@ flow roll the order back (it stays pending) instead of half-registering it.
 
 | Path | Responsibility |
 |---|---|
-| `src/agents/` | Customer (owner-assistant LLM chat + sourcing turn with name resolution), Customers (name matcher + create command), Disambiguation (SKU resolution), Inventory (availability + reservations), Dispatch (wired approve/reject), Sales (quotes), Perception (STT/vision), Intake (NL order parsing) |
+| `src/agents/` | Customer (owner-assistant LLM chat + sourcing turn with name resolution), Customers (name matcher + create command), Disambiguation (SKU resolution), Inventory (availability + reservations), Dispatch (wired confirm/cancel), Sales (quotes), Perception (STT/vision), Intake (NL order parsing) |
 | `src/orchestrator/` | Owner gate, router + session store (parse step, owner-keyed DB rehydration), approval orchestration |
 | `src/sourcing/` | Case A/B/C flows: classification, persistence of `SourcingNeed`, multi-turn supplier selection |
 | `src/purchasing/` | `SupplierPurchaseOrder` state machine + accumulation (one OPEN PO per supplier) |

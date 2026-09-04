@@ -24,9 +24,10 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from src.channels.base import InboundMessage
-from src.db.models import Cliente, Order, SourcingState, SupplierPurchaseOrder
+from src.db.models import Cliente, Order, OrderEstado, SourcingState, SupplierPurchaseOrder
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ConversationState
+from src.order_lifecycle.state import confirm_order
 from src.purchasing.accumulate import accumulate_need
 from src.sourcing.classify import MissingItem
 from src.sourcing.persistence import sourcing_needs_for_order, upsert_sourcing_need
@@ -42,15 +43,15 @@ def persist_case_b_order(
     delivery_date: date | None = None,
     missing: tuple[MissingItem, ...],
 ) -> Order:
-    """Persist the order with sourcing IN_PREPARATION and its SourcingNeed rows.
+    """Persist the order as DRAFT with its SourcingNeed rows.
 
-    IN_PREPARATION is set the moment the missing items are detected (not at
-    confirmation): the whole Case B span is "in preparation" per the design's
-    resolved open question.
+    Sourcing stays PENDING_ASSEMBLY here: per the order-sourcing spec,
+    IN_PREPARATION is set when the owner's selection is confirmed (the POs are
+    accumulated), not at order creation. The order itself is a Draft awaiting
+    the confirm ceremony — independent of the PO progress.
     """
     order = Order(
         customer_id=customer.customer_id,
-        sourcing_state=SourcingState.IN_PREPARATION,
         delivery_date=delivery_date,
     )
     session.add(order)
@@ -87,8 +88,10 @@ def confirm_selection(
     """Accumulate the confirmed selections into one OPEN PO per supplier.
 
     Each ``sku → supplier_id`` selection accumulates the need into that
-    supplier's OPEN purchase order (merging with any existing one) and the
-    order stays IN_PREPARATION. Returns the touched purchase orders.
+    supplier's OPEN purchase order (merging with any existing one), sourcing is
+    set IN_PREPARATION and the order itself enters CONFIRMED — per the
+    order-sourcing spec the order state is independent of the PO progress.
+    Returns the touched purchase orders.
     """
     needs = {need.sku: need for need in sourcing_needs_for_order(session, order.order_id)}
     pos: dict[int, SupplierPurchaseOrder] = {}
@@ -99,6 +102,8 @@ def confirm_selection(
         po = accumulate_need(session, need, supplier_id)
         pos[po.po_id] = po
     order.sourcing_state = SourcingState.IN_PREPARATION
+    if order.estado is OrderEstado.DRAFT:
+        confirm_order(session, order)  # Draft → Confirmed (no reservations: TTL guard passes)
     session.flush()
     return tuple(pos.values())
 

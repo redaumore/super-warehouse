@@ -73,7 +73,7 @@ def _client(session, customer_id: int, name: str) -> None:
 
 @pytest.fixture
 def shop(db_session):
-    """Two customers and TWO open orders (one per customer) plus a Case B need."""
+    """Two customers and TWO DRAFT orders (one per customer) plus a Case B need."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     _client(db_session, 1, "Ferretería Don Juan")
     _client(db_session, 2, "Ferretería El Zorro")
@@ -82,7 +82,7 @@ def shop(db_session):
     )
     order_a = Order(
         customer_id=1,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         sourcing_state=SourcingState.PENDING_ASSEMBLY,
     )
     db_session.add(order_a)
@@ -99,8 +99,8 @@ def shop(db_session):
     )
     order_b = Order(
         customer_id=2,
-        estado=OrderEstado.PENDING_APPROVAL,
-        sourcing_state=SourcingState.IN_PREPARATION,
+        estado=OrderEstado.DRAFT,
+        sourcing_state=SourcingState.PENDING_ASSEMBLY,
     )
     db_session.add(order_b)
     db_session.flush()
@@ -120,8 +120,8 @@ CANDIDATES = (
 )
 
 
-def test_rehydrate_picks_latest_open_order_across_customers(shop):
-    """El pedido abierto MÁS RECIENTE (de cualquier cliente) es la conversación activa."""
+def test_rehydrate_picks_latest_draft_order_across_customers(shop):
+    """El Draft MÁS RECIENTE (de cualquier cliente) es la conversación activa."""
     session = shop["session"]
     state = rehydrate_conversation(session, OWNER_SENDER)
     assert state is not None
@@ -133,14 +133,14 @@ def test_rehydrate_picks_latest_open_order_across_customers(shop):
 
 
 def test_rehydrate_restores_case_a_awaiting_decision(shop):
-    """Un pedido Case A pendiente de aprobación restaura awaiting_decision."""
+    """Un Draft Case A pendiente de confirmación restaura awaiting_decision."""
     session = shop["session"]
     state = rehydrate_conversation(
         session, OWNER_SENDER, searcher=FakeSupplierCatalogSearcher(CANDIDATES)
     )
     assert state is not None
-    # order_b is IN_PREPARATION → selection pending; order_a must be reachable
-    # via an explicit reference (the latest-open rule picks order_b).
+    # order_b has an unassigned need → selection pending; order_a must be
+    # reachable via an explicit reference (the latest-draft rule picks order_b).
     state_a = rehydrate_conversation(session, OWNER_SENDER, order_ref=shop["order_a"].order_id)
     assert state_a is not None
     assert state_a.order_id == shop["order_a"].order_id
@@ -157,27 +157,27 @@ def test_rehydrate_order_ref_overrides_latest(shop):
     assert state.customer_id == 1
 
 
-def test_rehydrate_skips_rejected_orders(shop):
-    """Un pedido rechazado no se rehidrata; el abierto más reciente gana."""
+def test_rehydrate_skips_cancelled_orders(shop):
+    """Un pedido cancelado no se rehidrata; el Draft más reciente gana."""
     session = shop["session"]
     session.add(
-        Order(customer_id=1, estado=OrderEstado.REJECTED, sourcing_state=SourcingState.CANCELLED)
+        Order(customer_id=1, estado=OrderEstado.CANCELED, sourcing_state=SourcingState.CANCELLED)
     )
     session.flush()
     state = rehydrate_conversation(session, OWNER_SENDER)
     assert state is not None
-    assert state.order_id == shop["order_b"].order_id  # still the IN_PREPARATION one
+    assert state.order_id == shop["order_b"].order_id  # still the DRAFT one
 
 
-def test_rehydrate_order_ref_to_rejected_order_returns_none(shop):
-    """Una referencia explícita a un pedido rechazado no rehidrata estado."""
+def test_rehydrate_order_ref_to_cancelled_order_returns_none(shop):
+    """Una referencia explícita a un pedido cancelado no rehidrata estado."""
     session = shop["session"]
-    rejected = Order(
-        customer_id=1, estado=OrderEstado.REJECTED, sourcing_state=SourcingState.CANCELLED
+    cancelled = Order(
+        customer_id=1, estado=OrderEstado.CANCELED, sourcing_state=SourcingState.CANCELLED
     )
-    session.add(rejected)
+    session.add(cancelled)
     session.flush()
-    assert rehydrate_conversation(session, OWNER_SENDER, order_ref=rejected.order_id) is None
+    assert rehydrate_conversation(session, OWNER_SENDER, order_ref=cancelled.order_id) is None
 
 
 def test_rehydrate_no_open_orders_returns_none(db_session):

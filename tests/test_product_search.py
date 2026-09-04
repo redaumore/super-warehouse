@@ -23,6 +23,7 @@ from src.agents.product_search import (
     is_finalize,
     parse_finalize,
     parse_product_add,
+    parse_product_remove,
 )
 from src.config import Settings
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
@@ -341,3 +342,22 @@ def test_is_finalize_recognizes_command_without_customer_name():
     """The handler can ask for a customer when a draft is being finalized anonymously."""
     assert is_finalize("cerrá el pedido") is True
     assert is_finalize("quiero más clavos") is False
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("sacá los clavos", "clavos"),
+        ("quitá la pintura", "pintura"),
+        ("eliminá el recolector de aceite", "recolector de aceite"),
+        ("borrá tornillos", "tornillos"),
+        ("Sacá el 2", "2"),
+        ("sacá clavos.", "clavos"),
+        ("no sacó nada", None),  # not a command
+        ("me gustaría comprar clavos", None),
+        ("", None),
+    ],
+)
+def test_parse_product_remove(text, expected):
+    """El comando 'sacá X' extrae el producto (artículo incluido); frases largas no."""
+    assert parse_product_remove(text) == expected

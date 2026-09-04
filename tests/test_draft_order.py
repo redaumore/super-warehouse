@@ -1,12 +1,22 @@
-"""Integration tests for persistence of source-aware customer draft orders."""
+"""Integration tests for persistence of source-aware customer draft orders.
+
+The draft is persisted as an ``Order`` with ``estado=DRAFT`` at the first add
+that knows the customer (design AD2). ``persist_draft_order`` writes NO
+reservations — the ACTIVE soft-lock is created at the quote step (AD10) by the
+customer handler; the confirm ceremony converts and deducts. These tests also
+prove the single-draft rule: the app guard refuses a second draft and the
+``uq_orders_one_draft_per_customer`` partial index makes the concurrent race
+fail cleanly with exactly one survivor.
+"""
 
 from __future__ import annotations
 
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.orm import sessionmaker
 
 from src.agents.customer import _supplier_margin_source
 from src.config import get_settings
@@ -15,10 +25,13 @@ from src.db.models import (
     Cliente,
     Inventory,
     ListaPrecios,
+    Order,
+    OrderEstado,
     OrderItem,
     StockReservation,
     Supplier,
 )
+from src.order_lifecycle.state import add_draft_item, remove_draft_item
 from src.pricing.order_pricing import PricedLine, PricedOrder, PricingLine, compute_order
 from src.sourcing.draft_order import persist_draft_order
 
@@ -78,14 +91,12 @@ def customer_ctx(db_session):
     return db_session, db_session.get(Cliente, 1)
 
 
-def test_persist_draft_order_reserves_local_and_keeps_rag_snapshot(customer_ctx):
-    """Local lines reserve stock while RAG lines remain catalog-independent snapshots."""
-    session, customer = customer_ctx
-    priced = PricedOrder(
+def _priced_local(cantidad: int = 2) -> PricedOrder:
+    return PricedOrder(
         lines=(
             PricedLine(
                 sku="LOCAL-1",
-                cantidad=2,
+                cantidad=cantidad,
                 base_ars=Decimal("135.00"),
                 final_ars=Decimal("135.00"),
                 moneda="ARS",
@@ -93,6 +104,37 @@ def test_persist_draft_order_reserves_local_and_keeps_rag_snapshot(customer_ctx)
                 name="Local item",
                 precio_original=Decimal("100.00"),
             ),
+        ),
+        subtotal=Decimal("270.00") if cantidad == 2 else Decimal("135.00"),
+        total=Decimal("270.00") if cantidad == 2 else Decimal("135.00"),
+    )
+
+
+def test_persist_draft_order_writes_draft_without_reservations(customer_ctx):
+    """Persist crea un Order DRAFT con sus líneas y sin reservar stock."""
+    session, customer = customer_ctx
+    order = persist_draft_order(session, customer, _priced_local())
+
+    assert order.estado is OrderEstado.DRAFT
+    assert order.subtotal == Decimal("270.00")
+    assert order.total == Decimal("270.00")
+    # AD10: no reservations at persist — the quote step soft-locks later.
+    assert (
+        session.scalars(
+            select(StockReservation).where(StockReservation.order_id == order.order_id)
+        ).all()
+        == []
+    )
+    items = session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)).all()
+    assert items[0].sku == "LOCAL-1"
+    assert items[0].source == "LOCAL"
+
+
+def test_persist_draft_order_keeps_rag_snapshot_without_reservation(customer_ctx):
+    """RAG lines remain catalog-independent snapshots; never reserved."""
+    session, customer = customer_ctx
+    priced = PricedOrder(
+        lines=(
             PricedLine(
                 sku="AMX-AT-5044",
                 cantidad=3,
@@ -106,23 +148,19 @@ def test_persist_draft_order_reserves_local_and_keeps_rag_snapshot(customer_ctx)
                 codigo_proveedor="AMX",
             ),
         ),
-        subtotal=Decimal("757.80"),
-        total=Decimal("757.80"),
+        subtotal=Decimal("487.80"),
+        total=Decimal("487.80"),
     )
 
     order = persist_draft_order(session, customer, priced)
 
-    assert order.subtotal == Decimal("757.80")
-    assert order.total == Decimal("757.80")
-    reservations = session.scalars(
-        select(StockReservation).where(StockReservation.order_id == order.order_id)
-    ).all()
-    assert [(row.sku, row.cantidad) for row in reservations] == [("LOCAL-1", 2)]
-    items = session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)).all()
-    assert items[1].sku == "AMX-AT-5044"
-    assert items[1].source == "RAG"
-    assert items[1].name == "RAG item"
-    assert items[1].precio_original == Decimal("135.5000")
+    assert order.estado is OrderEstado.DRAFT
+    assert session.scalars(select(StockReservation)).all() == []
+    item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.sku == "AMX-AT-5044"
+    assert item.source == "RAG"
+    assert item.name == "RAG item"
+    assert item.precio_original == Decimal("135.5000")
 
 
 def test_supplier_margin_edit_keeps_persisted_order_lines_frozen(customer_ctx):
@@ -188,6 +226,7 @@ def test_persist_draft_order_keeps_totals_null_when_conversion_is_pending(custom
 
     order = persist_draft_order(session, customer, priced)
 
+    assert order.estado is OrderEstado.DRAFT
     assert order.conversion_pending is True
     assert order.subtotal is None
     assert order.total is None
@@ -222,3 +261,76 @@ def test_persist_draft_order_normalizes_doubled_prefix_sku(customer_ctx):
 
     item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
     assert item.sku == "AMX-AT-5044"
+
+
+# ------------------------------------------------- single-draft rule (AD4)
+
+
+def test_second_draft_for_same_customer_is_rejected_and_preserved(customer_ctx):
+    """A second DRAFT for a customer with one open is rejected; the first survives."""
+    session, customer = customer_ctx
+    first = persist_draft_order(session, customer, _priced_local())
+    session.commit()
+
+    with pytest.raises(IntegrityError):
+        persist_draft_order(session, customer, _priced_local(cantidad=1))
+    session.rollback()
+
+    orders = session.scalars(select(Order)).all()
+    assert len(orders) == 1
+    assert orders[0].order_id == first.order_id
+    assert orders[0].estado is OrderEstado.DRAFT
+
+
+def test_two_session_draft_race_exactly_one_survives(db_engine, customer_ctx):
+    """Concurrent draft adds: exactly one DRAFT survives; the other fails cleanly."""
+    session, customer = customer_ctx
+    persist_draft_order(session, customer, _priced_local())
+    session.commit()
+
+    Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+    second_session = Session()
+    try:
+        with pytest.raises(IntegrityError):
+            persist_draft_order(second_session, customer, _priced_local(cantidad=1))
+    finally:
+        second_session.rollback()
+        second_session.close()
+
+    assert session.scalar(select(func.count(Order.order_id))) == 1
+
+
+# ------------------------------------------- draft line edits across sessions
+
+
+def test_remove_draft_item_is_real_on_persisted_draft(customer_ctx):
+    """remove borra la OrderItem; el Draft vacío sigue DRAFT."""
+    session, customer = customer_ctx
+    order = persist_draft_order(session, customer, _priced_local())
+    remove_draft_item(session, order, "LOCAL-1")
+
+    assert session.scalars(select(OrderItem)).all() == []
+    assert order.estado is OrderEstado.DRAFT
+
+
+def test_add_draft_item_after_resume_appends_to_same_draft(customer_ctx):
+    """Un Draft persistido retomado en otra sesión acepta nuevas líneas."""
+    session, customer = customer_ctx
+    order = persist_draft_order(session, customer, _priced_local())
+    order_id = order.order_id
+    session.commit()
+
+    Session = sessionmaker(bind=session.get_bind(), expire_on_commit=False)
+    resumed = Session()
+    try:
+        resumed_order = resumed.get(Order, order_id)
+        assert resumed_order.estado is OrderEstado.DRAFT
+        add_draft_item(resumed, resumed_order, "TRN-002", 2)
+        resumed.commit()
+    finally:
+        resumed.close()
+
+    items = session.scalars(
+        select(OrderItem).where(OrderItem.order_id == order_id).order_by(OrderItem.sku)
+    ).all()
+    assert [(i.sku, i.cantidad) for i in items] == [("LOCAL-1", 2), ("TRN-002", 2)]

@@ -80,8 +80,8 @@ def order_ctx(db_session):
     )
     order = Order(
         customer_id=1,
-        estado=OrderEstado.PENDING_APPROVAL,
-        sourcing_state=SourcingState.IN_PREPARATION,
+        estado=OrderEstado.DRAFT,
+        sourcing_state=SourcingState.PENDING_ASSEMBLY,
     )
     db_session.add(order)
     db_session.flush()

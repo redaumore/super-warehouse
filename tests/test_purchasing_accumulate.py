@@ -19,6 +19,7 @@ from src.db.models import (
     Cliente,
     ListaPrecios,
     Order,
+    OrderEstado,
     SourcingNeed,
     Supplier,
     SupplierPurchaseOrder,
@@ -74,8 +75,8 @@ def suppliers(db_session):
     db_session.add(
         Supplier(id=2, code="SUY", business_name="Supplier Y", default_margin_pct=Decimal(0))
     )
-    db_session.add(Order(order_id=100, customer_id=1))
-    db_session.add(Order(order_id=200, customer_id=1))
+    db_session.add(Order(order_id=100, customer_id=1, estado=OrderEstado.CONFIRMED))
+    db_session.add(Order(order_id=200, customer_id=1, estado=OrderEstado.CONFIRMED))
     db_session.flush()
     return db_session
 

@@ -1,11 +1,11 @@
-"""E2E order flow (owner pivot): WhatsApp intake → quote → approval → stock.
+"""E2E order flow (owner pivot): WhatsApp intake → quote → confirm → stock.
 
 Drives the real pipeline boundaries end-to-end with the WhatsApp adapter
 (outbound sends mocked at the httpx boundary) and the real Postgres fixture:
 the owner's inbound text order resolves the customer BY NAME, soft-locks stock,
-quotes in chat, and — on the owner's "aprobá" — converts the reservation,
-registers in Sheets, deducts stock and confirms with the in-chat confirmation
-text. A Sheets failure rolls the approval back: the order stays PENDING.
+quotes in chat, and — on the owner's "aprobá" — runs the confirm ceremony:
+reservation converted, Sheets registered, stock deducted and the in-chat
+confirmation. A Sheets failure is TOLERATED: the order stays CONFIRMED (spec).
 
 Skipped cleanly when Postgres is not running.
 """
@@ -38,10 +38,7 @@ from src.db.models import (
     Supplier,
 )
 from src.integrations.sheets import SheetsWriteStatus
-from src.orchestrator.approval import (
-    SheetsRegistrationError,
-    register_approved_order,
-)
+from src.orchestrator.approval import confirm_and_register
 
 CONFIGURED = Settings(
     whatsapp_token="tok", whatsapp_phone_id="123456", whatsapp_verify_token="verifyme"
@@ -110,7 +107,8 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "stock_adjustments, catalogo, suppliers, clientes, lista_precios "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
@@ -186,8 +184,8 @@ async def _send_whatsapp_order(session, shop) -> Order:
         customer.descuento_particular_pct,
     )
 
-    # 3. Order row + order items (the quote is the in-chat reply).
-    order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
+    # 3. Order row + order items (the quote is the in-chat reply), Draft state.
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     session.add(order)
     session.flush()
     session.add(
@@ -198,6 +196,7 @@ async def _send_whatsapp_order(session, shop) -> Order:
             base_price=Decimal("135.00"),
             final_price=quote.lines[0].final_price,
             adjustment=Decimal(0),
+            source="LOCAL",
         )
     )
     session.flush()
@@ -210,56 +209,55 @@ async def _send_whatsapp_order(session, shop) -> Order:
     return order
 
 
-async def test_e2e_owner_order_approves_and_deducts_stock(shop):
-    """El pedido del dueño se aprueba: reserva convertida, Sheets y stock descontado."""
+async def test_e2e_owner_order_confirms_and_deducts_stock(shop):
+    """El pedido del dueño se confirma: reserva convertida, Sheets y stock descontado."""
     session = shop["session"]
     order = await _send_whatsapp_order(session, shop)
 
-    apply_decision(session, order, Decision(action=DecisionAction.APPROVE))
     sheets = FakeSheets()
-    result = register_approved_order(session, order, sheets=sheets)
+    result = confirm_and_register(session, order, sheets=sheets)
 
-    assert result.order.estado is OrderEstado.APPROVED
-    assert "aprobado" in result.confirmation_text
+    assert result.order.estado is OrderEstado.CONFIRMED
+    assert "confirmado" in result.confirmation_text
     assert "Registrado en Google Sheets" in result.confirmation_text
     assert sheets.rows == [(order.order_id, "10 × CLV-PRS-2")]
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
     assert reservation.estado is ReservationEstado.CONVERTED
-    # The approval deduction writes Inventory (canonical on-hand), not the
+    # The confirm deduction writes Inventory (canonical on-hand), not the
     # legacy catalogo counter.
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == shop["sku"]))
-    assert on_hand.quantity_on_hand == 40  # 50 − 10 reserved
+    assert on_hand.quantity_on_hand == 40  # 50 − 10 deducted
     assert session.get(Catalogo, 1).stock_disponible == 50  # legacy counter untouched
     assert available_stock(session, shop["sku"]) == 40
 
 
-async def test_e2e_sheets_failure_keeps_order_pending(shop):
-    """Si Sheets falla, la aprobación se revierte y el pedido sigue pendiente."""
+async def test_e2e_sheets_failure_keeps_order_confirmed(shop):
+    """Si Sheets falla, el pedido IGUAL queda Confirmado (cuarentena tolerada)."""
     session = shop["session"]
     order = await _send_whatsapp_order(session, shop)
 
     sheets = FakeSheets(status=SheetsWriteStatus.QUARANTINED)
-    with pytest.raises(SheetsRegistrationError):
-        register_approved_order(session, order, sheets=sheets)
-    # The caller rolls back; a fresh read proves the order stayed PENDING and
-    # the reservation stayed ACTIVE (the in-memory conversion was never flushed).
+    result = confirm_and_register(session, order, sheets=sheets)
+
+    assert result.order.estado is OrderEstado.CONFIRMED  # spec: order stays Confirmed
+    assert result.sheets_status is SheetsWriteStatus.QUARANTINED
     session.expire_all()
     fresh = session.scalar(select(Order).where(Order.order_id == order.order_id))
-    assert fresh.estado is OrderEstado.PENDING_APPROVAL
+    assert fresh.estado is OrderEstado.CONFIRMED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
-    assert reservation.estado is ReservationEstado.ACTIVE
+    assert reservation.estado is ReservationEstado.CONVERTED
 
 
-async def test_e2e_owner_reject_releases_reservation(shop):
-    """Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre."""
+async def test_e2e_owner_reject_cancels_order_and_releases_reservation(shop):
+    """Al rechazar el pedido, se cancela y la reserva se libera."""
     session = shop["session"]
     order = await _send_whatsapp_order(session, shop)
     apply_decision(session, order, Decision(action=DecisionAction.REJECT))
-    assert order.estado is OrderEstado.REJECTED
+    assert order.estado is OrderEstado.CANCELED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )

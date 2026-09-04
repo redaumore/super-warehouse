@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 304, agrupados en 28 dominios.
+**Total de escenarios:** 333, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -11,14 +11,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Motor de precios](#motor-de-precios) — 6
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
-- [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 8
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 24
+- [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 11
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 25
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
-- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
+- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
-- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -27,12 +27,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 20
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 23
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 29
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 36
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -87,7 +87,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - rechazá el pedido
   - (vacío)
   - aprobá el pedido #3 y el #7
-- El texto del dueño se interpreta como aprobar, rechazar o desconocido. _(`test_parse_decision_actions`)_
+- El texto del dueño se interpreta como confirmar, cancelar o desconocido. _(`test_parse_decision_actions`)_
   - sí, aprobá
   - aprobá
   - dale
@@ -97,13 +97,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - no
   - hablamos mañana
   - (vacío)
-- Aprobar con descuento extra por línea se interpreta como aprobación + ajuste. _(`test_parse_decision_with_adjustment`)_
+- Aprobar con descuento extra por línea se interpreta como confirm + ajuste. _(`test_parse_decision_with_adjustment`)_
 - Se aceptan porcentajes decimales en el ajuste. _(`test_parse_decision_accepts_decimal_percent`)_
 - Un rechazo ignora cualquier mención de ajuste. _(`test_parse_decision_reject_ignores_adjustment_mention`)_
-- Aprobar con ajuste reprecifica la línea afectada. _(`test_apply_approve_with_adjustment_reprises_line`)_
-- Aprobar sin cambios conserva los precios cotizados. _(`test_apply_plain_approve_keeps_prices`)_
-- Rechazar libera las reservas y el stock vuelve a estar disponible. _(`test_apply_reject_releases_reservations`)_
-- Aprobar sobre una reserva vencida exige recotizar. _(`test_apply_approve_on_expired_reservation_requires_requote`)_
+- Confirmar con ajuste reprecifica la línea afectada. _(`test_apply_approve_with_adjustment_reprises_line`)_
+- Confirmar sin cambios conserva los precios cotizados. _(`test_apply_plain_approve_keeps_prices`)_
+- Rechazar cancela el pedido: reservas liberadas y stock disponible. _(`test_apply_reject_cancels_order_and_releases_reservations`)_
 - Aplicar una decisión desconocida lanza error. _(`test_apply_unknown_decision_raises`)_
 - Un ajuste que nombra un producto fuera de la cotización no se puede aplicar. _(`test_apply_adjustment_no_matching_quote_line_raises`)_
 - Sin cotización, un SKU desconocido en el ajuste se rechaza. _(`test_apply_adjustment_sku_not_in_order_raises`)_
@@ -113,11 +112,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El total del pedido suma precio final por cantidad, redondeado a centavos. _(`test_order_total_sums_final_price_times_quantity`)_
 - Una línea ajustada aporta su precio final rebajado al total. _(`test_order_total_with_adjusted_line`)_
 - El resumen de ítems lista cantidad por SKU separado por punto y coma. _(`test_build_items_summary_lists_each_line`)_
-- Sheets append is skipped at draft save and called once during approval registration. _(`test_sheets_append_belongs_to_approval_not_draft_persistence`)_
-- Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
-- Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
-- Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
-- La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente. _(`test_sheets_quarantine_rolls_back_approval`)_
+- Sheets append is skipped at draft save and called once during confirm. _(`test_sheets_append_belongs_to_confirm_not_draft_persistence`)_
+- Confirmar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_confirm_and_register_converts_deducts_and_confirms`)_
+- Confirmar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_confirm_on_expired_reservation_refuses_without_side_effects`)_
+- Confirmar dos veces es una transición inválida (idempotencia del ceremonia). _(`test_second_confirm_is_an_invalid_transition`)_
+- La cuarentena de Sheets NO revierte: el pedido queda Confirmado y se informa. _(`test_sheets_quarantine_is_tolerated_and_order_stays_confirmed`)_
+- Confirmar un pedido con precios pendientes de conversión se bloquea. _(`test_confirm_pending_conversion_order_is_blocked`)_
+- Classify at confirm: stock que cayó sin supplier cancela el pedido (Case C). _(`test_confirm_discovering_case_c_cancels_the_order`)_
+- Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B). _(`test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt`)_
 
 ## Orquestador y enrutamiento
 
@@ -126,6 +128,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un texto nuevo de cliente se enruta a Customer. _(`test_fresh_text_routes_to_customer`)_
 - La aprobación del dueño se enruta a Despacho reanudando el pedido. _(`test_owner_approval_routes_to_dispatch_resuming_order`)_
 - El rechazo del dueño se enruta a Despacho. _(`test_owner_rejection_routes_to_dispatch`)_
+- El comando 'sacá X' se enruta a Customer aunque haya un pedido en curso. _(`test_remove_product_command_routes_to_customer_with_order_context`)_
 - Una respuesta ambigua mientras se espera sigue en la conversación del dueño. _(`test_non_decision_reply_while_awaiting_goes_to_dispatch_menu`)_
 - Un pedido en curso con ítems se enruta a Ventas. _(`test_in_progress_order_with_items_routes_to_sales`)_
 - Un pedido en curso sin ítems se enruta a Desambiguación. _(`test_in_progress_order_without_items_routes_to_disambiguation`)_
@@ -191,6 +194,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - 'quiero 2' after a displayed product adds 2 of it with the finalize hint, no LLM. _(`test_bare_quantity_after_displayed_product_adds_qty_with_finalize_hint`)_
 - Un alta de un producto RAG con precio muestra el precio en la respuesta. _(`test_add_intent_reply_shows_rag_price_currency_and_unit`)_
 - Un alta de un producto local sin precio no muestra ningún precio. _(`test_add_intent_reply_omits_price_for_local_entry_without_price`)_
+- 'sacá X' quita la línea del draft en memoria sin llamar al LLM. _(`test_remove_command_removes_in_memory_draft_line`)_
+- Un objetivo que no está en el draft informa y no modifica nada. _(`test_remove_command_unknown_target_reports_without_touching_draft`)_
 - Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
 - Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
 - 'agregale 2' after a displayed product adds 2 of it without calling the LLM. _(`test_verb_quantity_add_after_displayed_product_adds_qty`)_
@@ -198,21 +203,34 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Ciclo de vida del pedido
 
-- Aprobar un pedido pendiente lo mueve a Aprobado. _(`test_approve_pending_order_moves_to_approved`)_
-- El flag needs_requote bloquea la aprobación silenciosa. _(`test_approve_flagged_order_raises_requote`)_
-- Un pedido con reserva vencida no se aprueba en silencio: exige recotizar. _(`test_approve_order_with_stale_reservation_raises_requote`)_
-- Aprobar un pedido que no está pendiente es una transición inválida. _(`test_approve_non_pending_order_is_invalid`)_
-- Rechazar un pedido pendiente lo mueve a Rechazado y libera reservas. _(`test_reject_pending_order_moves_to_rejected_and_releases`)_
-- Rechazar un pedido que no está pendiente es inválido. _(`test_reject_non_pending_order_is_invalid`)_
-- Despachar solo es válido desde el estado Aprobado. _(`test_mark_dispatched_only_from_approved`)_
+- Confirmar un pedido Draft lo mueve a Confirmado. _(`test_confirm_draft_moves_to_confirmed`)_
+- El flag needs_requote bloquea la confirmación silenciosa. _(`test_confirm_flagged_order_raises_requote`)_
+- Un pedido con reserva vencida no se confirma en silencio: exige recotizar. _(`test_confirm_order_with_stale_reservation_raises_requote`)_
+- Confirmar un pedido que no está en Draft es una transición inválida. _(`test_confirm_non_draft_order_is_invalid`)_
+- Start picking solo es válido desde Confirmado. _(`test_start_picking_only_from_confirmed`)_
+- Complete picking solo es válido desde Picking. _(`test_complete_picking_only_from_picking`)_
+- Deliver solo es válido desde Ready for delivery. _(`test_deliver_only_from_ready_for_delivery`)_
+- Cancelar un Draft libera las reservas activas de inmediato. _(`test_cancel_releases_active_reservations_from_draft`)_
+- Cancelar un Confirmado libera las reservas activas de inmediato. _(`test_cancel_releases_active_reservations_from_confirmed`)_
+- Cancelar desde Picking libera las reservas convertidas (restore: integration). _(`test_cancel_from_picking_releases_converted_reservations`)_
+- Cancelar un pedido cerrado o ya cancelado es inválido. _(`test_cancel_from_closed_or_canceled_is_invalid`)_
+- Modify solo es válido desde Confirmado y libera las reservas convertidas. _(`test_modify_only_from_confirmed_and_releases_converted`)_
+- add_draft_item crea la línea y acumula cantidad si el SKU ya existe. _(`test_add_draft_item_upserts_and_accumulates`)_
+- Una cantidad no positiva no se puede agregar a un Draft. _(`test_add_draft_item_refuses_non_positive_quantity`)_
+- Solo los pedidos Draft aceptan edición de líneas. _(`test_add_remove_draft_item_only_on_draft`)_
+- Quitar un SKU que no está en el Draft no hace nada. _(`test_remove_draft_item_unknown_sku_is_a_noop`)_
 - El flag needs_requote hace que requiera recotizar. _(`test_requires_requote_true_when_flagged`)_
 - Una reserva vencida hace que requiera recotizar. _(`test_requires_requote_true_when_stale_reservation`)_
 - Sin flag ni reservas vencidas, no requiere recotizar. _(`test_requires_requote_false_when_clean`)_
 - Expirar reservas vencidas marca el pedido para recotizar. _(`test_expire_reservations_flags_order_when_rows_expired`)_
 - Sin reservas vencidas, expirar no hace nada. _(`test_expire_reservations_noop_when_nothing_expired`)_
-- Rechazar libera las reservas y restaura el stock disponible. _(`test_reject_releases_reservations_and_restores_stock`)_
-- Un pedido con reserva vencida no se puede aprobar: exige recotizar. _(`test_expired_order_cannot_be_approved`)_
-- Una reserva vigente no bloquea la aprobación. _(`test_fresh_reservation_can_be_approved`)_
+- Draft → Confirmed → Picking → Ready for delivery → Closed con fecha. _(`test_happy_path_draft_to_closed_sets_delivery_date`)_
+- Un pedido con reserva vencida no se confirma: exige recotizar. _(`test_stale_quote_refused_with_requote_requirement`)_
+- Una reserva vigente no bloquea la confirmación. _(`test_fresh_reservation_can_be_confirmed`)_
+- Cancelar un Draft libera las reservas: el stock vuelve a estar disponible. _(`test_cancel_draft_releases_reservations_and_stock_is_available`)_
+- Cancelar desde Picking restaura el stock descontado y audita el ajuste. _(`test_late_cancel_restores_deducted_stock_with_audit`)_
+- Modify restaura el stock descontado y libera las reservas convertidas. _(`test_modify_restores_deducted_stock_without_double_count`)_
+- add/remove mutan OrderItem rows; el Draft vacío sigue Draft. _(`test_add_remove_draft_item_on_persisted_draft`)_
 
 ## Integración con RAG de catálogo de proveedores
 
@@ -294,6 +312,16 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
 - A finalize command returns its customer name only when a draft exists. _(`test_parse_finalize_extracts_customer_name_from_non_empty_draft`)_
 - The handler can ask for a customer when a draft is being finalized anonymously. _(`test_is_finalize_recognizes_command_without_customer_name`)_
+- El comando 'sacá X' extrae el producto (artículo incluido); frases largas no. _(`test_parse_product_remove`)_
+  - sacá los clavos / clavos
+  - quitá la pintura / pintura
+  - eliminá el recolector de aceite / recolector de aceite
+  - borrá tornillos / tornillos
+  - Sacá el 2 / 2
+  - sacá clavos. / clavos
+  - no sacó nada
+  - me gustaría comprar clavos
+  - (vacío)
 
 ## Percepción (voz e imagen)
 
@@ -389,14 +417,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - code tiene índice único; cuit único parcial cuando no es NULL. _(`test_supplier_code_and_cuit_indexes`)_
 - La columna `catalogo.embedding` se declara como pgvector vector(1536). _(`test_catalogo_has_vector_1536_embedding`)_
 - El modelo `clientes` no modela límites de crédito ni condiciones de pago. _(`test_cliente_has_no_credit_or_payment_fields`)_
-- La máquina de estados del pedido se fija a los cuatro estados de la spec. _(`test_order_estado_enum_values`)_
+- La máquina de estados del pedido se fija a los seis estados de la spec. _(`test_order_estado_enum_values`)_
+- El modelo orders declara el índice único parcial de un draft por cliente. _(`test_order_has_one_draft_per_customer_partial_index`)_
 - La migración crea todas las tablas del diseño. _(`test_migration_creates_all_tables`)_
 - RED: la migración agrega sourcing_state y delivery_date a orders. _(`test_migration_creates_sourcing_columns`)_
 - RED: los enums del eje de sourcing existen tras la migración. _(`test_migration_creates_sourcing_enums`)_
+- La migración deja el enum order_estado con los seis estados de la spec. _(`test_migration_order_estado_has_six_values`)_
+- La migración crea el índice único parcial de un draft por cliente. _(`test_migration_creates_one_draft_per_customer_index`)_
 - RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
-- The customer-order migration downgrades, upgrades, and preserves legacy Case A writes. _(`test_customer_order_migration_round_trips_and_keeps_case_a_persistable`)_
+- The order-state-machine migration downgrades safely and re-upgrades. _(`test_order_state_machine_migration_downgrade_safety`)_
 - A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it. _(`test_migration_seeded_default_margin_is_read_by_pricing`)_
 
 ## Teléfonos y clientes
@@ -476,6 +507,19 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
 - La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
 - The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
+- Solo las acciones legales del estado se ofrecen en el tab (backoffice spec). _(`test_legal_actions_per_state`)_
+  - DRAFT
+  - CONFIRMED
+  - PICKING
+  - READY_FOR_DELIVERY
+  - CANCELED
+  - CLOSED
+- La acción start picking transiciona y hace commit (patrón po.py). _(`test_start_picking_action_commits_transition`)_
+- Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega. _(`test_fulfillment_chain_commits_to_closed_with_delivery_date`)_
+- Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice. _(`test_cancel_action_releases_reservations_with_backoffice_actor`)_
+- Cancelar desde Picking restaura stock y audita con actor backoffice. _(`test_cancel_action_restores_deducted_stock_with_audit`)_
+- El monitor muestra los seis estados del pedido. _(`test_monitor_shows_all_six_states`)_
+- El tab Customer Orders expone las cuatro acciones de cumplimiento. _(`test_app_customer_orders_tab_has_fulfillment_buttons`)_
 
 ## Feature flags por fase
 
@@ -489,9 +533,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## E2E: pedido completo
 
-- El pedido del dueño se aprueba: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_approves_and_deducts_stock`)_
-- Si Sheets falla, la aprobación se revierte y el pedido sigue pendiente. _(`test_e2e_sheets_failure_keeps_order_pending`)_
-- Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre. _(`test_e2e_owner_reject_releases_reservation`)_
+- El pedido del dueño se confirma: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_confirms_and_deducts_stock`)_
+- Si Sheets falla, el pedido IGUAL queda Confirmado (cuarentena tolerada). _(`test_e2e_sheets_failure_keeps_order_confirmed`)_
+- Al rechazar el pedido, se cancela y la reserva se libera. _(`test_e2e_owner_reject_cancels_order_and_releases_reservation`)_
 - Una nota de voz de WhatsApp se normaliza marcando media_type voice. _(`test_e2e_whatsapp_voice_payload_flags_media`)_
 
 ## E2E: ingesta de documentos

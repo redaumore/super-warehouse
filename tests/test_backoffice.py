@@ -36,13 +36,18 @@ from src.backoffice.clients import (
     update_client,
 )
 from src.backoffice.customer_orders import (
+    cancel_order_action,
+    complete_picking_action,
+    deliver_order_action,
     get_default_margin,
+    legal_actions,
     list_customer_orders,
     list_exchange_rates,
     order_detail,
     recompute_pending_conversion,
     set_default_margin,
     set_exchange_rate,
+    start_picking_action,
 )
 from src.backoffice.ingestion import (
     ConfirmedIngest,
@@ -57,15 +62,19 @@ from src.db.models import (
     Catalogo,
     Cliente,
     ExchangeRate,
+    Inventory,
     ListaPrecios,
     Order,
     OrderEstado,
     OrderItem,
+    ReservationEstado,
+    StockAdjustment,
+    StockReservation,
     Supplier,
 )
 from src.db.session import SessionLocal
 from src.integrations.sheets import SheetsWriter
-from src.orchestrator.approval import PendingConversionError, register_approved_order
+from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
 # ---------------------------------------------------------------- app structure
@@ -170,9 +179,9 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
-                "clientes, lista_precios, supplier_sku_mappings, exchange_rates, app_settings "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE order_items, orders, stock_reservations, stock_adjustments, "
+                "inventory, catalogo, suppliers, clientes, lista_precios, "
+                "supplier_sku_mappings, exchange_rates, app_settings RESTART IDENTITY CASCADE"
             )
         )
 
@@ -325,13 +334,13 @@ def test_confirm_items_creates_new_product_for_unknown_sku(shop_ctx):
 def test_monitor_lists_orders_with_state_and_sheets_status(shop_ctx):
     """El monitor lista pedidos con estado y estado de sincronización Sheets."""
     db_session = shop_ctx["session"]
-    order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()
     sheets = SheetsWriter(gc=None, settings=get_settings())
     rows = list_orders(db_session, sheets=sheets)
     assert rows[0]["order_id"] == order.order_id
-    assert rows[0]["estado"] == "PENDING_APPROVAL"
+    assert rows[0]["estado"] == "DRAFT"
     assert rows[0]["sheets_synced"] is False
     assert rows[0]["active_reservations"] == 0
 
@@ -341,7 +350,7 @@ def test_customer_orders_list_and_detail_include_ars_totals_and_snapshots(shop_c
     db_session = shop_ctx["session"]
     order = Order(
         customer_id=1,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         subtotal=Decimal("270.00"),
         total=Decimal("256.50"),
         conversion_pending=False,
@@ -391,7 +400,7 @@ def test_recompute_pending_conversion_clears_flag_and_fills_totals(shop_ctx):
     db_session.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
     order = Order(
         customer_id=1,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         conversion_pending=True,
     )
     db_session.add(order)
@@ -435,14 +444,14 @@ def test_pending_conversion_order_is_blocked_at_approval(shop_ctx):
     """Approval registration refuses an order until its prices are converted."""
     order = Order(
         customer_id=1,
-        estado=OrderEstado.APPROVED,
+        estado=OrderEstado.CONFIRMED,
         conversion_pending=True,
     )
     shop_ctx["session"].add(order)
     shop_ctx["session"].flush()
 
     with pytest.raises(PendingConversionError, match="pending currency conversion"):
-        register_approved_order(shop_ctx["session"], order, sheets=SimpleNamespace())
+        confirm_and_register(shop_ctx["session"], order, sheets=SimpleNamespace())
 
 
 # ------------------------------------------------ app handler functions (DB)
@@ -544,7 +553,7 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
     db_session.add(AppSetting(key="default_margin_pct", value="20"))
     order = Order(
         customer_id=1,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         conversion_pending=True,
     )
     db_session.add(order)
@@ -584,3 +593,165 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
         assert reloaded.conversion_pending is False
         assert reloaded.subtotal == Decimal("24000.00")
         assert reloaded.total == Decimal("24000.00")
+
+
+# ------------------------------------------------ fulfillment actions (Phase 6)
+
+
+@pytest.mark.parametrize(
+    ("estado", "expected"),
+    [
+        ("DRAFT", ("cancel_order",)),
+        ("CONFIRMED", ("start_picking", "cancel_order")),
+        ("PICKING", ("complete_picking", "cancel_order")),
+        ("READY_FOR_DELIVERY", ("deliver_order", "cancel_order")),
+        ("CANCELED", ()),
+        ("CLOSED", ()),
+    ],
+)
+def test_legal_actions_per_state(estado, expected):
+    """Solo las acciones legales del estado se ofrecen en el tab (backoffice spec)."""
+    assert legal_actions(estado) == expected
+
+
+def _committed_order(session, *, estado: OrderEstado) -> Order:
+    order = Order(customer_id=1, estado=estado)
+    session.add(order)
+    session.flush()
+    session.commit()
+    return order
+
+
+def test_start_picking_action_commits_transition(shop_ctx):
+    """La acción start picking transiciona y hace commit (patrón po.py)."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.CONFIRMED)
+
+    with SessionLocal() as session:
+        message = start_picking_action(session, order.order_id)
+
+    assert "→ Picking." in message
+    with SessionLocal() as session:
+        assert session.get(Order, order.order_id).estado is OrderEstado.PICKING
+
+
+def test_fulfillment_chain_commits_to_closed_with_delivery_date(shop_ctx):
+    """Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.CONFIRMED)
+
+    with SessionLocal() as session:
+        assert "Picking" in start_picking_action(session, order.order_id)
+    with SessionLocal() as session:
+        assert "Ready" in complete_picking_action(session, order.order_id)
+    with SessionLocal() as session:
+        message = deliver_order_action(session, order.order_id)
+
+    assert "→ Closed" in message
+    with SessionLocal() as session:
+        reloaded = session.get(Order, order.order_id)
+        assert reloaded.estado is OrderEstado.CLOSED
+        assert reloaded.delivery_date is not None  # the delivery date is stored
+
+
+def test_cancel_action_releases_reservations_with_backoffice_actor(shop_ctx):
+    """Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.CONFIRMED)
+    db_session.add(
+        StockReservation(
+            sku="CLV-001",
+            customer_id=1,
+            order_id=order.order_id,
+            cantidad=2,
+            ttl_minutes=30,
+            estado=ReservationEstado.ACTIVE,
+        )
+    )
+    db_session.commit()
+
+    with SessionLocal() as session:
+        message = cancel_order_action(session, order.order_id)
+
+    assert "cancelado" in message
+    with SessionLocal() as session:
+        reloaded = session.get(Order, order.order_id)
+        assert reloaded.estado is OrderEstado.CANCELED
+        reservation = session.scalar(
+            select(StockReservation).where(StockReservation.order_id == order.order_id)
+        )
+        assert reservation.estado is ReservationEstado.RELEASED
+
+
+def test_cancel_action_restores_deducted_stock_with_audit(shop_ctx):
+    """Cancelar desde Picking restaura stock y audita con actor backoffice."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.PICKING)
+    db_session.add(Inventory(sku_id="CLV-001", quantity_on_hand=8))
+    db_session.add(
+        StockReservation(
+            sku="CLV-001",
+            customer_id=1,
+            order_id=order.order_id,
+            cantidad=2,
+            ttl_minutes=30,
+            estado=ReservationEstado.CONVERTED,
+        )
+    )
+    db_session.commit()
+
+    with SessionLocal() as session:
+        cancel_order_action(session, order.order_id)
+
+    with SessionLocal() as session:
+        assert (
+            session.scalar(select(Inventory.quantity_on_hand).where(Inventory.sku_id == "CLV-001"))
+            == 10
+        )  # restored
+        adjustment = session.scalar(select(StockAdjustment))
+        assert adjustment is not None
+        assert adjustment.reason == "order_cancelled"
+        assert adjustment.actor == "backoffice"
+        assert adjustment.delta == 2
+
+
+def test_monitor_shows_all_six_states(shop_ctx):
+    """El monitor muestra los seis estados del pedido."""
+    db_session = shop_ctx["session"]
+    for estado in OrderEstado:
+        db_session.add(Order(customer_id=1, estado=estado))
+    db_session.flush()
+    db_session.commit()
+
+    with SessionLocal() as session:
+        rows = list_orders(session, sheets=SheetsWriter(gc=None, settings=get_settings()))
+
+    assert {row["estado"] for row in rows} == {e.value for e in OrderEstado}
+
+
+def _all_labels(block) -> set[object]:
+    """Collect every descendant component label of a Blocks subtree.
+
+    Gradio stores the visible text of a Button in ``value`` and the label of
+    other components in ``label``; both are collected.
+    """
+    labels: set[object] = set()
+    for child in getattr(block, "children", ()):
+        if type(child).__name__ == "Button":
+            labels.add(getattr(child, "value", None))
+        else:
+            labels.add(getattr(child, "label", None))
+        labels |= _all_labels(child)
+    return labels
+
+
+def test_app_customer_orders_tab_has_fulfillment_buttons():
+    """El tab Customer Orders expone las cuatro acciones de cumplimiento."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    labels = _all_labels(tab)
+    assert "Start picking (Confirmed → Picking)" in labels
+    assert "Complete picking (Picking → Ready)" in labels
+    assert "Deliver (Ready → Closed)" in labels
+    assert "Cancel order" in labels
+    assert "Legal actions for the selected order" in labels

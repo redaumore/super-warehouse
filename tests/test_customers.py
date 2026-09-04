@@ -418,7 +418,7 @@ def test_disambiguation_pick_continues_to_case_a(shop_with_catalog):
         RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
     )
 
-    assert "Pedido #1 de Ferretería Don Juan confirmado" in second.reply  # type: ignore[operator]
+    assert "Pedido #1 de Ferretería Don Juan" in second.reply  # type: ignore[operator]
     assert second.state is not None
     assert second.state.customer_disambiguation_pending is False
     assert second.state.customer_id == 1

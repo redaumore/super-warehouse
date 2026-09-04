@@ -1,12 +1,11 @@
-"""Orchestrator: routing, conversational session state and approval flow."""
+"""Orchestrator: routing, conversational session state and confirm flow."""
 
 from src.orchestrator.approval import (
-    ApprovalResult,
+    ConfirmResult,
     PendingConversionError,
-    approve_and_register,
     build_items_summary,
+    confirm_and_register,
     order_total,
-    register_approved_order,
 )
 from src.orchestrator.router import (
     AgentName,
@@ -21,7 +20,7 @@ from src.orchestrator.session import ConversationState, ConversationStore, Resol
 __all__ = [
     "AgentName",
     "AgentOutcome",
-    "ApprovalResult",
+    "ConfirmResult",
     "ConversationState",
     "ConversationStore",
     "Orchestrator",
@@ -29,9 +28,8 @@ __all__ = [
     "ResolvedItem",
     "RoutingDecision",
     "TurnResult",
-    "approve_and_register",
     "build_items_summary",
+    "confirm_and_register",
     "order_total",
-    "register_approved_order",
     "route_message",
 ]
