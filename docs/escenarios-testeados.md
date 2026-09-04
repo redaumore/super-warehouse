@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 307, agrupados en 28 dominios.
+**Total de escenarios:** 320, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -16,7 +16,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 24
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
-- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
+- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
@@ -198,21 +198,34 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Ciclo de vida del pedido
 
-- Aprobar un pedido pendiente lo mueve a Aprobado. _(`test_approve_pending_order_moves_to_approved`)_
-- El flag needs_requote bloquea la aprobación silenciosa. _(`test_approve_flagged_order_raises_requote`)_
-- Un pedido con reserva vencida no se aprueba en silencio: exige recotizar. _(`test_approve_order_with_stale_reservation_raises_requote`)_
-- Aprobar un pedido que no está pendiente es una transición inválida. _(`test_approve_non_pending_order_is_invalid`)_
-- Rechazar un pedido pendiente lo mueve a Rechazado y libera reservas. _(`test_reject_pending_order_moves_to_rejected_and_releases`)_
-- Rechazar un pedido que no está pendiente es inválido. _(`test_reject_non_pending_order_is_invalid`)_
-- Despachar solo es válido desde el estado Aprobado. _(`test_mark_dispatched_only_from_approved`)_
+- Confirmar un pedido Draft lo mueve a Confirmado. _(`test_confirm_draft_moves_to_confirmed`)_
+- El flag needs_requote bloquea la confirmación silenciosa. _(`test_confirm_flagged_order_raises_requote`)_
+- Un pedido con reserva vencida no se confirma en silencio: exige recotizar. _(`test_confirm_order_with_stale_reservation_raises_requote`)_
+- Confirmar un pedido que no está en Draft es una transición inválida. _(`test_confirm_non_draft_order_is_invalid`)_
+- Start picking solo es válido desde Confirmado. _(`test_start_picking_only_from_confirmed`)_
+- Complete picking solo es válido desde Picking. _(`test_complete_picking_only_from_picking`)_
+- Deliver solo es válido desde Ready for delivery. _(`test_deliver_only_from_ready_for_delivery`)_
+- Cancelar un Draft libera las reservas activas de inmediato. _(`test_cancel_releases_active_reservations_from_draft`)_
+- Cancelar un Confirmado libera las reservas activas de inmediato. _(`test_cancel_releases_active_reservations_from_confirmed`)_
+- Cancelar desde Picking libera las reservas convertidas (restore: integration). _(`test_cancel_from_picking_releases_converted_reservations`)_
+- Cancelar un pedido cerrado o ya cancelado es inválido. _(`test_cancel_from_closed_or_canceled_is_invalid`)_
+- Modify solo es válido desde Confirmado y libera las reservas convertidas. _(`test_modify_only_from_confirmed_and_releases_converted`)_
+- add_draft_item crea la línea y acumula cantidad si el SKU ya existe. _(`test_add_draft_item_upserts_and_accumulates`)_
+- Una cantidad no positiva no se puede agregar a un Draft. _(`test_add_draft_item_refuses_non_positive_quantity`)_
+- Solo los pedidos Draft aceptan edición de líneas. _(`test_add_remove_draft_item_only_on_draft`)_
+- Quitar un SKU que no está en el Draft no hace nada. _(`test_remove_draft_item_unknown_sku_is_a_noop`)_
 - El flag needs_requote hace que requiera recotizar. _(`test_requires_requote_true_when_flagged`)_
 - Una reserva vencida hace que requiera recotizar. _(`test_requires_requote_true_when_stale_reservation`)_
 - Sin flag ni reservas vencidas, no requiere recotizar. _(`test_requires_requote_false_when_clean`)_
 - Expirar reservas vencidas marca el pedido para recotizar. _(`test_expire_reservations_flags_order_when_rows_expired`)_
 - Sin reservas vencidas, expirar no hace nada. _(`test_expire_reservations_noop_when_nothing_expired`)_
-- Rechazar libera las reservas y restaura el stock disponible. _(`test_reject_releases_reservations_and_restores_stock`)_
-- Un pedido con reserva vencida no se puede aprobar: exige recotizar. _(`test_expired_order_cannot_be_approved`)_
-- Una reserva vigente no bloquea la aprobación. _(`test_fresh_reservation_can_be_approved`)_
+- Draft → Confirmed → Picking → Ready for delivery → Closed con fecha. _(`test_happy_path_draft_to_closed_sets_delivery_date`)_
+- Un pedido con reserva vencida no se confirma: exige recotizar. _(`test_stale_quote_refused_with_requote_requirement`)_
+- Una reserva vigente no bloquea la confirmación. _(`test_fresh_reservation_can_be_confirmed`)_
+- Cancelar un Draft libera las reservas: el stock vuelve a estar disponible. _(`test_cancel_draft_releases_reservations_and_stock_is_available`)_
+- Cancelar desde Picking restaura el stock descontado y audita el ajuste. _(`test_late_cancel_restores_deducted_stock_with_audit`)_
+- Modify restaura el stock descontado y libera las reservas convertidas. _(`test_modify_restores_deducted_stock_without_double_count`)_
+- add/remove mutan OrderItem rows; el Draft vacío sigue Draft. _(`test_add_remove_draft_item_on_persisted_draft`)_
 
 ## Integración con RAG de catálogo de proveedores
 
