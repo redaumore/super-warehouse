@@ -1,11 +1,12 @@
 """Case A: full-stock orders through the existing reservation + quotation flow.
 
-Per the order-sourcing spec, a Case A order is created with sourcing
-PENDING_ASSEMBLY and a delivery date, then routed through the unchanged
-quotation/approval flow: every line is priced through the pure pricing engine,
-soft-locked with the standard reservation TTL, and the owner receives the quote
-in chat to approve (or reject). The separate Telegram push to ``owner_phone``
-was removed — the quote travels as the agent's in-chat reply.
+Per the order-sourcing spec, a Case A order is created as a DRAFT at the first
+add that knows the customer (design AD2): every line is priced through the pure
+pricing engine, soft-locked with the standard reservation TTL at the quote step
+(AD10 — the Draft stays DRAFT), and the owner receives the quote in chat to
+confirm (or cancel). The confirm ceremony later classifies from the latest
+availability and transitions DRAFT → CONFIRMED. The separate Telegram push to
+``owner_phone`` was removed — the quote travels as the agent's in-chat reply.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from src.agents.inventory import reserve_stock
 from src.agents.sales import ItemInput, Quote, quote_order
 from src.db.models import Catalogo, Cliente, Order, OrderEstado, OrderItem, SourcingState
 from src.orchestrator.session import ResolvedItem
+from src.pricing.engine import compute_base
 
 
 class UnknownSkuError(Exception):
@@ -33,11 +35,12 @@ def persist_case_a_order(
     *,
     delivery_date: date | None,
 ) -> tuple[Order, Quote]:
-    """Persist a full-stock order: quote, order row, reservations, order items.
+    """Persist a full-stock order as DRAFT: quote, order row, reservations, items.
 
     Returns the created ``Order`` and its ``Quote``; the caller renders the
-    quote as the in-chat reply so the unchanged approval flow resumes (awaiting
-    the owner's decision).
+    quote as the in-chat reply so the confirm flow resumes (awaiting the
+    owner's decision). The reservation is the ACTIVE soft-lock the confirm
+    ceremony converts and deducts (AD10).
     """
     inputs: list[ItemInput] = []
     for item in items:
@@ -48,7 +51,9 @@ def persist_case_a_order(
             ItemInput(
                 sku=item.sku,
                 cantidad=item.cantidad,
-                base_price=product.precio_lista_base,
+                # Source pricing: LOCAL base is costo_proveedor × (1 + margin),
+                # never the hand-editable precio_lista_base (spec).
+                base_price=compute_base(product.costo_proveedor, product.margen_aplicado_pct),
                 description=product.nombre_oficial,
             )
         )
@@ -59,7 +64,7 @@ def persist_case_a_order(
     )
     order = Order(
         customer_id=customer.customer_id,
-        estado=OrderEstado.PENDING_APPROVAL,
+        estado=OrderEstado.DRAFT,
         sourcing_state=SourcingState.PENDING_ASSEMBLY,
         delivery_date=delivery_date,
     )

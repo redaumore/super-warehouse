@@ -297,7 +297,9 @@ def remove_draft_item(session: Session, order: Order, sku: str) -> None:
     draft remains open for the next add.
     """
     if order.estado is not OrderEstado.DRAFT:
-        raise InvalidTransitionError(f"cannot remove items from order in state {order.estado.value}")
+        raise InvalidTransitionError(
+            f"cannot remove items from order in state {order.estado.value}"
+        )
     item = session.scalar(
         select(OrderItem).where(OrderItem.order_id == order.order_id, OrderItem.sku == sku)
     )

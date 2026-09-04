@@ -34,7 +34,6 @@ from src.db.models import (
     Order,
     OrderEstado,
     SourcingNeed,
-    SourcingState,
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
@@ -166,23 +165,24 @@ def rehydrate_conversation(
 ) -> ConversationState | None:
     """Rebuild the owner's state from the DB when the in-memory entry is gone.
 
-    Owner-keyed: the latest open Order across ALL customers is restored (there
-    is no owner entity — the latest open order IS the owner's, per the design).
+    Owner-keyed: the latest DRAFT order ACROSS ALL customers is restored (there
+    is no owner entity — the latest open draft IS the owner's, per the design).
     An explicit ``order_ref`` (``pedido #N``) targets that specific order
     instead of the latest. The state carries the order's items, its SourcingNeed
     rows and the routing flags: a Case B order still awaiting supplier choices
     is restored with ``sourcing_selection_pending`` and the candidates
-    recomputed through the searcher; a Case A order awaiting approval restores
-    ``awaiting_decision`` so the owner's approve/reject reply routes correctly.
+    recomputed through the searcher; a Draft awaiting confirm restores
+    ``awaiting_decision`` so the owner's confirm/cancel reply routes correctly.
+    CANCELED replaces the legacy REJECTED: cancelled orders never rehydrate.
     """
     if order_ref is not None:
         order = session.get(Order, order_ref)
-        if order is None or order.estado is OrderEstado.REJECTED:
+        if order is None or order.estado is OrderEstado.CANCELED:
             return None
     else:
         order = session.scalar(
             select(Order)
-            .where(Order.estado == OrderEstado.PENDING_APPROVAL)
+            .where(Order.estado == OrderEstado.DRAFT)
             .order_by(Order.order_id.desc())
             .limit(1)
         )
@@ -200,10 +200,6 @@ def rehydrate_conversation(
         for need in session.scalars(
             select(SourcingNeed).where(SourcingNeed.order_id == order.order_id)
         )
-    )
-    awaiting_decision = (
-        order.estado is OrderEstado.PENDING_APPROVAL
-        and order.sourcing_state is SourcingState.PENDING_ASSEMBLY
     )
     # The selection turn stays pending while any need is unassigned OR any of
     # the order's purchase orders is still OPEN (re-selection before execution).
@@ -225,9 +221,11 @@ def rehydrate_conversation(
             )
             is not None
         )
-    selection_pending = order.sourcing_state is SourcingState.IN_PREPARATION and (
+    selection_pending = bool(needs) and (
         any(need.supplier_id is None for need in needs) or open_po_exists
     )
+    # A Draft awaiting the owner's confirm (or cancel) owns the next reply.
+    awaiting_decision = order.estado is OrderEstado.DRAFT and not selection_pending
     candidates: tuple[SupplierCandidate, ...] = ()
     if selection_pending and searcher is not None:
         collected: list[SupplierCandidate] = []
