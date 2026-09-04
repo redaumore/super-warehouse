@@ -98,7 +98,8 @@ The migration MUST DELETE legacy supplier rows and their dependents (no backfill
 
 ### Requirement: Default margin scope
 
-The supplier `default_margin_pct` MUST be consumed only for future catalog products at ingestion; editing a margin MUST NOT re-price existing catalog rows.
+The supplier `default_margin_pct` MUST be consumed for future catalog products at ingestion AND at order time for RAG-sourced order lines resolved via `codigo_proveedor` → `suppliers.code`. Editing a margin MUST NOT re-price existing catalog rows or already-persisted order lines.
+(Previously: consumed only for future catalog products at ingestion.)
 
 #### Scenario: Margin applies to future ingestion
 
@@ -111,3 +112,15 @@ The supplier `default_margin_pct` MUST be consumed only for future catalog produ
 - GIVEN existing catalog products priced with an old margin
 - WHEN the supplier's default margin is edited
 - THEN existing product prices are unchanged
+
+#### Scenario: Margin applies to RAG order lines
+
+- GIVEN a RAG line whose `codigo_proveedor` maps to the supplier
+- WHEN the order is priced at finalize
+- THEN the line base uses the supplier's current default margin
+
+#### Scenario: Persisted orders stay frozen
+
+- GIVEN an order persisted with a supplier margin
+- WHEN the supplier's default margin is edited afterwards
+- THEN the persisted order lines keep their snapshot prices
