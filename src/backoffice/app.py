@@ -9,24 +9,31 @@ which keeps tests and CI safe.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from decimal import Decimal
 from functools import lru_cache
 from typing import cast
 
 import gradio as gr
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from src.agents.perception import VisionAnalyzer
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.customer_orders import (
+    cancel_order_action,
+    complete_picking_action,
+    deliver_order_action,
     get_default_margin,
+    legal_actions,
     list_customer_orders,
     list_exchange_rates,
     order_detail,
     recompute_pending_conversion,
     set_default_margin,
     set_exchange_rate,
+    start_picking_action,
 )
 from src.backoffice.ingestion import confirm_items, to_grid_rows
 from src.backoffice.monitor import list_orders
@@ -346,6 +353,37 @@ def _customer_orders_grid() -> list[list[object]]:
         ]
         for row in rows
     ]
+
+
+def _order_action(
+    action: Callable[[Session, int], str],
+) -> Callable[[object], str]:
+    """Wrap a fulfillment action: open a session, run it, surface errors."""
+
+    def run(order_id: object) -> str:
+        with SessionLocal() as session:
+            try:
+                return action(session, int(str(order_id)))
+            except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+                session.rollback()
+                return f"Error: {exc}"
+
+    return run
+
+
+def _legal_actions_label(order_id: object) -> str:
+    """Show the legal fulfillment actions of the selected order (state-driven)."""
+    if not order_id:
+        return "Seleccioná un pedido."
+    with SessionLocal() as session:
+        try:
+            row = order_detail(session, int(str(order_id)))
+        except KeyError:
+            return "Pedido inexistente."
+    actions = legal_actions(row["estado"])
+    if not actions:
+        return f"Estado {row['estado']}: sin acciones de cumplimiento."
+    return f"Acciones legales: {', '.join(actions)}."
 
 
 def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
@@ -705,6 +743,40 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _customer_order_detail_grid,
                 inputs=customer_order_id,
                 outputs=customer_order_detail_grid,
+            )
+
+            gr.Markdown("### Fulfillment actions")
+            order_action_status = gr.Textbox(label="Action status", interactive=False)
+            order_action_label = gr.Textbox(
+                label="Legal actions for the selected order", interactive=False
+            )
+            with gr.Row():
+                action_start_picking = gr.Button("Start picking (Confirmed → Picking)")
+                action_complete_picking = gr.Button("Complete picking (Picking → Ready)")
+                action_deliver = gr.Button("Deliver (Ready → Closed)")
+                action_cancel = gr.Button("Cancel order", variant="stop")
+            customer_order_id.change(
+                _legal_actions_label, inputs=customer_order_id, outputs=order_action_label
+            )
+            action_start_picking.click(
+                _order_action(start_picking_action),
+                inputs=customer_order_id,
+                outputs=order_action_status,
+            )
+            action_complete_picking.click(
+                _order_action(complete_picking_action),
+                inputs=customer_order_id,
+                outputs=order_action_status,
+            )
+            action_deliver.click(
+                _order_action(deliver_order_action),
+                inputs=customer_order_id,
+                outputs=order_action_status,
+            )
+            action_cancel.click(
+                _order_action(cancel_order_action),
+                inputs=customer_order_id,
+                outputs=order_action_status,
             )
 
             gr.Markdown("### Exchange rates")

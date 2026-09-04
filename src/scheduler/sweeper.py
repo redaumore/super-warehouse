@@ -1,12 +1,12 @@
 """APScheduler sweeper: durable release of TTL-expired reservations (task 2.10).
 
-The order-lifecycle spec requires unapproved orders to be auto-released after
+The order-lifecycle spec requires unconfirmed orders to be auto-released after
 the 30-minute window. TTL correctness is ALREADY enforced at read time — the
 inventory agent excludes ACTIVE reservations past their TTL from availability —
 so this sweeper is best-effort cleanup that makes the expiry durable: it marks
 past-TTL ACTIVE reservations as EXPIRED and flags their orders with
-``needs_requote`` so any later approval attempt must re-quote first (the
-lifecycle refuses stale approvals anyway).
+``needs_requote`` so any later confirm attempt must re-quote first (the
+lifecycle refuses stale confirmations anyway).
 
 ``build_sweeper`` wraps the job in APScheduler's ``BackgroundScheduler``;
 ``sweep_expired`` is the pure-ish DB unit so it can be tested directly.
