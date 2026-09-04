@@ -39,3 +39,6 @@ credentials/
 
 # Dev script runtime logs
 logs/
+
+# RAG catalog API runtime data (subtreed service; PDFs/artifacts stay local)
+services/rag-api/data/
