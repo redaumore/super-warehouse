@@ -15,10 +15,10 @@ WhatsApp / Telegram ──> webhook ──> ACK (<5 s) ──> client
                                                                   Disambiguation (hybrid search)
                                                                   Inventory & Pricing (soft-lock)
                                                                   Conversational Sales (quote)
-                                                                  Dispatch (wired approve/reject)
-                                                                      approve ──> Sheets + stock deduct + confirm (in chat)
-                                                                      reject  ──> release reservations
-                                                                  Sourcing (Case B supplier selection)
+Dispatch (wired confirm/cancel)
+                                                                       confirm ──> classify + convert + Sheets + stock deduct (in chat)
+                                                                       cancel  ──> release reservations / restore stock
+                                                                   Sourcing (Case B supplier selection)
 ```
 
 Heavy work (transcription, vision, search, pricing) never blocks the intake:
@@ -38,7 +38,7 @@ that owns that step and carries conversation context between them.
 | Disambiguation | Catalog resolution | `src/agents/disambiguation.py` | Hybrid rapidfuzz + pgvector cosine; auto-maps high-confidence, menus on ambiguity, reports not-found |
 | Inventory & Pricing | Soft-lock + availability | `src/agents/inventory.py` | `available = stock − Σ(active, unexpired reservations)`; TTL enforced at read time |
 | Conversational Sales | Quotes + adjustments | `src/agents/sales.py`, `src/pricing/engine.py` | Compound discounts via the pure pricing function; per-line owner adjustments |
-| Dispatch & Owner | Approve/reject (wired) | `src/agents/dispatch.py`, `src/orchestrator/approval.py` | `parse_decision` + `apply_decision` + `register_approved_order` (Sheets); `#N` override; Sheets failure rolls the approval back |
+| Dispatch & Owner | Confirm/cancel (wired) | `src/agents/dispatch.py`, `src/orchestrator/approval.py` | `parse_decision` + `apply_decision` + `confirm_and_register` (classify → convert → Sheets → deduct); `#N` override; Sheets quarantine is tolerated (the order stays CONFIRMED) |
 
 ## Data flow details
 
@@ -61,27 +61,36 @@ that owns that step and carries conversation context between them.
 5. **Reserve** (`src/agents/inventory.py`): each quoted line soft-locks stock
    with a TTL; the sweeper (`src/scheduler/sweeper.py`) makes expiry durable
    (EXPIRED + `needs_requote`).
-6. **Approve** (`src/orchestrator/approval.py`): the lifecycle transition
-   (`src/order_lifecycle/state.py`) refuses stale orders (`RequiresRequoteError`);
-   registration converts ACTIVE→CONVERTED reservations, appends the order row
-   to Google Sheets, deducts stock and returns the in-chat confirmation. A
-   quarantined Sheets write RAISES `SheetsRegistrationError` so the caller rolls
-   the approval back — the order stays PENDING (never half-registered).
+6. **Confirm** (`src/orchestrator/approval.py`): the confirm ceremony — the
+   lifecycle transition (`src/order_lifecycle/state.py`) refuses stale quotes
+   (`RequiresRequoteError`); the order is re-classified from the latest
+   availability (Case C cancels, Case B persists sourcing needs and hands the
+   supplier selection back); registration converts ACTIVE→CONVERTED
+   reservations, appends the order row to Google Sheets, deducts stock and
+   returns the in-chat confirmation. A quarantined Sheets write is TOLERATED:
+   the order stays CONFIRMED and the failure is surfaced in chat (spec:
+   "the order MUST remain Confirmed").
 
-Quotes, cancellations and approvals are in-chat replies: the legacy
+Quotes, cancellations and confirmations are in-chat replies: the legacy
 `_ChannelNotifier` push to `owner_phone` was removed (the owner sender IS the
 chat).
 
 ## State machine
 
 ```
-PENDING_APPROVAL ──approve──> APPROVED ──dispatch──> IN_DISPATCH
-       │
-       └──reject / TTL expiry──> REJECTED / needs_requote (re-quote before approve)
+DRAFT ──confirm──> CONFIRMED ──start picking──> PICKING ──complete──> READY_FOR_DELIVERY ──deliver──> CLOSED
+  │                    │                            │                        │
+  └──────cancel────────┴──────cancel────────────────┴────────cancel──────────┘
+        Draft/Confirmed: release ACTIVE reservations
+        Picking/Ready:   restore deducted stock + StockAdjustment (audit)
+CONFIRMED ──modify──> DRAFT   (restores stock, releases converted locks)
+DRAFT ──add/remove item──> DRAFT   (the draft persists; an empty draft stays DRAFT)
 ```
 
-`orders.estado` is one of `PENDING_APPROVAL | APPROVED | IN_DISPATCH | REJECTED`
-plus a `needs_requote` flag. TTL expiry is a reservation property, not a fifth
+`orders.estado` is one of `DRAFT | CONFIRMED | PICKING | READY_FOR_DELIVERY |
+CANCELED | CLOSED` plus a `needs_requote` flag. `SourcingState` is a separate
+informational axis (PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) that never
+drives the order state. TTL expiry is a reservation property, not a seventh
 state.
 
 ## Pricing
@@ -98,10 +107,12 @@ agent delegates to this function — no agent re-derives a price.
 
 ## Backoffice
 
-Gradio Blocks (`src/backoffice/app.py`) with four tabs: Catalog (stock/price/
+Gradio Blocks (`src/backoffice/app.py`) with seven tabs: Catalog (stock/price/
 margin edits — margin recomputes list price), Clients (registration with phone
-normalization), Orders/Monitor (state + soft-lock + Sheets sync) and Ingestion
-(upload → Vision preview grid → confirm to inventory). Supplier OCR
+normalization), Orders/Monitor (state + soft-lock + Sheets sync), Purchase
+Orders (send/receive/cancel), Ingestion (upload → Vision preview grid →
+confirm to inventory), Suppliers (master data) and Customer Orders (order
+lines, exchange rates, default margin, fulfillment actions). Supplier OCR
 (`src/supplier/ocr.py`) rejects illegible documents; barcode decoding
 (`src/barcode/decoder.py`) flags duplicate mappings for manual resolution.
 

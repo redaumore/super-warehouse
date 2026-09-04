@@ -1,20 +1,19 @@
-# Apply Progress: order-state-machine — Slice 1 (PR 1)
+# Apply Progress: order-state-machine — Full Change (PR final)
 
 **Mode**: Standard (`strict_tdd: false`)
-**Delivery**: `auto-chain`, `stacked-to-main`, 2000-line review budget
-**Status**: Tasks 1.1–1.3 implemented and slice-1 tests green; **STOP at slice
-boundary** — the full suite cannot be green without Phases 2–8 (evidence below).
-PR not opened: CI would be red; orchestrator decides next step.
-**Branch**: `feat/order-state-machine` (pushed to origin, base `main`)
+**Delivery**: `exception-ok` — maintainer-approved single PR with `size:exception`
+(~2,400–2,900 authored lines; budget 3,200). No chained PRs.
+**Status**: Phases 1–8 implemented; full suite green
+(**679 passed / 0 failed / 0 errors**); `ruff check` + `ruff format --check`
+clean; migration smoke green (the conftest session fixture rebuilds the schema
+with `alembic upgrade head` on every run).
+**Branch**: `feat/order-state-machine` (base `main`)
 **Issue**: https://github.com/redaumore/super-warehouse/issues/13
-**Commits**:
-
-- `0b61738 feat(db): migrate order_estado to six states with draft index`
-- `85a1523 feat(db): align OrderEstado model with the six-state migration`
-- `f380e8d test(db): cover six-state enum and migration downgrade safety`
-- `34d3c0c docs(sdd): add order state machine planning artifacts and state diagram doc`
+**PR**: opened per branch-pr skill (`Closes #13`, exactly one `type:*` label).
 
 ## Completed Tasks
+
+### Phase 1 (slice 1, committed)
 
 - [x] 1.1 Create `alembic/versions/f2b2570aed04_order_state_machine.py`
   (down_revision `7d2f4a1e8b90`): RENAME VALUE ×4, ADD DRAFT+PICKING
@@ -31,75 +30,175 @@ PR not opened: CI would be red; orchestrator decides next step.
   downgrade safety (one-step downgrade + guarded re-upgrade), partial-index
   lock, both enum-cardinality locks updated to six states.
 
-## Work Unit Evidence
+### Phase 2: Forward transitions
+
+- [x] 2.1 Rewrote `src/order_lifecycle/state.py`: `confirm_order` (TTL guard via
+  `requires_requote`, Draft→Confirmed, sets `approved_at`), `start_picking`,
+  `complete_picking`, `deliver_order` (sets `delivery_date` when absent),
+  `cancel_order(actor)` (Draft/Confirmed release ACTIVE; Picking/Ready restore
+  deducted stock + `StockAdjustment(reason='order_cancelled', actor)`),
+  `modify_order` (Confirmed→Draft restores stock without double-count),
+  `add_draft_item`/`remove_draft_item` (upsert/delete; empty Draft stays DRAFT).
+  Deleted `approve_order`/`reject_order`/`mark_dispatched`; kept
+  `expire_reservations`/`requires_requote`.
+- [x] 2.2 Rewrote `tests/test_order_lifecycle.py`: 11 legal transitions as
+  tables, illegal moves rejected, stale-quote `RequiresRequoteError`,
+  happy path Draft→…→Closed with delivery date, late-cancel restore + audit,
+  modify no-leak, draft line edits.
+
+### Phase 3: Draft persistence
+
+- [x] 3.1 `src/sourcing/draft_order.py`: `persist_draft_order` writes
+  `estado=DRAFT`, no reservations at persist (AD10: soft-lock at the quote step).
+- [x] 3.2 `src/agents/customer.py` `_persist_finalized_draft`: the quote step
+  (`cerrá el pedido`) reserves LOCAL lines ACTIVE; Draft stays DRAFT.
+- [x] 3.3 `add_draft_item`/`remove_draft_item` in `state.py` (upsert/delete
+  OrderItem; empty draft stays DRAFT).
+- [x] 3.4 First add that knows the customer persists Order(DRAFT) (parsed-order
+  turn and finalize path); customer resolved/created (name+phone, Base list);
+  single-draft app guard + `IntegrityError` catch (race backstop).
+- [x] 3.5 Tests in `test_draft_order.py`/`test_finalize.py`: first-add persist,
+  unknown-customer creation, remove is real, add-after-resume, second-draft
+  rejected and preserved, two-session race → exactly one survives.
+
+### Phase 4: Confirm ceremony
+
+- [x] 4.1 `src/orchestrator/approval.py`: `approve_and_register` →
+  `confirm_and_register` returning `ConfirmResult(order, converted,
+  sheets_status, total, confirmation_text, cancelled_case, missing)`. Sheets
+  quarantine TOLERATED (order stays CONFIRMED); `SheetsRegistrationError` and
+  the approval rollback are gone. `SheetsWriteStatus.SKIPPED` added (Case
+  C/B outcomes append no row).
+- [x] 4.2 Ceremony per AD5: TTL guard → transition → classify A/B/C from the
+  latest availability → reserve→convert→deduct → Sheets append. LOCAL lines
+  price from `costo_proveedor × margin` at the quote step (never
+  `precio_lista_base` — fixed in `persist_case_a_order` too); RAG lines use
+  supplier margin or default (existing source-aware engine).
+- [x] 4.3 `case_a.py` persists DRAFT; `case_b.py` sets IN_PREPARATION and
+  enters CONFIRMED on the confirmed selection; `case_c.py` cancels via
+  `cancel_order(actor)` + `SourcingState.CANCELLED`; owner-chat reply uses
+  `pedido #N`.
+- [x] 4.4 Tests: confirm idempotency (2nd confirm → `InvalidTransitionError`),
+  quarantine keeps CONFIRMED, Case C/B discovered at confirm, pending-
+  conversion blocked, stale quote refused.
+
+### Phase 5: Cancel & modify
+
+- [x] 5.1 `cancel_order(session, order, *, actor, now)` in `state.py`:
+  Draft/Confirmed release ACTIVE; Picking/Ready restore deducted stock +
+  `StockAdjustment(reason='order_cancelled', actor)`; all → CANCELED.
+- [x] 5.2 `modify_order`: Confirmed→Draft restores deducted stock and releases
+  CONVERTED reservations (no audit row — modify is not a cancel); Sheets
+  append-only, re-confirm appends a fresh row.
+- [x] 5.3 Case B cancel policy (AD9): order cancel never touches OPEN/SENT POs
+  or `SourcingNeed` rows — proven by `test_cancel_case_b_order_never_touches_pos_or_needs`.
+- [x] 5.4 Tests: cancel release/restore + audit trail (`test_order_lifecycle`,
+  `test_dispatch`, `test_backoffice`), modify no-leak/no-double-count, Case C
+  cancel path (`test_case_c`).
+
+### Phase 6: Backoffice
+
+- [x] 6.1 Action wrappers in `src/backoffice/customer_orders.py` (po.py
+  pattern, commit inside): `start_picking_action`, `complete_picking_action`,
+  `deliver_order_action`, `cancel_order_action(actor="backoffice")`, plus
+  `legal_actions(estado)`.
+- [x] 6.2 Gradio buttons + list refresh in `src/backoffice/app.py`; the four
+  actions on the Customer Orders tab with a state-driven legal-actions label.
+- [x] 6.3 Tests in `test_backoffice.py`: actions commit each transition,
+  deliver stores the delivery date, cancel restores stock with the
+  backoffice actor audited, monitor shows all six states, tab renders the
+  four buttons, `legal_actions` per state.
+
+### Phase 7: Chat handlers & rehydration
+
+- [x] 7.1 `dispatch.py`: "aprobá" → adjustments + `confirm_and_register`;
+  "rechazá" → `cancel_order(actor="owner")`; remove-product command (`sacá X`)
+  in `customer.py` (parser in `product_search.py`, routed to CUSTOMER even
+  with order context; removes from in-memory draft or persisted DRAFT).
+- [x] 7.2 `session.py`: rehydrate the latest DRAFT order;
+  `awaiting_decision` = awaiting confirm; CANCELED replaces REJECTED;
+  supplier-selection flag derived from the needs themselves.
+- [x] 7.3 Tests in `test_dispatch.py`, `test_dispatch_handler.py`,
+  `test_orchestrator.py`, `test_customer.py`, `test_product_search.py`,
+  `test_finalize.py`: confirm/cancel handlers, `pedido #N` override, unknown
+  reply re-asks, quarantine kept CONFIRMED, remove command, routing.
+
+### Phase 8: Sweep & docs
+
+- [x] 8.1 Updated the remaining tests (e2e, pipeline, backoffice, sweeper,
+  sourcing persistence, rehydration, purchasing accumulate, customers,
+  finalize, case A/B/C) to the six-state values.
+- [x] 8.2 Updated `docs/architecture.md`, `docs/sourcing.md`, `README.md` and
+  the pipeline/sweeper docstrings; removed the dead four-state code.
+- [x] 8.3 Full `pytest` green (679 passed / 0 failed / 0 errors) + `alembic
+  upgrade head` smoke (conftest rebuilds the disposable test schema from the
+  migrations every session); PO/pricing behavior unchanged (accumulate and
+  pricing suites green).
+
+## Work Unit Evidence (phases 2–8)
 
 | Unit | Focused test command and exact result | Runtime harness command and exact result | Rollback boundary |
 |------|----------------------------------------|------------------------------------------|-------------------|
-| 1.1 Migration | `.venv/bin/python -m pytest tests/test_db_models.py -q` — **23 passed** in 3.24s (includes migration round-trip tests) | `command.upgrade("head")` then one-step `downgrade("7d2f4a1e8b90")` then guarded re-upgrade on the disposable `ferreteria_test` DB — enum has 6 labels after downgrade (4 legacy + DRAFT/PICKING leftovers), index dropped, rows reconciled, re-upgrade succeeds | Revert `0b61738`; `downgrade()` reverses the renames, drops the index, reconciles rows; `delivery_date` untouched (predates this migration) |
-| 1.2 Model | Same focused command — model enum locks and partial-index lock pass | `db_inspector` confirmed `order_estado` has exactly the six labels and the index exists with `WHERE estado = 'DRAFT'` | Revert `85a1523`; restores the four-state enum and removes `__table_args__` index without touching the migration |
-| 1.3 Tests | Same focused command — **23 passed** including the new downgrade-safety test | `make test-docs` regenerated `docs/escenarios-testeados.md` (307 scenarios; repo hook rejects a stale inventory) | Revert `f380e8d`; test-only changes plus the generated scenario doc |
+| 2 transitions | `pytest tests/test_order_lifecycle.py` — 28 passed | N/A — pure lifecycle logic, unit + integration tested | revert the state.py commit |
+| 3 draft persistence | `pytest tests/test_draft_order.py tests/test_finalize.py` — green | two-session race against the real DB → exactly one DRAFT survives, other IntegrityError | revert draft_order/customer finalize changes |
+| 4 confirm ceremony | `pytest tests/test_approval.py tests/test_case_a.py` — green | fake `SheetsWriter` QUARANTINED → order stays CONFIRMED, status surfaced | revert approval/dispatch commits |
+| 5 cancel/modify | `pytest tests/test_order_lifecycle.py tests/test_case_b.py tests/test_case_c.py` — green | inventory-delta + PO-retention integration (late cancel restore + audit; Case B cancel leaves POs/needs intact) | revert state.py cancel/modify + case policy |
+| 6 backoffice | `pytest tests/test_backoffice.py` — 41 passed | Gradio-free wrappers: each action commits inside its `SessionLocal` | revert customer_orders.py + app.py |
+| 7 chat + rehydration | `pytest tests/test_dispatch.py tests/test_dispatch_handler.py tests/test_orchestrator.py` — green | chat-turn replay fixtures: `aprobá`/`rechazá`/`sacá X` over real sessions | revert dispatch.py + session.py + router |
+| 8 sweep + docs | full `pytest` — **679 passed, 0 failed, 0 errors** | `alembic upgrade head` on the disposable test DB (every conftest session) | revert test/docs edits only |
 
-## Slice Boundary Conflict (evidence)
+## Deviations from Design
 
-Making the full suite green is **impossible** within slice 1: the enum rename
-and the removed transition functions are consumed by `src/` modules and tests
-that belong to Phases 2–8. Full run on the final slice commit:
+- **Pricing runs at the quote step, not inside the ceremony.** The draft and
+  Case A persist paths price every line by source (LOCAL `costo_proveedor ×
+  margin`, never `precio_lista_base`; RAG supplier margin or default) when the
+  quote is shown; the confirm ceremony consumes the frozen source-priced
+  snapshots and applies the owner's adjustments on top. Re-pricing at confirm
+  would clobber the applied adjustments (AD5 lists price before adjustments;
+  the quote the owner saw must be the price they confirm). The spec's
+  "Local line priced from cost … never precio_lista_base" is enforced at both
+  persist paths and locked by `test_case_a`/`test_finalize`/`test_draft_order`.
+- **Case B orders enter CONFIRMED at the supplier selection, not at the
+  ceremony.** Per the sourcing spec ("on confirmed selection … the order
+  itself enters CONFIRMED"), `confirm_selection` transitions the order;
+  the ceremony's Case B branch (discovered at confirm for a draft whose
+  availability dropped) keeps the order CONFIRMED and hands the selection
+  prompt back. Case B conversion/deduction is decoupled: the POs are the
+  sourcing truth and are fulfilled via receipts (unchanged PO flow).
+- **`delivery_date` NOT re-added**: already exists as a nullable `Date` column
+  from `a0bf3bd210f8`; the task's "ADD COLUMN TIMESTAMP" would duplicate it
+  (documented in slice 1; deliver stores the date, not a new column).
+- **`approved_at`/`rejected_at` reused as-is** (design open question,
+  recommended option): `confirm_order` sets `approved_at`, `cancel_order` sets
+  `rejected_at`. No column rename.
+- **Tests committed before code** in the final batch: the pre-commit
+  scenario-docs hook requires the generated `docs/escenarios-testeados.md` to
+  match the full staged test set, which forced the test-migration commit to
+  land first; the code commits follow and the final tree is green.
+- **`docs/estado-pedido.md` left as the historical gap analysis** (planning
+  artifact of this change); the living docs (architecture.md, sourcing.md,
+  README) were updated to the six-state flow.
 
-```
-45 failed, 541 passed, 46 errors
-```
+## Risks
 
-| Test file | Failure root cause | Required phase |
-|-----------|--------------------|----------------|
-| `tests/test_order_lifecycle.py` | tests removed `approve_order`/`reject_order`/`mark_dispatched`; `OrderEstado.PENDING_APPROVAL/APPROVED/IN_DISPATCH/REJECTED` gone | Phase 2 (`confirm_order`, `start_picking`, `complete_picking`, `deliver_order`) |
-| `tests/test_approval.py` | `approve_and_register` flow (removed ceremony) | Phase 4 (`confirm_and_register`) |
-| `tests/test_dispatch.py`, `tests/test_dispatch_handler.py` | `apply_decision` approve/reject handlers reference removed enum members/functions | Phase 7 |
-| `tests/test_pipeline_owner.py`, `tests/test_session_rehydrate_owner.py` | `REJECTED`/awaiting-approval semantics | Phase 7/8 |
-| `tests/test_sweeper.py` | `OrderEstado.PENDING_APPROVAL` direct ref (`:176`) | Phase 8 |
-| `tests/test_purchasing_accumulate.py`, `tests/test_sourcing_persistence.py` | new `DRAFT` default + `uq_orders_one_draft_per_customer` rejects the second order for the same customer created without an explicit state (AD4 working as designed) | Phase 3/5 (persist DRAFT / set explicit states) |
+- Case B orders that reach the ceremony via re-classification (draft-path)
+  hold no reservation conversion/deduction for their available LOCAL portion;
+  bounded and documented (the PO axis is the sourcing truth). A follow-up
+  could convert the available portion at selection.
+- The confirm-ceremony classification adds back the order's own ACTIVE
+  reservations to availability; an expired-but-not-yet-swept reservation is
+  still caught by the TTL guard before any conversion.
+- The dev database (`ferreteria`) may still hold pre-migration rows; the
+  migration renames values in place, so live rows land in diagram-equivalent
+  states (slice 1).
 
-`src/` consumers of removed members that would need later-slice behavior:
-`src/order_lifecycle/state.py` (Phase 2), `src/orchestrator/approval.py`
-(Phase 4), `src/sourcing/case_a.py` + `draft_order.py` (Phase 3), and the
-chat/session modules (Phase 7).
+## Slice 1 Boundary Evidence (historical)
 
-Per the apply contract, slice 1 was not half-extended into Phase 2; the
-orchestrator decides how to proceed (e.g. expand slice 1 to include Phase 2,
-reorder slices, or accept a red-CI PR).
-
-## Deviations and Risks
-
-- **`delivery_date` was NOT re-added by the migration**: it already exists as a
-  nullable `sa.Date()` column from `a0bf3bd210f8` and is modeled as such; the
-  task's "ADD COLUMN `delivery_date TIMESTAMP NULL`" would have failed with a
-  duplicate column. The migration documents this; downgrade does not drop it.
-- **ADD VALUE uses an autocommit block unconditionally**: PG<12 rejects
-  in-transaction ADD VALUE; PG>=12 accepts it but the new value is unusable
-  until commit — the partial index needs `DRAFT` (verified:
-  `UnsafeNewEnumValueUsage` when used in-transaction). Server-version detection
-  is documented; no version branch is needed because the block covers both.
-- **ADD VALUE is guarded against leftover labels**: a downgrade leaves
-  DRAFT/PICKING behind (PG cannot drop enum values); re-upgrade would fail with
-  `DuplicateObject` without the guard (verified empirically). The downgrade→
-  re-upgrade cycle is exercised by the test suite.
-- **The legacy deep round-trip test was replaced**: `test_customer_order_migration_
-  round_trips_and_keeps_case_a_persistable` asserted the removed
-  `OrderEstado.PENDING_APPROVAL` and a write path Phase 3 rewrites; it is now
-  `test_order_state_machine_migration_downgrade_safety` (one-step downgrade +
-  guarded re-upgrade). The deep downgrade path is still exercised by
-  `test_migration_seeded_default_margin_is_read_by_pricing`.
-- **No PR opened**: branch pushed, issue #13 created, but the PR would fail CI
-  (`45 failed, 46 errors`). Per the slice contract the orchestrator decides.
-- Migration head is now `f2b2570aed04`; the conftest session fixture upgrades to
-  it, and tests that hard-coded head `7d2f4a1e8b90` were updated accordingly.
+Full run at the end of slice 1 (commit e504eb1): `45 failed, 541 passed,
+46 errors` — the enum rename and removed transition functions were consumed
+by Phases 2–8 modules and tests. That inventory is superseded: the same run
+is now **679 passed / 0 failed / 0 errors**.
 
 ## Pending Tasks
 
-- [ ] Phase 2 (PR 2): forward transitions — `confirm_order`, `start_picking`,
-      `complete_picking`, `deliver_order`; rewrite `tests/test_order_lifecycle.py`
-- [ ] Phase 3 (PR 3): draft persistence; explicit states for multi-order tests
-- [ ] Phase 4 (PR 4): confirm ceremony
-- [ ] Phase 5 (PR 5): cancel/modify
-- [ ] Phase 6 (PR 6): backoffice actions
-- [ ] Phase 7 (PR 7): chat handlers + rehydration
-- [ ] Phase 8 (PR 8): sweep remaining test/docs references; full green suite
+None — all tasks 1.1–8.3 are complete. Next phase: `verify`.

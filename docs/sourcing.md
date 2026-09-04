@@ -44,22 +44,23 @@ owner message ──► gate (owner sender) ──► parse (name + items + date
 
 | Case | Condition | OrderEstado | SourcingState | What happens |
 |------|-----------|-------------|---------------|--------------|
-| A | every item covered by stock | PENDING_APPROVAL → APPROVED (unchanged flow) | PENDING_ASSEMBLY | reserve → quote in chat → owner approves → Sheets + Inventory deducted |
-| B | some item missing AND every missing item has a supplier | PENDING_APPROVAL (approval bypassed) | IN_PREPARATION | list missing + suppliers → owner selects → accumulate OPEN PO per supplier |
-| C | some missing item has NO supplier | REJECTED (existing rejection flow releases reservations) | CANCELLED | owner notified in chat the items are unavailable |
+| A | every item covered by stock | DRAFT → CONFIRMED (confirm ceremony) | PENDING_ASSEMBLY | reserve at quote → confirm in chat → classify at confirm → Sheets + Inventory deducted |
+| B | some item missing AND every missing item has a supplier | DRAFT → CONFIRMED (on selection) | PENDING_ASSEMBLY → IN_PREPARATION (on selection) | list missing + suppliers → owner selects → accumulate OPEN PO per supplier |
+| C | some missing item has NO supplier | DRAFT → CANCELED (cancel path) | CANCELLED | owner notified in chat the items are unavailable |
 
-The four `OrderEstado` states are untouched: sourcing is a separate axis on
-the order.
+The six `OrderEstado` states are independent of the sourcing axis: sourcing
+never drives the order state.
 
-## Case A approval
+## Case A confirmation
 
 The quote is the agent's in-chat reply ("…¿Lo aprobás? Respondé 'aprobá' o
 'rechazá'"). The owner's reply routes to the wired DISPATCH agent
 (`src/agents/dispatch.py::build_dispatch_handler`): `parse_decision` →
-`apply_decision` → `register_approved_order` (Sheets). A `pedido #N` reference
-targets a specific order instead of the latest open one. If the Sheets write
-quarantines, the approval is rolled back — the order stays PENDING and the
-owner gets an error reply (never half-registered).
+`apply_decision` → `confirm_and_register` (classify → convert → Sheets →
+deduct). A `pedido #N` reference targets a specific order instead of the
+latest DRAFT. If the Sheets write quarantines, the failure is tolerated — the
+order stays CONFIRMED and the owner gets the error surfaced in chat (spec:
+the order MUST remain Confirmed).
 
 ## Case B multi-turn selection
 
@@ -74,8 +75,8 @@ refused.
 ## Rehydration (owner-keyed)
 
 `rehydrate_conversation` (`src/orchestrator/session.py`) rebuilds the OWNER's
-conversation from the LATEST OPEN ORDER ACROSS ALL CUSTOMERS (no owner entity —
-the latest open order IS the owner's). An explicit `pedido #N` reference
+conversation from the LATEST DRAFT ORDER ACROSS ALL CUSTOMERS (no owner entity —
+the latest draft IS the owner's). An explicit `pedido #N` reference
 overrides to a specific order.
 
 ## Purchase order lifecycle
