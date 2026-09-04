@@ -101,3 +101,21 @@ def test_backoffice_sessions_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert grid[0][2] == "query"
     assert grid[0][3] == "INFO"
     assert "clavos" in grid[0][4]
+
+
+def test_human_readable_log_format(tmp_path: Path) -> None:
+    """Verifica que el archivo de log contenga cabecera y bloques legibles para debugging."""
+    sid = "ses_debug_123"
+    log_session_event(
+        "telegram",
+        "inbound_message",
+        {"channel": "telegram", "sender_id": "12345", "text": "amoladora recta"},
+        session_id=sid,
+        log_dir=tmp_path,
+    )
+    log_file = tmp_path / f"{sid}.log"
+    content = log_file.read_text(encoding="utf-8")
+    assert f"SESSION LOG: {sid}" in content
+    assert "[TELEGRAM -> inbound_message]" in content
+    assert 'Message: "amoladora recta"' in content
+    assert "# JSON: " in content

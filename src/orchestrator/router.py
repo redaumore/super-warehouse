@@ -31,7 +31,7 @@ from src.agents.commands import RESET_GREETING, is_session_reset
 from src.agents.intake import OrderParser
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
-from src.observability.session_logger import generate_session_id
+from src.observability.session_logger import generate_session_id, get_current_session_id
 from src.orchestrator.session import ConversationState, ConversationStore
 
 
@@ -162,7 +162,7 @@ class Orchestrator:
         """
         if message.media_type is None and is_session_reset((message.text or "").strip()):
             self.store.drop(message.sender_id)
-            sid = generate_session_id(message.sender_id)
+            sid = get_current_session_id() or generate_session_id(message.sender_id)
             fresh_state = ConversationState(sender_id=message.sender_id, session_id=sid)
             self.store.put(fresh_state)
             return TurnResult(
@@ -172,7 +172,8 @@ class Orchestrator:
             )
         state = self.store.get(message.sender_id)
         if state is not None and state.session_id is None:
-            state = state.with_updates(session_id=generate_session_id(message.sender_id))
+            sid = get_current_session_id() or generate_session_id(message.sender_id)
+            state = state.with_updates(session_id=sid)
             self.store.put(state)
         decision = route_message(message, state)
         if (
@@ -186,7 +187,7 @@ class Orchestrator:
                 sid = (
                     state.session_id
                     if state and state.session_id
-                    else generate_session_id(message.sender_id)
+                    else (get_current_session_id() or generate_session_id(message.sender_id))
                 )
                 state = ConversationState(
                     sender_id=message.sender_id, session_id=sid, parsed_order=parsed
@@ -203,9 +204,11 @@ class Orchestrator:
                 sid = (
                     state.session_id
                     if state and state.session_id
-                    else generate_session_id(message.sender_id)
+                    else (get_current_session_id() or generate_session_id(message.sender_id))
                 )
                 final_state = final_state.with_updates(session_id=sid)
+            self.store.put(final_state)
+        elif final_state is not None:
             self.store.put(final_state)
         return TurnResult(
             decision=decision,

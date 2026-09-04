@@ -104,3 +104,10 @@ def clean_schema(db_engine):
     yield
     with db_engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_session_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect session traces in all tests to tmp_path to prevent polluting logs/sessions."""
+    session_dir = tmp_path / "test_sessions"
+    monkeypatch.setattr("src.observability.session_logger.DEFAULT_SESSIONS_DIR", session_dir)

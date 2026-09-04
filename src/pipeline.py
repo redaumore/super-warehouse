@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from src.agents.commands import is_session_reset
 from src.agents.customer import (
     CustomerResponder,
     DbCatalogSearcher,
@@ -51,7 +52,11 @@ from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIResponder
 from src.integrations.rag import RagProductClient
 from src.integrations.sheets import SheetsWriter
-from src.observability.session_logger import log_session_event, set_current_session_id
+from src.observability.session_logger import (
+    generate_session_id,
+    log_session_event,
+    set_current_session_id,
+)
 from src.orchestrator.owner import is_owner_sender, rejection_reply
 from src.orchestrator.router import (
     AgentName,
@@ -214,17 +219,23 @@ async def handle_inbound(message: InboundMessage) -> None:
             logger.exception("rejection reply failed on channel=%s", message.channel)
         return
 
-    # Seed context from store if session already active
-    prior_state = ORCHESTRATOR.store.get(message.sender_id)
-    if prior_state and prior_state.session_id:
-        set_current_session_id(prior_state.session_id)
+    # Resolve active session ID before any logging or routing
+    is_reset = message.media_type is None and is_session_reset((message.text or "").strip())
+    if is_reset:
+        sid = generate_session_id(message.sender_id)
+        set_current_session_id(sid)
+    else:
+        prior_state = ORCHESTRATOR.store.get(message.sender_id)
+        if prior_state and prior_state.session_id:
+            sid = prior_state.session_id
+            set_current_session_id(sid)
+        else:
+            sid = generate_session_id(message.sender_id)
+            set_current_session_id(sid)
 
-    result = ORCHESTRATOR.handle_inbound(message)
-    if result.state and result.state.session_id:
-        set_current_session_id(result.state.session_id)
-
+    # Log inbound message first in chronological order
     log_session_event(
-        "telegram",
+        message.channel,
         "inbound_message",
         {
             "channel": message.channel,
@@ -233,6 +244,11 @@ async def handle_inbound(message: InboundMessage) -> None:
             "media_type": message.media_type,
         },
     )
+
+    result = ORCHESTRATOR.handle_inbound(message)
+    if result.state and result.state.session_id:
+        set_current_session_id(result.state.session_id)
+
     log_session_event(
         "orchestrator",
         "routing_decision",
@@ -251,14 +267,14 @@ async def handle_inbound(message: InboundMessage) -> None:
     try:
         await adapter.send_text(message.sender_id, reply)
         log_session_event(
-            "telegram",
+            message.channel,
             "outbound_reply",
             {"channel": message.channel, "sender_id": message.sender_id, "reply": reply},
         )
     except Exception:
         logger.exception("reply failed on channel=%s", message.channel)
         log_session_event(
-            "telegram",
+            message.channel,
             "outbound_reply_failed",
             {"channel": message.channel, "sender_id": message.sender_id},
             level="ERROR",
