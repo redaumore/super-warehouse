@@ -21,14 +21,13 @@ from openai import OpenAI
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.agents.customer import (
-    ADDED_TO_ORDER_REPLY,
     GREETING,
-    OFFER_TO_CREATE_REPLY,
     SYSTEM_PROMPT,
     CustomerResponder,
     ResponderError,
     ResponderNotConfigured,
     build_handler,
+    format_added_to_order_reply,
 )
 from src.agents.product_search import (
     ProductEntry,
@@ -60,21 +59,29 @@ class FakeResponder(CustomerResponder):
 
 
 class FakeProductSearcher:
-    """Deterministic fake product searcher: configured result, can raise."""
+    """Deterministic fake product searcher: configured result, can raise.
+
+    ``by_query`` maps specific queries to results; any other query falls back
+    to ``result`` (or a NONE result when no result is configured).
+    """
 
     def __init__(
         self,
         result: ProductSearchResult | None = None,
         error: Exception | None = None,
+        by_query: dict[str, ProductSearchResult] | None = None,
     ) -> None:
         self.result = result
         self.error = error
+        self.by_query = by_query or {}
         self.queries: list[str] = []
 
     def search(self, query: str) -> ProductSearchResult:
         self.queries.append(query)
         if self.error is not None:
             raise self.error
+        if query in self.by_query:
+            return self.by_query[query]
         return (
             self.result
             if self.result is not None
@@ -524,7 +531,7 @@ def test_add_intent_with_open_order_appends_draft_and_clears_options():
     outcome = handler(_message(text="agregalo"), state, _decision())
 
     assert fake.calls == []
-    assert outcome.reply == ADDED_TO_ORDER_REPLY.format(name="Tarugo Fischer 8mm", qty=1)
+    assert outcome.reply == format_added_to_order_reply(entry, 1)
     assert outcome.state is not None
     assert outcome.state.draft_items == ((entry, 1),)
     assert outcome.state.product_options == ()
@@ -573,10 +580,66 @@ def test_add_intent_without_open_order_starts_draft():
     outcome = handler(_message(text="agregalo"), state, _decision())
 
     assert fake.calls == []
-    assert outcome.reply == ADDED_TO_ORDER_REPLY.format(name="Tarugo Fischer 8mm", qty=1)
+    assert outcome.reply == format_added_to_order_reply(entry, 1)
     assert outcome.state is not None
     assert outcome.state.draft_items == ((entry, 1),)
     assert outcome.state.product_options == ()
+
+
+def test_bare_quantity_after_displayed_product_adds_qty_with_finalize_hint():
+    """'quiero 2' after a displayed product adds 2 of it with the finalize hint, no LLM."""
+    fake = FakeResponder()
+    entry = _entry("SKU-001", "Tarugo Fischer 8mm")
+    state = ConversationState(sender_id=SENDER, product_options=(entry,))
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="quiero 2"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.reply == format_added_to_order_reply(entry, 2)
+    assert "cerrá el pedido para" in outcome.reply
+    assert outcome.state is not None
+    assert outcome.state.draft_items == ((entry, 2),)
+    assert outcome.state.product_options == ()
+    assert outcome.state.history == (
+        ChatMessage("user", "quiero 2"),
+        ChatMessage("assistant", outcome.reply),
+    )
+
+
+def test_add_intent_reply_shows_rag_price_currency_and_unit():
+    """Un alta de un producto RAG con precio muestra el precio en la respuesta."""
+    fake = FakeResponder()
+    entry = _entry(
+        "AMX-AT-5044",
+        "Tarugo Fischer 8mm",
+        source=ProductSource.RAG,
+        price=135.5,
+        currency="ARS",
+        unit="bolsa",
+    )
+    state = ConversationState(sender_id=SENDER, order_id=5, product_options=(entry,))
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="agregalo"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.reply == format_added_to_order_reply(entry, 1)
+    assert "(135.5 ARS/bolsa)" in outcome.reply
+
+
+def test_add_intent_reply_omits_price_for_local_entry_without_price():
+    """Un alta de un producto local sin precio no muestra ningún precio."""
+    fake = FakeResponder()
+    entry = _entry("SKU-001", "Tarugo Fischer 8mm")
+    state = ConversationState(sender_id=SENDER, order_id=5, product_options=(entry,))
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="agregalo"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.reply == format_added_to_order_reply(entry, 1)
+    assert "(" not in outcome.reply
 
 
 def test_add_phrase_without_options_goes_to_llm():
@@ -600,3 +663,46 @@ def test_query_updates_product_options_for_next_turn():
 
     assert outcome.state is not None
     assert outcome.state.product_options == entries
+
+
+def test_verb_quantity_add_after_displayed_product_adds_qty():
+    """'agregale 2' after a displayed product adds 2 of it without calling the LLM."""
+    fake = FakeResponder()
+    entry = _entry("SKU-001", "Tarugo Fischer 8mm")
+    state = ConversationState(sender_id=SENDER, order_id=5, product_options=(entry,))
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="agregale 2"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.reply == format_added_to_order_reply(entry, 2)
+    assert outcome.state is not None
+    assert outcome.state.draft_items == ((entry, 2),)
+    assert outcome.state.product_options == ()
+
+
+def test_turn_without_results_keeps_last_displayed_product_anchor():
+    """A turn whose search shows nothing keeps product_options, so a later bare '2' still adds."""
+    fake = FakeResponder()
+    entry = _entry("SKU-001", "Tarugo Fischer 8mm")
+    searcher = FakeProductSearcher(
+        by_query={
+            "tarugos": _local_result(entry),
+            "dale": ProductSearchResult(source=ProductSource.NONE, entries=()),
+        }
+    )
+    handler = build_handler(fake, searcher=searcher)
+
+    displayed = handler(_message(text="tarugos"), None, _decision())
+    assert displayed.state is not None
+    assert displayed.state.product_options == (entry,)
+
+    nothing = handler(_message(text="dale"), displayed.state, _decision())
+    assert nothing.state is not None
+    assert nothing.state.product_options == (entry,)
+
+    added = handler(_message(text="2"), nothing.state, _decision())
+    assert fake.calls  # the "dale" turn went through the LLM
+    assert added.state is not None
+    assert added.state.draft_items == ((entry, 2),)
+    assert added.state.product_options == ()

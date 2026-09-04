@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 291, agrupados en 28 dominios.
+**Total de escenarios:** 296, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -15,7 +15,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 8
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
@@ -174,8 +174,13 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - 'sumá 5 de eso' agrega 5 unidades del último producto mostrado al draft. _(`test_add_intent_with_quantity_appends_draft_with_qty`)_
 - 'el 2' selecciona el segundo resultado mostrado. _(`test_add_intent_numbered_reference_picks_displayed_result`)_
 - An add intent starts the draft even when no persisted order exists yet. _(`test_add_intent_without_open_order_starts_draft`)_
+- 'quiero 2' after a displayed product adds 2 of it with the finalize hint, no LLM. _(`test_bare_quantity_after_displayed_product_adds_qty_with_finalize_hint`)_
+- Un alta de un producto RAG con precio muestra el precio en la respuesta. _(`test_add_intent_reply_shows_rag_price_currency_and_unit`)_
+- Un alta de un producto local sin precio no muestra ningún precio. _(`test_add_intent_reply_omits_price_for_local_entry_without_price`)_
 - Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
 - Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
+- 'agregale 2' after a displayed product adds 2 of it without calling the LLM. _(`test_verb_quantity_add_after_displayed_product_adds_qty`)_
+- A turn whose search shows nothing keeps product_options, so a later bare '2' still adds. _(`test_turn_without_results_keeps_last_displayed_product_anchor`)_
 
 ## Ciclo de vida del pedido
 
@@ -221,12 +226,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Búsqueda de producto (precedencia local → RAG)
 
-- Las frases de alta ('agregalo', 'sumá N de eso', 'el N') se resuelven a (índice, cantidad). _(`test_parse_product_add`)_
+- Add phrases resolve to (index, quantity); bare quantity answers map to the last product. _(`test_parse_product_add`)_
   - agregalo
   - agregala
   - sumá 5 de eso
   - sumale 3 de eso
   - agregá 2 de esos
+  - agregale 2
+  - sumale 3
+  - AGREGÁ 1
+  - agregale 2 unidades
+  - agregale 2 de eso
   - el 2
   - quiero el 3
   - agregalo
@@ -234,6 +244,32 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - el 2
   - pasame el precio
   - (vacío)
+  - quiero 2
+  - dame 3
+  - anotame 2
+  - llevo 2 unidades
+  - necesito 2
+  - quiero llevar 2
+  - 2 unidades
+  - llevo 2 u.
+  - dos
+  - un
+  - diez
+  - veinte
+  - 2
+  - Serían 2
+  - si, está bien
+  - dale
+  - nada más
+  - ok
+  - sí
+  - no
+  - todo bien
+  - quiero 2 recolectores
+  - agregale 2 recolectores de aceite
+  - agregale
+  - agregale 2
+  - quiero 2
 - Un hit local (>= floor) resuelve LOCAL y nunca llama al RAG. _(`test_local_hit_skips_rag`)_
 - Un candidato local bajo el floor no es hit: el RAG se consulta. _(`test_local_below_floor_falls_back_to_rag`)_
 - Un local vacío cae al RAG y los campos del producto viajan al entry. _(`test_empty_local_falls_back_to_rag_and_maps_fields`)_

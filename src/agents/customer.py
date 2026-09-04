@@ -20,9 +20,10 @@ conversation keeps answering while the DB is down.
 
 Order building rides the same seam: while an order is open, the owner can add
 the last displayed product with natural phrases ("agregalo", "sumá 5 de eso",
-"el 2") and the handler appends it to the state's ``draft_items`` without
-calling the LLM; without an open order the handler offers to create one
-through the existing sourcing path.
+"el 2", or a bare quantity answer like "quiero 2") and the handler appends it
+to the state's ``draft_items`` without calling the LLM; the add reply invites
+the owner to finalize with "cerrá el pedido para <cliente>". Without an open
+order the handler offers to create one through the existing sourcing path.
 
 The sourcing turn (parsed orders) resolves the customer by NAME
 (``src/agents/customers.py``), offers in-chat creation for unknown names and
@@ -36,7 +37,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 import phonenumbers
 from phonenumbers import PhoneNumber, PhoneNumberFormat
@@ -45,6 +46,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.agents.commands import (
+    ADD_QUANTITY,
+    APPROVE,
+    FINALIZE_WITH_CUSTOMER,
+    NEW_CUSTOMER,
+    REJECT,
+)
 from src.agents.customers import (
     CustomerResolutionKind,
     format_customer_menu,
@@ -74,10 +82,18 @@ from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, Supplier
 from src.db.session import SessionLocal
-from src.integrations.rag import RagPrice, RagProductClient
+from src.integrations.rag import RagProductClient
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem, SourcingNeedItem
-from src.pricing.order_pricing import MissingRateError, PricingLine, PricedOrder, compute_order, pending_order
+from src.pricing.order_pricing import (
+    MarginSource,
+    MissingRateError,
+    PricedOrder,
+    PricingLine,
+    RateSource,
+    compute_order,
+    pending_order,
+)
 from src.sourcing.case_a import persist_case_a_order
 from src.sourcing.classify import MissingItem, SourcingCase, classify_case
 from src.sourcing.draft_order import persist_draft_order
@@ -95,14 +111,57 @@ OFFER_TO_CREATE_REPLY = (
     "Todavía no hay un pedido abierto para agregar productos. "
     "Mandá el pedido completo (cliente, productos y cantidades) y lo cargo."
 )
-ADDED_TO_ORDER_REPLY = "Listo: agregué {name} × {qty} al pedido en curso."
+ADDED_TO_ORDER_REPLY = (
+    "Listo: agregué {name} × {qty} al pedido en curso{price}. "
+    "¿Algo más? Si ya está completo, decime 'cerrá el pedido para <cliente>'."
+)
+
+EMPTY_DRAFT_FINALIZE_REPLY = (
+    "Todavía no hay productos en el pedido. Buscá el artículo (por ejemplo "
+    "'recolector de aceite') y después sumalo con 'agregale 2'. Cuando esté "
+    "completo, decime 'cerrá el pedido para <cliente>'."
+)
+
+ASK_CUSTOMER_FINALIZE_REPLY = (
+    "¿Para qué cliente es el pedido? Decime 'cerrá el pedido para <cliente>'. "
+    "Si es nuevo, dalo de alta con 'nuevo cliente <nombre> <teléfono>'."
+)
 
 SYSTEM_PROMPT = (
     "Sos el asistente del dueño de una ferretería de barrio, y te escribe el dueño "
     "por WhatsApp o Telegram. Tu trabajo es cargar los pedidos de sus clientes: "
     "primero identificás al cliente por nombre, después los productos y cantidades. "
-    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos."
+    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos. "
+    "Los pedidos los crea la app, no el chat: nunca digas que un pedido quedó guardado, "
+    "confirmado, creado, cerrado o cancelado, que le agregaste productos, ni que lo "
+    "estás gestionando, ni prometas avisar cuando esté listo. "
+    "Nunca inventes cantidades que el dueño no escribió. "
+    "Cuando mostrás un producto, respondé breve y no cierres la venta: la app se encarga "
+    f"de agregar y finalizar (el dueño puede escribir '{ADD_QUANTITY}', "
+    f"'{FINALIZE_WITH_CUSTOMER}' o '{NEW_CUSTOMER}'). "
+    "Cuando el dueño te pida confirmar, cerrar o finalizar un pedido, no lo hagas vos: "
+    "recordale el comando exacto para hacerlo."
 )
+
+
+def format_added_to_order_reply(entry: ProductEntry, qty: int) -> str:
+    """Render the add-to-order confirmation, with a price part when known.
+
+    The price renders exactly like ``_rag_entry_fields``: ``{price:g}`` followed
+    by currency and/or unit only when present. An entry without a price renders
+    no price part at all.
+    """
+    price_part = ""
+    if entry.price is not None:
+        price_text = f"{entry.price:g}"
+        if entry.currency and entry.unit:
+            price_text = f"{price_text} {entry.currency}/{entry.unit}"
+        elif entry.currency:
+            price_text = f"{price_text} {entry.currency}"
+        elif entry.unit:
+            price_text = f"{price_text}/{entry.unit}"
+        price_part = f" ({price_text})"
+    return ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty, price=price_part)
 
 
 def _to_whatsapp_e164(number: PhoneNumber) -> str:
@@ -505,6 +564,16 @@ def _draft_pricing_lines(
     return tuple(lines)
 
 
+class DraftPricingSources(TypedDict):
+    """Typed pricing keyword bundle shared by ``compute_order`` and ``pending_order``."""
+
+    rate: RateSource
+    supplier_margin: MarginSource
+    default_margin: Decimal
+    list_discount: Decimal
+    particular_discount: Decimal
+
+
 def _price_draft(
     session: Session,
     customer: Cliente,
@@ -513,7 +582,7 @@ def _price_draft(
 ) -> PricedOrder:
     """Price a draft or produce its pending-conversion snapshot."""
     lines = _draft_pricing_lines(session, base, rag_client)
-    kwargs = {
+    kwargs: DraftPricingSources = {
         "rate": _rate_source(session),
         "supplier_margin": _supplier_margin_source(session),
         "default_margin": _default_margin(session),
@@ -531,17 +600,17 @@ def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> 
     """Render the owner-facing quote for a newly persisted draft."""
     if priced.conversion_pending:
         return (
-            f"Order #{order.order_id} for {customer.nombre_comercial} is pending conversion. "
-            "Set the missing exchange rate in Customer Orders, then approve the order."
+            f"Pedido #{order.order_id} para {customer.nombre_comercial}: conversión pendiente. "
+            "Cargá el tipo de cambio que falta en Customer Orders y aprobalo."
         )
     lines = " ".join(
         f"{line.cantidad} × {line.name or line.sku}: {line.final_ars:.2f} ARS"
         for line in priced.lines
     )
     return (
-        f"Order #{order.order_id} for {customer.nombre_comercial} — "
+        f"Pedido #{order.order_id} para {customer.nombre_comercial} — "
         f"total {priced.total:.2f} ARS. {lines} "
-        "Reply 'aprobá' or 'rechazá'."
+        f"Respondé '{APPROVE}' o '{REJECT}'."
     )
 
 
@@ -614,6 +683,10 @@ def _run_finalize_turn(
     if rag_client is None:
         rag_client = getattr(deps.searcher, "client", None)
     create = parse_create_client_command(text)
+    if not base.draft_items:
+        if create is not None:
+            return _handle_create_client(deps, base, *create)
+        return AgentOutcome(state=base, reply=EMPTY_DRAFT_FINALIZE_REPLY)
     finalize_name = parse_finalize(text, base.draft_items)
     with deps.session_factory() as session:
         if create is not None and not base.customer_disambiguation_pending:
@@ -633,7 +706,7 @@ def _run_finalize_turn(
             if not finalize_name:
                 return AgentOutcome(
                     state=base,
-                    reply="Name the customer before finalizing the order.",
+                    reply=ASK_CUSTOMER_FINALIZE_REPLY,
                 )
             resolution = resolve_customer_name(session, finalize_name)
             if resolution.kind is CustomerResolutionKind.AMBIGUOUS:
@@ -803,9 +876,10 @@ def build_handler(
     note so the conversation survives a down database.
 
     While ``product_options`` hold the last displayed results, an add-intent
-    phrase ("agregalo", "sumá 5 de eso", "el 2") short-circuits the LLM and
-    appends the referenced entry to ``draft_items`` even before an order exists.
-    A finalize phrase then resolves the customer and persists the draft.
+    phrase ("agregalo", "sumá 5 de eso", "el 2", or a bare quantity answer
+    such as "quiero 2") short-circuits the LLM and appends the referenced
+    entry to ``draft_items`` even before an order exists. A finalize phrase
+    then resolves the customer and persists the draft.
 
     When ``sourcing`` is wired and the orchestrator's parse step flagged the
     turn (``decision.parsed``), the handler runs the sourcing workflow instead
@@ -822,13 +896,12 @@ def build_handler(
         history = state.history if state is not None else ()
         base = state if state is not None else ConversationState(sender_id=message.sender_id)
         text = (message.text or "").strip()
-        if sourcing is not None and base.draft_items:
-            if (
-                base.customer_disambiguation_pending
-                or is_finalize(text)
-                or parse_create_client_command(text) is not None
-            ):
-                return _run_finalize_turn(message, base, sourcing)
+        if sourcing is not None and (
+            (base.customer_disambiguation_pending and base.draft_items)
+            or is_finalize(text)
+            or parse_create_client_command(text) is not None
+        ):
+            return _run_finalize_turn(message, base, sourcing)
         if decision.parsed and sourcing is not None:
             return _run_sourcing_turn(message, state, decision, sourcing)
         if not text:
@@ -841,7 +914,7 @@ def build_handler(
                 index, qty = intent
                 entry = base.product_options[index]
                 turn_history = (*history, ChatMessage("user", text))
-                reply = ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty)
+                reply = format_added_to_order_reply(entry, qty)
                 updated = base.with_updates(
                     history=(*turn_history, ChatMessage("assistant", reply)),
                     product_options=(),
@@ -873,7 +946,12 @@ def build_handler(
             except ResponderNotConfigured:
                 reply = fallback_reply
             new_history = (*history, ChatMessage("user", text), ChatMessage("assistant", reply))
-            updated = base.with_updates(history=new_history, product_options=displayed)
+            updated = base.with_updates(history=new_history)
+            # A turn that displays nothing must not clear the last displayed
+            # product, or "agregale N" and bare-quantity adds die after any
+            # unrecognized message.
+            if displayed:
+                updated = updated.with_updates(product_options=displayed)
         return AgentOutcome(state=updated, reply=reply)
 
     return handler
