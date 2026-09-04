@@ -51,6 +51,7 @@ from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIResponder
 from src.integrations.rag import RagProductClient
 from src.integrations.sheets import SheetsWriter
+from src.observability.session_logger import log_session_event, set_current_session_id
 from src.orchestrator.owner import is_owner_sender, rejection_reply
 from src.orchestrator.router import (
     AgentName,
@@ -198,6 +199,12 @@ async def handle_inbound(message: InboundMessage) -> None:
     settings = get_settings()
     adapter = CHANNELS.get(message.channel)
     if not is_owner_sender(message.sender_id, message.channel, settings):
+        log_session_event(
+            "pipeline",
+            "rejection",
+            {"channel": message.channel, "sender_id": message.sender_id, "reason": "non_owner"},
+            level="WARNING",
+        )
         if adapter is None:
             logger.warning("no adapter for channel=%s; rejection dropped", message.channel)
             return
@@ -206,12 +213,53 @@ async def handle_inbound(message: InboundMessage) -> None:
         except Exception:
             logger.exception("rejection reply failed on channel=%s", message.channel)
         return
+
+    # Seed context from store if session already active
+    prior_state = ORCHESTRATOR.store.get(message.sender_id)
+    if prior_state and prior_state.session_id:
+        set_current_session_id(prior_state.session_id)
+
     result = ORCHESTRATOR.handle_inbound(message)
+    if result.state and result.state.session_id:
+        set_current_session_id(result.state.session_id)
+
+    log_session_event(
+        "telegram",
+        "inbound_message",
+        {
+            "channel": message.channel,
+            "sender_id": message.sender_id,
+            "text": message.text,
+            "media_type": message.media_type,
+        },
+    )
+    log_session_event(
+        "orchestrator",
+        "routing_decision",
+        {
+            "agent": result.decision.agent.value,
+            "media_kind": result.decision.media_kind,
+            "parsed": result.decision.parsed,
+            "context_loaded": result.decision.context_loaded,
+        },
+    )
+
     reply = _reply_for(message, result.decision, result.reply)
     if adapter is None:
         logger.warning("no adapter for channel=%s; reply dropped", message.channel)
         return
     try:
         await adapter.send_text(message.sender_id, reply)
+        log_session_event(
+            "telegram",
+            "outbound_reply",
+            {"channel": message.channel, "sender_id": message.sender_id, "reply": reply},
+        )
     except Exception:
         logger.exception("reply failed on channel=%s", message.channel)
+        log_session_event(
+            "telegram",
+            "outbound_reply_failed",
+            {"channel": message.channel, "sender_id": message.sender_id},
+            level="ERROR",
+        )

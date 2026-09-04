@@ -85,8 +85,8 @@ def _tabs_block(demo) -> object:
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
 
 
-def test_build_app_creates_seven_tabs_with_expected_labels():
-    """Building the app creates seven tabs with the expected labels."""
+def test_build_app_creates_tabs_with_expected_labels():
+    """Building the app creates tabs with the expected labels."""
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
     assert labels == [
@@ -97,6 +97,7 @@ def test_build_app_creates_seven_tabs_with_expected_labels():
         "Ingestion",
         "Suppliers",
         "Customer Orders",
+        "Sessions",
     ]
 
 

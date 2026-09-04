@@ -43,6 +43,7 @@ from src.backoffice.po import (
     receive_po_action,
     send_po_action,
 )
+from src.backoffice.sessions import list_sessions, session_events_grid
 from src.backoffice.suppliers import (
     create_supplier,
     list_suppliers,
@@ -807,6 +808,41 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _save_default_margin,
                 inputs=default_margin,
                 outputs=default_margin_status,
+            )
+
+        with gr.Tab("Sessions"):
+            gr.Markdown("### User Telegram Sessions & Traces")
+            initial_sessions = list_sessions()
+            initial_selected = initial_sessions[0] if initial_sessions else None
+            with gr.Row():
+                session_selector = gr.Dropdown(
+                    label="Active / Recent Sessions",
+                    choices=initial_sessions,
+                    value=initial_selected,
+                    interactive=True,
+                )
+                refresh_sessions_btn = gr.Button("Refresh Sessions")
+            session_trace_grid = gr.Dataframe(
+                headers=["Time", "Service", "Action", "Level", "Details"],
+                datatype=["str", "str", "str", "str", "str"],
+                value=session_events_grid(initial_selected),
+                label="Session Event Trace",
+                interactive=False,
+            )
+
+            def _on_session_select(sid: str | None) -> list[list[object]]:
+                return session_events_grid(sid)
+
+            def _on_refresh_sessions() -> tuple[object, list[list[object]]]:
+                sids = list_sessions()
+                sel = sids[0] if sids else None
+                return gr.update(choices=sids, value=sel), session_events_grid(sel)
+
+            session_selector.change(
+                _on_session_select, inputs=session_selector, outputs=session_trace_grid
+            )
+            refresh_sessions_btn.click(
+                _on_refresh_sessions, outputs=[session_selector, session_trace_grid]
             )
     return cast(gr.Blocks, demo)
 

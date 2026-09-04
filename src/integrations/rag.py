@@ -29,6 +29,7 @@ from typing import Any
 import httpx
 
 from src.config import Settings, get_settings
+from src.observability.session_logger import log_session_event
 
 logger = logging.getLogger(__name__)
 
@@ -164,21 +165,41 @@ class RagProductClient:
         try:
             response = client.post("/api/v1/query", json=payload)
         except httpx.HTTPError as exc:
+            log_session_event(
+                "rag", "query_error", {"query": text, "error": str(exc)}, level="ERROR"
+            )
             raise RagProductError(f"rag query failed for {text!r}: {exc}") from exc
         latency = time.perf_counter() - started
         if response.status_code != 200:
+            log_session_event(
+                "rag",
+                "query_error",
+                {"query": text, "status": response.status_code, "latency_sec": round(latency, 3)},
+                level="WARNING",
+            )
             logger.warning("rag query status=%s latency=%.1fs", response.status_code, latency)
             raise RagProductError(f"rag query returned HTTP {response.status_code} for {text!r}")
         try:
             data = response.json()
         except ValueError as exc:
+            log_session_event(
+                "rag", "query_error", {"query": text, "error": "non-json"}, level="ERROR"
+            )
             raise RagProductError(f"rag query returned non-JSON payload: {exc}") from exc
         if data.get("is_refusal"):
+            log_session_event(
+                "rag", "query_refusal", {"query": text, "latency_sec": round(latency, 3)}
+            )
             logger.info("rag refusal for query=%r latency=%.1fs", text, latency)
             return ()
         structured = data.get("structured_json") or {}
         products = structured.get("productos") or []
         mapped = tuple(self._map_product(product) for product in products if product.get("nombre"))
+        log_session_event(
+            "rag",
+            "query_success",
+            {"query": text, "products_count": len(mapped), "latency_sec": round(latency, 3)},
+        )
         logger.info("rag query=%r products=%d latency=%.1fs", text, len(mapped), latency)
         return mapped
 

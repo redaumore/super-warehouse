@@ -31,6 +31,7 @@ from src.agents.commands import RESET_GREETING, is_session_reset
 from src.agents.intake import OrderParser
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
+from src.observability.session_logger import generate_session_id
 from src.orchestrator.session import ConversationState, ConversationStore
 
 
@@ -82,6 +83,7 @@ class TurnResult:
 
     decision: RoutingDecision
     reply: str | None = None
+    state: ConversationState | None = None
 
 
 def route_message(message: InboundMessage, state: ConversationState | None) -> RoutingDecision:
@@ -160,13 +162,18 @@ class Orchestrator:
         """
         if message.media_type is None and is_session_reset((message.text or "").strip()):
             self.store.drop(message.sender_id)
-            fresh_state = ConversationState(sender_id=message.sender_id)
+            sid = generate_session_id(message.sender_id)
+            fresh_state = ConversationState(sender_id=message.sender_id, session_id=sid)
             self.store.put(fresh_state)
             return TurnResult(
                 decision=RoutingDecision(agent=AgentName.CUSTOMER),
                 reply=RESET_GREETING,
+                state=fresh_state,
             )
         state = self.store.get(message.sender_id)
+        if state is not None and state.session_id is None:
+            state = state.with_updates(session_id=generate_session_id(message.sender_id))
+            self.store.put(state)
         decision = route_message(message, state)
         if (
             self.parser is not None
@@ -176,12 +183,32 @@ class Orchestrator:
         ):
             parsed = self.parser.parse((message.text or "").strip())
             if parsed is not None:
-                state = ConversationState(sender_id=message.sender_id, parsed_order=parsed)
+                sid = (
+                    state.session_id
+                    if state and state.session_id
+                    else generate_session_id(message.sender_id)
+                )
+                state = ConversationState(
+                    sender_id=message.sender_id, session_id=sid, parsed_order=parsed
+                )
                 decision = RoutingDecision(agent=AgentName.CUSTOMER, parsed=True)
         handler = self.agents.get(decision.agent)
         outcome = None
         if handler is not None:
             outcome = handler(message, state, decision)
+        final_state = state
         if outcome is not None and outcome.state is not None:
-            self.store.put(outcome.state)
-        return TurnResult(decision=decision, reply=outcome.reply if outcome else None)
+            final_state = outcome.state
+            if final_state.session_id is None:
+                sid = (
+                    state.session_id
+                    if state and state.session_id
+                    else generate_session_id(message.sender_id)
+                )
+                final_state = final_state.with_updates(session_id=sid)
+            self.store.put(final_state)
+        return TurnResult(
+            decision=decision,
+            reply=outcome.reply if outcome else None,
+            state=final_state,
+        )

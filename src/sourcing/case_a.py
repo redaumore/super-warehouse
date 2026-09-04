@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from src.agents.inventory import reserve_stock
 from src.agents.sales import ItemInput, Quote, quote_order
 from src.db.models import Catalogo, Cliente, Order, OrderEstado, OrderItem, SourcingState
+from src.observability.session_logger import log_session_event
 from src.orchestrator.session import ResolvedItem
 from src.pricing.engine import compute_base
 
@@ -91,4 +92,14 @@ def persist_case_a_order(
             )
         )
     session.flush()
+    log_session_event(
+        "orders",
+        "persist_case_a_order",
+        {
+            "order_id": order.order_id,
+            "customer_id": customer.customer_id,
+            "items_count": len(items),
+            "total_price": str(quote.total),
+        },
+    )
     return order, quote

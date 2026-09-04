@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 333, agrupados en 28 dominios.
+**Total de escenarios:** 339, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,6 +36,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
+- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 5
+- [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
 ## Motor de precios
 
@@ -478,7 +480,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Building the app creates seven tabs with the expected labels. _(`test_build_app_creates_seven_tabs_with_expected_labels`)_
+- Building the app creates tabs with the expected labels. _(`test_build_app_creates_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
@@ -544,3 +546,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Correcciones del dueño en la grilla reemplazan la extracción cruda. _(`test_e2e_owner_corrections_override_raw_extraction`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
 - confirm_items rechaza un supplier INACTIVO sin escribir inventario. _(`test_confirm_items_refuses_inactive_supplier_and_writes_nothing`)_
+
+## Observabilidad y logs por sesión
+
+- Genera identificadores de sesión únicos y formateados. _(`test_generate_session_id`)_
+- Propaga el session_id a través de contextvars en el contexto síncrono. _(`test_contextvar_propagation`)_
+- Aísla el session_id entre diferentes corutinas asincrónicas concurrentes. _(`test_contextvar_async_isolation`)_
+- Registra eventos estructurados en el archivo de log individual de la sesión. _(`test_log_session_event_and_read`)_
+- El backoffice puede listar archivos de sesión y renderizar eventos tabulares. _(`test_backoffice_sessions_helpers`)_
+
+## Trazabilidad de sesión en el pipeline
+
+- El pipeline inicia sesión con 'Hola Bob', preserva la sesión y registra eventos de RAG. _(`test_session_trace_lifecycle_and_rag_events`)_

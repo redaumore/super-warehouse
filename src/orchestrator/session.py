@@ -74,6 +74,7 @@ class ConversationState:
     """Context for one sender's order, preserved across pipeline steps."""
 
     sender_id: str
+    session_id: str | None = None
     customer_id: int | None = None
     order_id: int | None = None
     items: tuple[ResolvedItem, ...] = ()
