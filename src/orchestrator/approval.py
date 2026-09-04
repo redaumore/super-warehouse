@@ -1,24 +1,22 @@
-"""Approval orchestration: APPROVE → convert → Sheets → stock → confirm.
+"""Confirm orchestration: the DRAFT → CONFIRMED ceremony (design AD5).
 
-Composes the lifecycle approve transition with the registration side effects
-that complete an approved order (design data flow):
+Composes the lifecycle confirm transition with the registration side effects
+that complete an order (design data flow):
 
-    approve → reservations ACTIVE→CONVERTED → append Sheets row → deduct stock
-            → confirm to the owner (in chat).
+    classify A/B/C from latest availability
+      → Case C: cancel_order + sourcing CANCELLED (no registration)
+      → Case B: persist SourcingNeed rows, hand the selection prompt back
+      → Case A: confirm (TTL guard) → reserve→convert→deduct → append Sheets row
 
-``approve_and_register`` is the full flow for a clean approval; it raises
+``confirm_and_register`` is the full flow for a clean confirmation. It raises
 ``RequiresRequoteError`` (from the lifecycle) when the order's reservations
-have expired — the caller re-quotes first, never approving silently.
+have expired — the caller re-quotes first, never confirming silently.
 
-``register_approved_order`` is the registration half alone, for approvals that
-already ran the lifecycle transition with per-line adjustments
-(``dispatch.apply_decision`` + adjustments → then register).
-
-Approval is ATOMIC with registration: when the Sheets write quarantines, the
-whole approval is rolled back — the order stays PENDING rather than
-half-registered — and the caller replies with an error. The old ``notifier`` /
-``owner_phone`` push is gone; the confirmation/error text rides the
-``ApprovalResult`` / the caller's reply.
+Sheets is append-only and its failure is TOLERATED: a quarantined write keeps
+the order CONFIRMED and the status rides the ``ConfirmResult`` — there is no
+rollback (spec order-lifecycle: "the order MUST remain Confirmed"). The old
+``notifier`` / ``owner_phone`` push is gone; the confirmation/error text rides
+the ``ConfirmResult`` / the caller's reply.
 """
 
 from __future__ import annotations
@@ -28,40 +26,52 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import Inventory, Order, ReservationEstado, StockReservation
+from src.agents.inventory import available_stock, reserve_stock
+from src.db.models import (
+    Inventory,
+    Order,
+    ReservationEstado,
+    SourcingState,
+    StockReservation,
+)
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
-from src.order_lifecycle.state import approve_order
+from src.orchestrator.session import ResolvedItem
+from src.order_lifecycle.state import (
+    cancel_order,
+    confirm_order,
+)
+from src.sourcing.classify import MissingItem, SourcingCase, classify_case
+from src.supplier.searcher import SupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
 
 _CENT = Decimal("0.01")
 
 
-class SheetsRegistrationError(Exception):
-    """The approval could not be registered in Google Sheets.
-
-    Raised so the caller rolls the transaction back: the order must stay
-    PENDING rather than half-registered (spec: Sheets failure keeps the order
-    pending and the owner gets an error reply in chat).
-    """
-
-
 class PendingConversionError(Exception):
-    """An order cannot be approved while one or more prices lack conversion."""
+    """An order cannot be confirmed while one or more prices lack conversion."""
 
 
 @dataclass(frozen=True)
-class ApprovalResult:
-    """Outcome of registering an approved order."""
+class ConfirmResult:
+    """Outcome of the confirm ceremony.
+
+    ``cancelled_case`` marks a Case C outcome (the order was cancelled instead
+    of confirmed, so no stock was converted and no Sheets row was appended);
+    ``missing`` carries the Case B items when the ceremony hands the supplier
+    selection back to the conversation.
+    """
 
     order: Order
     converted: int
     sheets_status: SheetsWriteStatus
     total: Decimal
     confirmation_text: str
+    cancelled_case: bool = False
+    missing: tuple[MissingItem, ...] = ()
 
 
 def order_total(order: Order) -> Decimal:
@@ -84,17 +94,59 @@ def _active_reservations(session: Session, order: Order) -> list[StockReservatio
                 StockReservation.order_id == order.order_id,
                 StockReservation.estado == ReservationEstado.ACTIVE,
             )
-        )
+        ).all()
     )
 
 
-def _convert_reservations(
-    session: Session, order: Order, reservations: list[StockReservation]
-) -> int:
-    """Mark every ACTIVE reservation CONVERTED; returns how many."""
+def _local_quantities(order: Order) -> dict[str, int]:
+    """Per-SKU requested quantities of LOCAL lines (RAG lines never reserve)."""
+    quantities: dict[str, int] = {}
+    for item in order.items:
+        if (item.source or "LOCAL").upper() != "LOCAL":
+            continue
+        quantities[item.sku] = quantities.get(item.sku, 0) + item.cantidad
+    return quantities
+
+
+def _reconcile_reservations(session: Session, order: Order) -> None:
+    """Align ACTIVE reservations with the current LOCAL line quantities.
+
+    Releases reservations whose quantity no longer matches the line (an item
+    was removed or re-quantified on the draft) and creates a fresh ACTIVE
+    reservation for LOCAL lines that have none (e.g. after ``modify_order``
+    released the converted locks — design AD6's fresh re-reserve). Matching
+    reservations keep their original TTL, so the stale-quote guard stays
+    meaningful for unmodified quotes.
+    """
+    wanted = _local_quantities(order)
+    for reservation in _active_reservations(session, order):
+        if wanted.get(reservation.sku) != reservation.cantidad:
+            reservation.estado = ReservationEstado.RELEASED
+    session.flush()  # autoflush-off sessions must see the released rows below
+    for sku, cantidad in wanted.items():
+        matching = session.scalar(
+            select(StockReservation.reservation_id).where(
+                StockReservation.order_id == order.order_id,
+                StockReservation.sku == sku,
+                StockReservation.estado == ReservationEstado.ACTIVE,
+            )
+        )
+        if matching is None:
+            reserve_stock(
+                session,
+                sku,
+                order.customer_id,
+                cantidad,
+                order_id=order.order_id,
+            )
+
+
+def _convert_reservations(session: Session, order: Order) -> list[StockReservation]:
+    """Mark every ACTIVE reservation CONVERTED and return them."""
+    reservations = _active_reservations(session, order)
     for reservation in reservations:
         reservation.estado = ReservationEstado.CONVERTED
-    return len(reservations)
+    return reservations
 
 
 def _deduct_stock(session: Session, reservations: list[StockReservation]) -> None:
@@ -116,30 +168,119 @@ def _deduct_stock(session: Session, reservations: list[StockReservation]) -> Non
         row.updated_at = datetime.now(UTC)
 
 
-def _confirmation_text(order: Order, total: Decimal) -> str:
+def _availability_for_order(session: Session, order: Order, sku: str) -> int:
+    """Stock available to THIS order: on-hand minus other orders' ACTIVE locks.
+
+    ``available_stock`` counts every ACTIVE reservation — including the order's
+    own soft-lock, which would make a fully-quoted order look missing at
+    confirm. The order's own reservation is its own stock, so it is added back:
+    classification at confirm sees the availability the order actually has.
+    """
+    own = session.scalar(
+        select(func.coalesce(func.sum(StockReservation.cantidad), 0)).where(
+            StockReservation.order_id == order.order_id,
+            StockReservation.sku == sku,
+            StockReservation.estado == ReservationEstado.ACTIVE,
+        )
+    )
+    return available_stock(session, sku) + int(own or 0)
+
+
+def _classify_from_latest_availability(
+    session: Session, order: Order, searcher: SupplierCatalogSearcher | None
+) -> tuple[SourcingCase, tuple[MissingItem, ...]]:
+    """Classify the order from the LATEST availability (spec: at confirm)."""
+    items = tuple(
+        ResolvedItem(sku=item.sku, cantidad=item.cantidad, description=item.name)
+        for item in order.items
+    )
+    decision = classify_case(
+        items,
+        lambda sku: _availability_for_order(session, order, sku),
+        searcher,
+    )
+    return decision.case, decision.missing
+
+
+def _confirmation_text(order: Order, total: Decimal, sheets_status: SheetsWriteStatus) -> str:
+    if sheets_status is SheetsWriteStatus.QUARANTINED:
+        return (
+            f"Pedido #{order.order_id} confirmado — total {total:.2f} ARS. "
+            "Stock descontado. NO se pudo registrar en Google Sheets: la fila "
+            "quedó en cuarentena. Revisá la configuración."
+        )
     return (
-        f"Pedido #{order.order_id} aprobado — total {total:.2f} ARS. "
+        f"Pedido #{order.order_id} confirmado — total {total:.2f} ARS. "
         "Stock descontado. Registrado en Google Sheets."
     )
 
 
-def register_approved_order(
+def confirm_and_register(
     session: Session,
     order: Order,
     *,
     sheets: SheetsWriter,
+    searcher: SupplierCatalogSearcher | None = None,
     customer_name: str | None = None,
-) -> ApprovalResult:
-    """Register an already-APPROVED order: convert, Sheets, deduct, confirm.
+    actor: str = "owner",
+    now: datetime | None = None,
+) -> ConfirmResult:
+    """Run the DRAFT → CONFIRMED ceremony atomically (design AD5).
 
-    Atomic with registration: a quarantined Sheets write raises
-    ``SheetsRegistrationError`` so the caller rolls the approval back — the
-    order stays PENDING rather than half-registered.
+    One transaction: TTL guard + transition (``confirm_order``) → re-classify
+    from the latest availability:
+
+    - Case C (missing items, no supplier): the order is cancelled via the
+      cancel path with sourcing CANCELLED and ``cancelled_case=True`` — no
+      stock is converted and no Sheets row is appended.
+    - Case B (missing items with suppliers): the order stays CONFIRMED (per
+      the spec the order state is independent of PO progress), the SourcingNeed
+      rows are persisted and the supplier-selection prompt is returned.
+    - Case A (full stock): reservations reconciled → CONVERTED, stock
+      deducted, and the Sheets row appended. A Sheets quarantine is TOLERATED:
+      the order stays CONFIRMED and the failure is surfaced in the result.
     """
     if order.conversion_pending:
         raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
-    reservations = _active_reservations(session, order)
-    converted = _convert_reservations(session, order, reservations)
+    confirm_order(session, order, now=now)
+    case, missing = _classify_from_latest_availability(session, order, searcher)
+
+    if case is SourcingCase.C:
+        from src.agents.customer import format_case_c_reply
+
+        cancel_order(session, order, actor=actor, now=now)
+        order.sourcing_state = SourcingState.CANCELLED
+        session.flush()
+        return ConfirmResult(
+            order=order,
+            converted=0,
+            sheets_status=SheetsWriteStatus.SKIPPED,
+            total=order_total(order),
+            confirmation_text=format_case_c_reply(order, missing),
+            cancelled_case=True,
+            missing=missing,
+        )
+
+    if case is SourcingCase.B:
+        from src.sourcing.persistence import upsert_sourcing_need
+
+        for item in missing:
+            upsert_sourcing_need(session, order.order_id, item.sku, item.missing_quantity)
+        from src.agents.customer import format_case_b_reply
+
+        reply = format_case_b_reply(order, missing)
+        session.flush()
+        return ConfirmResult(
+            order=order,
+            converted=0,
+            sheets_status=SheetsWriteStatus.SKIPPED,
+            total=order_total(order),
+            confirmation_text=reply,
+            missing=missing,
+        )
+
+    _reconcile_reservations(session, order)
+    converted = _convert_reservations(session, order)
     total = order_total(order)
     sheets_status = sheets.append_order_row(
         order.order_id,
@@ -148,42 +289,12 @@ def register_approved_order(
         total=str(total),
         items_summary=build_items_summary(order),
     )
-    if sheets_status is SheetsWriteStatus.QUARANTINED:
-        raise SheetsRegistrationError(
-            f"order {order.order_id} could not be registered in Google Sheets"
-        )
-    _deduct_stock(session, reservations)
+    _deduct_stock(session, converted)
     session.flush()
-    return ApprovalResult(
+    return ConfirmResult(
         order=order,
-        converted=converted,
+        converted=len(converted),
         sheets_status=sheets_status,
         total=total,
-        confirmation_text=_confirmation_text(order, total),
-    )
-
-
-def approve_and_register(
-    session: Session,
-    order: Order,
-    *,
-    sheets: SheetsWriter,
-    customer_name: str | None = None,
-    now: datetime | None = None,
-) -> ApprovalResult:
-    """Full flow: lifecycle approve (refuses stale orders) then register.
-
-    Raises ``RequiresRequoteError`` when the order has TTL-expired
-    reservations — the caller must re-quote before registration. A Sheets
-    quarantine propagates as ``SheetsRegistrationError`` for the caller to
-    roll back.
-    """
-    if order.conversion_pending:
-        raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
-    approve_order(session, order, now=now)
-    return register_approved_order(
-        session,
-        order,
-        sheets=sheets,
-        customer_name=customer_name,
+        confirmation_text=_confirmation_text(order, total, sheets_status),
     )

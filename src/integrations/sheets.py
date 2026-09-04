@@ -31,6 +31,7 @@ class SheetsWriteStatus(str, enum.Enum):
 
     APPENDED = "APPENDED"
     QUARANTINED = "QUARANTINED"
+    SKIPPED = "SKIPPED"  # no write attempted (e.g. a Case C confirm cancelled the order)
 
 
 class SheetsWriter:

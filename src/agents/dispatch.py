@@ -1,4 +1,4 @@
-"""Dispatch agent: approve/reject parsing and the wired approval flow.
+"""Dispatch agent: confirm/cancel parsing and the wired confirm flow.
 
 Owns the owner-facing decision tools of the pipeline:
 
@@ -8,18 +8,21 @@ Owns the owner-facing decision tools of the pipeline:
 - ``parse_order_reference`` — extracts an explicit ``pedido #N`` reference so
   a decision can target a specific order instead of the rehydrated latest one;
 - ``apply_decision`` — applies the decision to the order through the lifecycle:
-  approval (with adjustments re-pricing the affected lines) or rejection
-  (releasing every reservation immediately);
+  APPROVE applies the per-line adjustments (the confirm ceremony runs the
+  transition + registration), REJECT cancels the order (``cancel_order`` with
+  the owner as actor);
 - ``build_dispatch_handler`` — the wired DISPATCH agent turn: parse decision →
   load order (``#N`` override or the conversation's ``order_id``) →
-  ``apply_decision`` + ``register_approved_order`` (Sheets). A Sheets
-  quarantine rolls the approval back: the order stays PENDING and the owner
-  gets an error reply in chat.
+  ``apply_decision`` + ``confirm_and_register`` (classify + convert + deduct +
+  Sheets). A Sheets quarantine is tolerated: the order stays CONFIRMED and the
+  failure is surfaced in the in-chat reply. A stale quote raises
+  ``RequiresRequoteError`` and rolls back.
 
 Decision parsing is pure; the handler is built with injectable boundaries
-(session factory + ``SheetsWriter``) so unit tests never touch the network.
-The old ``owner_phone`` push (``notify_owner``) is gone — approvals,
-rejections and errors are in-chat replies.
+(session factory + ``SheetsWriter`` + optional supplier searcher) so unit
+tests never touch the network. The old ``owner_phone`` push
+(``notify_owner``) is gone — confirmations, cancellations and errors are
+in-chat replies.
 """
 
 from __future__ import annotations
@@ -39,15 +42,15 @@ from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import Order, OrderItem
 from src.integrations.sheets import SheetsWriter
-from src.orchestrator.approval import SheetsRegistrationError, register_approved_order
+from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ConversationState
+from src.orchestrator.session import ConversationState, SourcingNeedItem
 from src.order_lifecycle.state import (
     InvalidTransitionError,
     RequiresRequoteError,
-    approve_order,
-    reject_order,
+    cancel_order,
 )
+from src.supplier.searcher import SupplierCatalogSearcher
 
 _CENT = Decimal("0.01")
 
@@ -61,7 +64,7 @@ _ORDER_REF_RE = re.compile(r"#\s*(\d+)")
 
 
 class UnknownDecisionError(Exception):
-    """The owner's reply could not be resolved to approve or reject."""
+    """The owner's reply could not be resolved to confirm or cancel."""
 
 
 class UnknownAdjustmentTargetError(Exception):
@@ -77,7 +80,7 @@ class LineAdjustment:
 
 
 class DecisionAction(str, enum.Enum):
-    """Owner decision outcome: approve, reject, or unresolved."""
+    """Owner decision outcome: confirm, cancel, or unresolved."""
 
     APPROVE = "APPROVE"
     REJECT = "REJECT"
@@ -118,7 +121,7 @@ def parse_order_reference(text: str) -> int | None:
 
 
 def parse_decision(text: str) -> Decision:
-    """Resolve an owner reply to approve / reject (+ per-line adjustments)."""
+    """Resolve an owner reply to confirm / cancel (+ per-line adjustments)."""
     if not text or not text.strip():
         return Decision(action=DecisionAction.UNKNOWN)
     raw = text.strip()
@@ -177,35 +180,55 @@ def apply_decision(
 ) -> Order:
     """Apply the owner's decision to the order.
 
-    APPROVE → apply per-line adjustments (when present) and move the order to
-    APPROVED. Raises ``RequiresRequoteError`` (from the lifecycle) when the
-    order's reservations have expired: the caller must re-quote first.
+    APPROVE → apply per-line adjustments (when present); the confirm ceremony
+    (``confirm_and_register``) runs the Draft→Confirmed transition with its TTL
+    guard, classification, conversion and Sheets registration.
 
-    REJECT → release every reservation immediately and move the order to
-    REJECTED (spec: reserved stock becomes available to other customers).
+    REJECT → ``cancel_order`` with the owner as actor: Draft/Confirmed release
+    every ACTIVE reservation; Picking/Ready for delivery restore the deducted
+    stock with the audit trail (spec: cancellations release or restore stock).
 
     UNKNOWN → ``UnknownDecisionError`` — the owner is asked to repeat.
     """
     if decision.action is DecisionAction.REJECT:
-        return reject_order(session, order, now=now)
+        return cancel_order(session, order, actor="owner", now=now)
     if decision.action is DecisionAction.APPROVE:
         if decision.adjustments:
             _apply_line_adjustments(session, order, decision, quote)
-        return approve_order(session, order, now=now)
+        return order
     raise UnknownDecisionError("unresolved owner decision")
+
+
+def _selection_state_updates(result, order, state: ConversationState) -> ConversationState:
+    """Move a conversation from awaiting-confirm to the Case B selection turn."""
+    needs = tuple(
+        SourcingNeedItem(sku=m.sku, missing_quantity=m.missing_quantity) for m in result.missing
+    )
+    candidates = tuple(c for m in result.missing for c in m.candidates)
+    return state.with_updates(
+        awaiting_decision=False,
+        order_id=order.order_id,
+        items=(),
+        parsed_order=None,
+        sourcing_selection_pending=True,
+        sourcing_needs=needs,
+        sourcing_candidates=candidates,
+    )
 
 
 def build_dispatch_handler(
     session_factory: Callable[[], Session],
     sheets: SheetsWriter,
+    *,
+    searcher: SupplierCatalogSearcher | None = None,
 ) -> Callable[[InboundMessage, ConversationState | None, RoutingDecision], AgentOutcome]:
-    """Build the wired DISPATCH agent: decision → order → lifecycle + Sheets.
+    """Build the wired DISPATCH agent: decision → order → ceremony (or cancel).
 
-    Approve/reject replies on an ``awaiting_decision`` conversation run the
-    real approval flow: ``parse_decision`` → load the order (``#N`` override
-    or the state's ``order_id``) → ``apply_decision`` + ``register_approved_order``.
-    A Sheets quarantine rolls the whole approval back (order stays PENDING)
-    and the owner gets an error reply in chat.
+    Confirm/cancel replies on an ``awaiting_decision`` conversation run the
+    real flow: ``parse_decision`` → load the order (``#N`` override or the
+    state's ``order_id``) → ``apply_decision`` + ``confirm_and_register``.
+    A stale quote rolls back with the re-quote error; a Sheets quarantine is
+    tolerated (the order stays CONFIRMED and the error surfaces in chat).
     """
 
     def handler(
@@ -235,31 +258,44 @@ def build_dispatch_handler(
             try:
                 if parsed.action is DecisionAction.APPROVE:
                     apply_decision(session, order, parsed)
-                    result = register_approved_order(session, order, sheets=sheets)
+                    result = confirm_and_register(
+                        session,
+                        order,
+                        sheets=sheets,
+                        searcher=searcher,
+                        actor="owner",
+                    )
                     reply = result.confirmation_text
                 else:
                     apply_decision(session, order, parsed)
-                    reply = f"Pedido #{order.order_id} rechazado; las reservas fueron liberadas."
+                    reply = (
+                        f"Pedido #{order.order_id} cancelado; "
+                        "las reservas fueron liberadas y el stock restaurado."
+                    )
                 session.commit()
             except RequiresRequoteError:
                 session.rollback()
                 reply = (
-                    f"El pedido #{order_id} tiene reservas vencidas: recotizalo antes de aprobar."
+                    f"El pedido #{order_id} tiene reservas vencidas: recotizalo antes de confirmar."
                 )
             except (UnknownAdjustmentTargetError, InvalidTransitionError) as exc:
                 session.rollback()
                 reply = f"No pude aplicar la decisión: {exc}"
-            except SheetsRegistrationError:
+            except PendingConversionError:
                 session.rollback()
                 reply = (
-                    f"No pude registrar el pedido #{order_id} en Google Sheets; "
-                    "sigue pendiente. Revisá la configuración y volvé a aprobarlo."
+                    f"El pedido #{order_id} tiene precios pendientes de conversión; "
+                    "cargá el tipo de cambio en Customer Orders y volvé a confirmar."
                 )
             else:
-                # Success: the decision conversation is closed.
-                state = state.with_updates(
-                    awaiting_decision=False, order_id=None, items=(), parsed_order=None
-                )
+                if parsed.action is DecisionAction.APPROVE and result.missing:
+                    # Case B discovered at confirm: the selection turn takes over.
+                    state = _selection_state_updates(result, order, state)
+                else:
+                    # Success: the decision conversation is closed.
+                    state = state.with_updates(
+                        awaiting_decision=False, order_id=None, items=(), parsed_order=None
+                    )
         return AgentOutcome(state=state, reply=reply)
 
     return handler
