@@ -6,7 +6,7 @@ from decimal import Decimal
 from unittest.mock import Mock
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.agents.customer import (
@@ -159,7 +159,7 @@ def test_finalize_local_draft_uses_cost_margin_and_clears_draft(shop):
     assert outcome.state.awaiting_decision is True
     order = shop.scalar(select(Order))
     assert order is not None
-    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert order.estado is OrderEstado.DRAFT  # persisted at the first add that knows the customer
     assert order.subtotal == Decimal("270.00")
     assert order.total == Decimal("270.00")
     item = shop.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
@@ -360,6 +360,44 @@ def test_finalize_rag_without_price_falls_back_to_endpoint_lookup(shop):
         shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
         is None
     )
+
+
+def test_second_finalize_for_same_customer_is_refused(shop):
+    """A second draft for a customer with one open is refused; the first survives."""
+    state = ConversationState(
+        sender_id="owner",
+        draft_items=((_entry("LOCAL-1", "Local item", source=ProductSource.LOCAL), 1),),
+    )
+    handler = _handler(shop)
+    first = handler(_message("cerrá el pedido para Customer One"), state, _decision())
+    assert first.state is not None
+    assert first.state.awaiting_decision is True
+    assert shop.scalar(select(Order)).estado is OrderEstado.DRAFT
+
+    second = handler(_message("cerrá el pedido para Customer One"), state, _decision())
+
+    assert "ya tiene un pedido abierto" in second.reply  # type: ignore[operator]
+    assert shop.scalar(select(func.count(Order.order_id))) == 1
+
+
+def test_remove_command_deletes_persisted_draft_line(shop):
+    """'sacá X' borra la OrderItem del Draft persistido y el pedido sigue DRAFT."""
+    state = ConversationState(
+        sender_id="owner",
+        draft_items=((_entry("LOCAL-1", "Local item", source=ProductSource.LOCAL), 1),),
+    )
+    handler = _handler(shop)
+    finished = handler(_message("cerrá el pedido para Customer One"), state, _decision())
+    assert finished.state is not None
+    order_id = finished.state.order_id
+    assert order_id is not None
+
+    outcome = handler(_message("sacá el Local item"), finished.state, _decision())
+
+    assert "saqué" in outcome.reply  # type: ignore[operator]
+    assert shop.scalar(select(func.count(OrderItem.id))) == 0  # line deleted
+    order = shop.get(Order, order_id)
+    assert order.estado is OrderEstado.DRAFT  # empty Draft stays DRAFT
 
 
 def test_default_margin_edit_prices_subsequent_chat_finalize(shop):

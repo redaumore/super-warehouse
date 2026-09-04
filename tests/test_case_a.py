@@ -155,13 +155,13 @@ def test_full_stock_order_flows_through_case_a(shop):
 
     assert result.decision.agent is AgentName.CUSTOMER
     assert result.decision.parsed is True
-    assert "Pedido #1 de Ferretería Don Juan confirmado" in result.reply  # type: ignore[operator]
+    assert "Pedido #1 de Ferretería Don Juan" in result.reply  # type: ignore[operator]
     assert "aprobá" in result.reply  # type: ignore[operator]  # in-chat quote asks approval
     assert "2026" in result.reply  # type: ignore[operator]  # delivery date shown
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
     assert order is not None
-    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert order.estado is OrderEstado.DRAFT  # persisted at the first add (AD2)
     assert order.sourcing_state is SourcingState.PENDING_ASSEMBLY
     assert order.delivery_date is not None  # fuzzy "para el viernes" resolved
 
@@ -188,19 +188,17 @@ def test_full_stock_order_flows_through_case_a(shop):
 
 
 def test_case_a_order_can_be_approved_with_stock_deduction(shop):
-    """La aprobación de un pedido Case A descuenta el Inventory canónico."""
+    """La confirmación de un pedido Case A descuenta el Inventory canónico."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
     orchestrator.handle_inbound(_message(f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas"))
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
-    from src.agents.dispatch import Decision, DecisionAction, apply_decision
-    from src.orchestrator.approval import register_approved_order
+    from src.orchestrator.approval import confirm_and_register
 
-    apply_decision(session, order, Decision(action=DecisionAction.APPROVE))
-    result = register_approved_order(session, order, sheets=FakeSheets())
-    assert result.order.estado is OrderEstado.APPROVED
-    assert "aprobado" in result.confirmation_text
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+    assert result.order.estado is OrderEstado.CONFIRMED
+    assert "confirmado" in result.confirmation_text
     assert "Registrado en Google Sheets" in result.confirmation_text
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-PRS-2"))
     assert on_hand.quantity_on_hand == 40  # 50 − 10
@@ -219,13 +217,13 @@ def test_case_a_reservation_ttl_requote_rules_unchanged(shop):
     reservation.timestamp = datetime.now(UTC) - timedelta(minutes=31)
     session.flush()
 
-    from src.agents.dispatch import Decision, DecisionAction, apply_decision
+    from src.orchestrator.approval import confirm_and_register
     from src.order_lifecycle.state import RequiresRequoteError
 
     with pytest.raises(RequiresRequoteError):
-        apply_decision(session, order, Decision(action=DecisionAction.APPROVE))
+        confirm_and_register(session, order, sheets=FakeSheets())
     assert order.needs_requote is True
-    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert order.estado is OrderEstado.DRAFT
     assert available_stock(session, "CLV-PRS-2") == 50  # expired lock freed
 
 

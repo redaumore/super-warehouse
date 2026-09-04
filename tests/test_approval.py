@@ -1,11 +1,15 @@
-"""Approval orchestration tests.
+"""Confirm ceremony orchestration tests (Phase 4).
 
-Unit (no DB): order totals and items summaries over ORM-shaped objects.
+Unit (no DB): order totals and items summaries over ORM-shaped objects, and
+the sheets-append boundary (the ceremony appends once; draft persistence never
+touches Sheets).
 
-Integration (Postgres, skipped when down): the full APPROVE flow — state
+Integration (Postgres, skipped when down): the full confirm flow — lifecycle
 transition, reservation conversion, stock deduction, Sheets append and the
-in-chat confirmation — plus the failure paths (stale order refuses, and a
-Sheets quarantine ROLLS THE APPROVAL BACK so the order stays PENDING).
+in-chat confirmation — plus the failure and tolerance paths: a stale order
+refuses, a second confirm is an ``InvalidTransitionError``, and a Sheets
+QUARANTINE IS TOLERATED (the order stays CONFIRMED, the status is surfaced, no
+rollback — spec order-lifecycle).
 """
 
 from __future__ import annotations
@@ -19,9 +23,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.dispatch import Decision, DecisionAction, LineAdjustment, apply_decision
 from src.agents.inventory import reserve_stock, seed_inventory
-from src.agents.sales import ItemInput, quote_order
 from src.config import Settings, get_settings
 from src.db.models import (
     Catalogo,
@@ -37,13 +39,12 @@ from src.db.models import (
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.orchestrator.approval import (
-    SheetsRegistrationError,
-    approve_and_register,
+    PendingConversionError,
     build_items_summary,
+    confirm_and_register,
     order_total,
-    register_approved_order,
 )
-from src.order_lifecycle.state import RequiresRequoteError
+from src.order_lifecycle.state import InvalidTransitionError, RequiresRequoteError
 from src.pricing.order_pricing import PricedLine, PricedOrder
 from src.sourcing.draft_order import persist_draft_order
 
@@ -80,8 +81,8 @@ def test_build_items_summary_lists_each_line():
     assert build_items_summary(order) == "10 × CLV-001; 5 × TRN-002"
 
 
-def test_sheets_append_belongs_to_approval_not_draft_persistence():
-    """Sheets append is skipped at draft save and called once during approval registration."""
+def test_sheets_append_belongs_to_confirm_not_draft_persistence():
+    """Sheets append is skipped at draft save and called once during confirm."""
     save_session = Mock()
     customer = SimpleNamespace(customer_id=7)
     priced = PricedOrder(
@@ -107,29 +108,8 @@ def test_sheets_append_belongs_to_approval_not_draft_persistence():
 
     append_at_save.assert_not_called()
 
-    approval_session = Mock()
-    approval_session.scalars.return_value = ()
-    order = SimpleNamespace(
-        order_id=42,
-        conversion_pending=False,
-        items=[SimpleNamespace(sku="RAG-1", cantidad=1, final_price=Decimal("100.00"))],
-        customer=None,
-    )
-    sheets = Mock(spec=SheetsWriter)
-    sheets.append_order_row.return_value = SheetsWriteStatus.APPENDED
 
-    result = register_approved_order(approval_session, order, sheets=sheets)
-
-    sheets.append_order_row.assert_called_once_with(
-        42,
-        customer_name=None,
-        total="100.00",
-        items_summary="1 × RAG-1",
-    )
-    assert result.sheets_status is SheetsWriteStatus.APPENDED
-
-
-# -------------------------------------------------- integration (approval flow)
+# -------------------------------------------------- integration (confirm flow)
 
 
 def _postgres_up() -> bool:
@@ -156,7 +136,8 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "stock_adjustments, catalogo, suppliers, clientes, lista_precios "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
@@ -170,7 +151,7 @@ def _on_hand(session, sku: str) -> int:
 
 @pytest.fixture
 def order_ctx(db_session):
-    """Seed product (10 units), customer, PENDING_APPROVAL order + one item."""
+    """Seed product (10 units), customer, DRAFT order + one item."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
         Supplier(
@@ -204,7 +185,7 @@ def order_ctx(db_session):
     )
     db_session.flush()
     seed_inventory(db_session)
-    order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()
     db_session.add(
@@ -212,9 +193,10 @@ def order_ctx(db_session):
             order_id=order.order_id,
             sku="CLV-001",
             cantidad=10,
-            base_price=Decimal("100.00"),
-            final_price=Decimal("100.00"),
+            base_price=Decimal("135.00"),
+            final_price=Decimal("135.00"),
             adjustment=Decimal(0),
+            source="LOCAL",
         )
     )
     db_session.flush()
@@ -239,25 +221,25 @@ class FakeSheets:
         return SheetsWriteStatus.APPENDED
 
 
-def test_approve_and_register_converts_deducts_and_confirms(order_ctx):
-    """Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma."""
+def test_confirm_and_register_converts_deducts_and_confirms(order_ctx):
+    """Confirmar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma."""
     reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
         customer_id=1,
-        cantidad=4,
+        cantidad=10,
         order_id=order_ctx["order"].order_id,
     )
-    result = approve_and_register(
+    result = confirm_and_register(
         order_ctx["session"],
         order_ctx["order"],
         sheets=FakeSheets(),
         customer_name="Ferretería Don Juan",
     )
-    assert result.order.estado is OrderEstado.APPROVED
+    assert result.order.estado is OrderEstado.CONFIRMED
     assert result.converted == 1
-    assert result.total == Decimal("1000.00")
-    assert "aprobado" in result.confirmation_text
+    assert result.total == Decimal("1350.00")
+    assert "confirmado" in result.confirmation_text
     assert "Pedido #" in result.confirmation_text
     reservations = (
         order_ctx["session"]
@@ -267,58 +249,13 @@ def test_approve_and_register_converts_deducts_and_confirms(order_ctx):
         .all()
     )
     assert all(r.estado is ReservationEstado.CONVERTED for r in reservations)
-    assert _on_hand(order_ctx["session"], "CLV-001") == 6
-    # Legacy catalogo stock counter is untouched by the approval deduction.
+    assert _on_hand(order_ctx["session"], "CLV-001") == 0  # 10 − 10
+    # Legacy catalogo stock counter is untouched by the confirm deduction.
     assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 10
 
 
-def test_register_after_adjustment_approve_uses_revised_total(order_ctx):
-    """Registrar tras un ajuste usa el total reprecificado y confirma igual."""
-    reserve_stock(
-        order_ctx["session"],
-        order_ctx["sku"],
-        customer_id=1,
-        cantidad=4,
-        order_id=order_ctx["order"].order_id,
-    )
-    quote = quote_order(
-        (
-            ItemInput(
-                sku="CLV-001",
-                cantidad=10,
-                base_price=Decimal("100.00"),
-                description="Clavos Paris 2 Pulgadas",
-            ),
-        ),
-        None,
-        None,
-    )
-    apply_decision(
-        order_ctx["session"],
-        order_ctx["order"],
-        Decision(
-            action=DecisionAction.APPROVE,
-            adjustments=(LineAdjustment(sku="clavos", extra_discount_pct=Decimal("0.05")),),
-        ),
-        quote=quote,
-    )
-    result = register_approved_order(
-        order_ctx["session"],
-        order_ctx["order"],
-        sheets=FakeSheets(),
-        customer_name="Ferretería Don Juan",
-    )
-    assert result.total == Decimal("950.00")
-    assert result.confirmation_text.startswith("Pedido #")
-    item = order_ctx["session"].scalar(
-        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
-    )
-    assert item.final_price == Decimal("95.00")
-    assert _on_hand(order_ctx["session"], "CLV-001") == 6
-
-
-def test_approve_on_expired_reservation_refuses_without_side_effects(order_ctx):
-    """Aprobar una reserva vencida exige recotizar y no produce efectos laterales."""
+def test_confirm_on_expired_reservation_refuses_without_side_effects(order_ctx):
+    """Confirmar una reserva vencida exige recotizar y no produce efectos laterales."""
     reservation = reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
@@ -329,40 +266,39 @@ def test_approve_on_expired_reservation_refuses_without_side_effects(order_ctx):
     reservation.timestamp = datetime.now(UTC) - timedelta(minutes=31)
     order_ctx["session"].flush()
     with pytest.raises(RequiresRequoteError):
-        approve_and_register(
-            order_ctx["session"],
-            order_ctx["order"],
-            sheets=FakeSheets(),
-        )
-    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
+        confirm_and_register(order_ctx["session"], order_ctx["order"], sheets=FakeSheets())
+    assert order_ctx["order"].estado is OrderEstado.DRAFT
     assert order_ctx["order"].needs_requote is True
     reservation = order_ctx["session"].get(StockReservation, reservation.reservation_id)
     assert reservation.estado is ReservationEstado.ACTIVE
     assert _on_hand(order_ctx["session"], "CLV-001") == 10  # nothing deducted
 
 
-def test_sheets_quarantine_rolls_back_approval(order_ctx):
-    """La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente."""
+def test_second_confirm_is_an_invalid_transition(order_ctx):
+    """Confirmar dos veces es una transición inválida (idempotencia del ceremonia)."""
+    confirm_and_register(order_ctx["session"], order_ctx["order"], sheets=FakeSheets())
+    with pytest.raises(InvalidTransitionError, match="cannot confirm"):
+        confirm_and_register(order_ctx["session"], order_ctx["order"], sheets=FakeSheets())
+
+
+def test_sheets_quarantine_is_tolerated_and_order_stays_confirmed(order_ctx):
+    """La cuarentena de Sheets NO revierte: el pedido queda Confirmado y se informa."""
     reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
         customer_id=1,
-        cantidad=4,
+        cantidad=10,
         order_id=order_ctx["order"].order_id,
     )
-    # A SAVEPOINT mirrors the dispatch handler's transaction boundary: when the
-    # Sheets write quarantines, rolling the savepoint back must leave the order
-    # PENDING and the stock undeducted.
-    with pytest.raises(SheetsRegistrationError), order_ctx["session"].begin_nested():
-        approve_and_register(
-            order_ctx["session"],
-            order_ctx["order"],
-            sheets=_sheets_writer(),  # no credentials → append quarantines
-        )
-    order = order_ctx["session"].get(Order, order_ctx["order"].order_id)
-    assert order is not None
-    assert order.estado is OrderEstado.PENDING_APPROVAL
-    assert _on_hand(order_ctx["session"], "CLV-001") == 10  # no stock deducted
+    result = confirm_and_register(
+        order_ctx["session"],
+        order_ctx["order"],
+        sheets=_sheets_writer(),  # no credentials → append quarantines
+    )
+    assert result.order.estado is OrderEstado.CONFIRMED  # spec: order stays Confirmed
+    assert result.sheets_status is SheetsWriteStatus.QUARANTINED
+    assert "cuarentena" in result.confirmation_text  # failure surfaced to the owner
+    assert _on_hand(order_ctx["session"], "CLV-001") == 0  # stock was still deducted
     reservations = (
         order_ctx["session"]
         .scalars(
@@ -370,4 +306,84 @@ def test_sheets_quarantine_rolls_back_approval(order_ctx):
         )
         .all()
     )
-    assert all(r.estado is ReservationEstado.ACTIVE for r in reservations)
+    assert all(r.estado is ReservationEstado.CONVERTED for r in reservations)
+
+
+def test_confirm_pending_conversion_order_is_blocked(order_ctx):
+    """Confirmar un pedido con precios pendientes de conversión se bloquea."""
+    order = order_ctx["order"]
+    order.conversion_pending = True
+    order_ctx["session"].flush()
+    with pytest.raises(PendingConversionError, match="pending currency conversion"):
+        confirm_and_register(order_ctx["session"], order, sheets=FakeSheets())
+    assert order.estado is OrderEstado.DRAFT
+
+
+def test_confirm_discovering_case_c_cancels_the_order(order_ctx):
+    """Classify at confirm: stock que cayó sin supplier cancela el pedido (Case C)."""
+    # The order's item exceeds the on-hand stock at confirm: 12 requested, 8 on hand.
+    item = order_ctx["session"].scalar(
+        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
+    )
+    item.cantidad = 12
+    order_ctx["session"].flush()
+    on_hand = order_ctx["session"].scalar(
+        select(Inventory).where(Inventory.sku_id == order_ctx["sku"])
+    )
+    on_hand.quantity_on_hand = 8
+    order_ctx["session"].flush()
+
+    result = confirm_and_register(
+        order_ctx["session"], order_ctx["order"], sheets=FakeSheets()
+    )  # no searcher → no supplier candidates → Case C
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    assert result.order.sourcing_state.value == "CANCELLED"
+    assert "no están disponibles" in result.confirmation_text
+    assert result.converted == 0
+    assert result.sheets_status is SheetsWriteStatus.SKIPPED
+
+
+def test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt(order_ctx):
+    """Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B)."""
+    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+
+    item = order_ctx["session"].scalar(
+        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
+    )
+    item.cantidad = 12
+    order_ctx["session"].flush()
+    on_hand = order_ctx["session"].scalar(
+        select(Inventory).where(Inventory.sku_id == order_ctx["sku"])
+    )
+    on_hand.quantity_on_hand = 8
+    order_ctx["session"].flush()
+    candidates = (
+        SupplierCandidate(
+            supplier_id=1,
+            business_name="Supplier X",
+            sku="CLV-001",
+            description="Clavos Paris 2 Pulgadas",
+            available_quantity=50,
+        ),
+    )
+    searcher = FakeSupplierCatalogSearcher(candidates)
+
+    result = confirm_and_register(
+        order_ctx["session"], order_ctx["order"], sheets=FakeSheets(), searcher=searcher
+    )
+
+    assert result.cancelled_case is False
+    assert result.order.estado is OrderEstado.CONFIRMED  # state independent of PO progress
+    assert result.converted == 0
+    assert result.missing
+    assert result.missing[0].missing_quantity == 4  # 12 − 8
+    assert "faltan 4" in result.confirmation_text
+    from src.db.models import SourcingNeed
+
+    need = order_ctx["session"].scalar(
+        select(SourcingNeed).where(SourcingNeed.order_id == order_ctx["order"].order_id)
+    )
+    assert need is not None
+    assert need.missing_quantity == 4

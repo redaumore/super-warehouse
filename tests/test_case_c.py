@@ -137,7 +137,7 @@ def test_no_supplier_order_is_cancelled_and_reported_in_chat(shop):
     assert "no están disponibles" in result.reply  # type: ignore[operator]
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
-    assert order.estado is OrderEstado.REJECTED  # existing rejection flow
+    assert order.estado is OrderEstado.CANCELED  # generalized cancel path
     assert order.sourcing_state is SourcingState.CANCELLED
     assert order.rejected_at is not None
     # The reply traveled in the chat: no separate push was made.
@@ -145,15 +145,15 @@ def test_no_supplier_order_is_cancelled_and_reported_in_chat(shop):
 
 
 def test_cancel_for_no_supplier_releases_reservations(shop):
-    """Cancelar libera las reservas activas del pedido (flujo de rechazo)."""
+    """Cancelar libera las reservas activas del pedido (flujo de cancelación)."""
     session = shop["session"]
     order = persist_case_c_order(session, session.get(Cliente, 1))
     reserve_stock(session, "CLV-PRS-2", customer_id=1, cantidad=2, order_id=order.order_id)
     assert available_stock(session, "CLV-PRS-2") == 0
 
-    cancel_for_no_supplier(session, order)
+    cancel_for_no_supplier(session, order, actor="owner")
 
-    assert order.estado is OrderEstado.REJECTED
+    assert order.estado is OrderEstado.CANCELED
     assert order.sourcing_state is SourcingState.CANCELLED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)

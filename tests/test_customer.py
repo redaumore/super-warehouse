@@ -642,6 +642,44 @@ def test_add_intent_reply_omits_price_for_local_entry_without_price():
     assert "(" not in outcome.reply
 
 
+def test_remove_command_removes_in_memory_draft_line():
+    """'sacá X' quita la línea del draft en memoria sin llamar al LLM."""
+    fake = FakeResponder()
+    nails = _entry("SKU-001", "Tarugo Fischer 8mm")
+    paint = _entry("SKU-002", "Pintura Látex Blanco")
+    state = ConversationState(
+        sender_id=SENDER,
+        order_id=5,
+        draft_items=((nails, 2), (paint, 1)),
+    )
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="sacá la pintura"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.state is not None
+    assert outcome.state.draft_items == ((nails, 2),)  # only the matched line left
+    assert "Pintura Látex Blanco" in outcome.reply  # type: ignore[operator]
+
+
+def test_remove_command_unknown_target_reports_without_touching_draft():
+    """Un objetivo que no está en el draft informa y no modifica nada."""
+    fake = FakeResponder()
+    state = ConversationState(
+        sender_id=SENDER,
+        order_id=5,
+        draft_items=((_entry("SKU-001", "Tarugo Fischer 8mm"), 2),),
+    )
+    handler = build_handler(fake, searcher=FakeProductSearcher())
+
+    outcome = handler(_message(text="sacá la pintura"), state, _decision())
+
+    assert fake.calls == []
+    assert outcome.state is not None
+    assert outcome.state.draft_items == state.draft_items
+    assert "No encontré ese artículo" in outcome.reply  # type: ignore[operator]
+
+
 def test_add_phrase_without_options_goes_to_llm():
     """Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM."""
     fake = FakeResponder()

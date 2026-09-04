@@ -1,16 +1,16 @@
 """Dispatch agent tests.
 
-Unit (no DB): decision parsing (approve / reject / adjustments / unknown),
+Unit (no DB): decision parsing (confirm / cancel / adjustments / unknown),
 ``parse_order_reference`` (pedido #N) and message formatting.
 
 Integration (Postgres, skipped when down): applying the decision end-to-end —
-approval with a per-line adjustment re-prices the order_items rows, and
-rejection releases the reservations so the stock is available again.
+an APPROVE with a per-line adjustment re-prices the order_items rows (the
+confirm ceremony runs the transition), and a REJECT cancels the order,
+releasing the reservations so the stock is available again.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -42,7 +42,6 @@ from src.db.models import (
     StockReservation,
     Supplier,
 )
-from src.order_lifecycle.state import RequiresRequoteError
 
 
 def _quote() -> object:
@@ -108,12 +107,12 @@ def test_parse_order_reference(text, expected):
     ],
 )
 def test_parse_decision_actions(text, action):
-    """El texto del dueño se interpreta como aprobar, rechazar o desconocido."""
+    """El texto del dueño se interpreta como confirmar, cancelar o desconocido."""
     assert parse_decision(text).action is action
 
 
 def test_parse_decision_with_adjustment():
-    """Aprobar con descuento extra por línea se interpreta como aprobación + ajuste.
+    """Aprobar con descuento extra por línea se interpreta como confirm + ajuste.
 
     Spec: 'aprobá pero hacé un 5% de descuento extra en clavos' → approve + 5%.
     """
@@ -165,14 +164,15 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "stock_adjustments, catalogo, suppliers, clientes, lista_precios "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
 
 @pytest.fixture
 def order_ctx(db_session):
-    """Seed product (10 units), customer, PENDING_APPROVAL order and one item."""
+    """Seed product (10 units), customer, DRAFT order and one item."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
         Supplier(
@@ -206,7 +206,7 @@ def order_ctx(db_session):
     )
     db_session.flush()
     seed_inventory(db_session)
-    order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL, needs_requote=False)
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()
     db_session.add(
@@ -217,6 +217,7 @@ def order_ctx(db_session):
             base_price=Decimal("100.00"),
             final_price=Decimal("100.00"),
             adjustment=Decimal(0),
+            source="LOCAL",
         )
     )
     db_session.flush()
@@ -224,16 +225,17 @@ def order_ctx(db_session):
 
 
 def test_apply_approve_with_adjustment_reprises_line(order_ctx):
-    """Aprobar con ajuste reprecifica la línea afectada.
+    """Confirmar con ajuste reprecifica la línea afectada.
 
-    Spec: approval with '5% extra en clavos' re-prices the affected item.
+    Spec: approval with '5% extra en clavos' re-prices the affected item; the
+    ceremony (not apply_decision) runs the state transition.
     """
     decision = Decision(
         action=DecisionAction.APPROVE,
         adjustments=(LineAdjustment(sku="clavos", extra_discount_pct=Decimal("0.05")),),
     )
     apply_decision(order_ctx["session"], order_ctx["order"], decision, quote=_quote())
-    assert order_ctx["order"].estado is OrderEstado.APPROVED
+    assert order_ctx["order"].estado is OrderEstado.DRAFT  # still awaiting the ceremony
     item = order_ctx["session"].scalar(
         select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
     )
@@ -242,12 +244,9 @@ def test_apply_approve_with_adjustment_reprises_line(order_ctx):
 
 
 def test_apply_plain_approve_keeps_prices(order_ctx):
-    """Aprobar sin cambios conserva los precios cotizados.
-
-    Spec: plain approval keeps the previously quoted prices unchanged.
-    """
+    """Confirmar sin cambios conserva los precios cotizados."""
     apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.APPROVE))
-    assert order_ctx["order"].estado is OrderEstado.APPROVED
+    assert order_ctx["order"].estado is OrderEstado.DRAFT  # ceremony owns the transition
     item = order_ctx["session"].scalar(
         select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
     )
@@ -255,11 +254,8 @@ def test_apply_plain_approve_keeps_prices(order_ctx):
     assert item.adjustment == Decimal(0)
 
 
-def test_apply_reject_releases_reservations(order_ctx):
-    """Rechazar libera las reservas y el stock vuelve a estar disponible.
-
-    Spec: rejection releases reservations — stock available to others again.
-    """
+def test_apply_reject_cancels_order_and_releases_reservations(order_ctx):
+    """Rechazar cancela el pedido: reservas liberadas y stock disponible."""
     reserve_stock(
         order_ctx["session"],
         order_ctx["sku"],
@@ -269,7 +265,8 @@ def test_apply_reject_releases_reservations(order_ctx):
     )
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 6
     apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.REJECT))
-    assert order_ctx["order"].estado is OrderEstado.REJECTED
+    assert order_ctx["order"].estado is OrderEstado.CANCELED
+    assert order_ctx["order"].rejected_at is not None
     reservations = (
         order_ctx["session"]
         .scalars(
@@ -279,23 +276,6 @@ def test_apply_reject_releases_reservations(order_ctx):
     )
     assert all(r.estado is ReservationEstado.RELEASED for r in reservations)
     assert available_stock(order_ctx["session"], order_ctx["sku"]) == 10
-
-
-def test_apply_approve_on_expired_reservation_requires_requote(order_ctx):
-    """Aprobar sobre una reserva vencida exige recotizar."""
-    reservation = reserve_stock(
-        order_ctx["session"],
-        order_ctx["sku"],
-        customer_id=1,
-        cantidad=4,
-        order_id=order_ctx["order"].order_id,
-    )
-    reservation.timestamp = datetime.now(UTC) - timedelta(minutes=31)
-    order_ctx["session"].flush()
-    with pytest.raises(RequiresRequoteError):
-        apply_decision(order_ctx["session"], order_ctx["order"], Decision(DecisionAction.APPROVE))
-    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
-    assert order_ctx["order"].needs_requote is True
 
 
 def test_apply_unknown_decision_raises(order_ctx):
@@ -315,7 +295,7 @@ def test_apply_adjustment_no_matching_quote_line_raises(order_ctx):
     )
     with pytest.raises(UnknownAdjustmentTargetError):
         apply_decision(order_ctx["session"], order_ctx["order"], decision, quote=_quote())
-    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
+    assert order_ctx["order"].estado is OrderEstado.DRAFT
 
 
 def test_apply_adjustment_sku_not_in_order_raises(order_ctx):
@@ -329,4 +309,4 @@ def test_apply_adjustment_sku_not_in_order_raises(order_ctx):
     )
     with pytest.raises(UnknownAdjustmentTargetError):
         apply_decision(order_ctx["session"], order_ctx["order"], decision)
-    assert order_ctx["order"].estado is OrderEstado.PENDING_APPROVAL
+    assert order_ctx["order"].estado is OrderEstado.DRAFT

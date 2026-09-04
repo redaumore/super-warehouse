@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 320, agrupados en 28 dominios.
+**Total de escenarios:** 333, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -11,14 +11,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Motor de precios](#motor-de-precios) — 6
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
-- [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 8
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 24
+- [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 11
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 25
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
-- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -32,7 +32,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 29
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 36
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -87,7 +87,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - rechazá el pedido
   - (vacío)
   - aprobá el pedido #3 y el #7
-- El texto del dueño se interpreta como aprobar, rechazar o desconocido. _(`test_parse_decision_actions`)_
+- El texto del dueño se interpreta como confirmar, cancelar o desconocido. _(`test_parse_decision_actions`)_
   - sí, aprobá
   - aprobá
   - dale
@@ -97,13 +97,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - no
   - hablamos mañana
   - (vacío)
-- Aprobar con descuento extra por línea se interpreta como aprobación + ajuste. _(`test_parse_decision_with_adjustment`)_
+- Aprobar con descuento extra por línea se interpreta como confirm + ajuste. _(`test_parse_decision_with_adjustment`)_
 - Se aceptan porcentajes decimales en el ajuste. _(`test_parse_decision_accepts_decimal_percent`)_
 - Un rechazo ignora cualquier mención de ajuste. _(`test_parse_decision_reject_ignores_adjustment_mention`)_
-- Aprobar con ajuste reprecifica la línea afectada. _(`test_apply_approve_with_adjustment_reprises_line`)_
-- Aprobar sin cambios conserva los precios cotizados. _(`test_apply_plain_approve_keeps_prices`)_
-- Rechazar libera las reservas y el stock vuelve a estar disponible. _(`test_apply_reject_releases_reservations`)_
-- Aprobar sobre una reserva vencida exige recotizar. _(`test_apply_approve_on_expired_reservation_requires_requote`)_
+- Confirmar con ajuste reprecifica la línea afectada. _(`test_apply_approve_with_adjustment_reprises_line`)_
+- Confirmar sin cambios conserva los precios cotizados. _(`test_apply_plain_approve_keeps_prices`)_
+- Rechazar cancela el pedido: reservas liberadas y stock disponible. _(`test_apply_reject_cancels_order_and_releases_reservations`)_
 - Aplicar una decisión desconocida lanza error. _(`test_apply_unknown_decision_raises`)_
 - Un ajuste que nombra un producto fuera de la cotización no se puede aplicar. _(`test_apply_adjustment_no_matching_quote_line_raises`)_
 - Sin cotización, un SKU desconocido en el ajuste se rechaza. _(`test_apply_adjustment_sku_not_in_order_raises`)_
@@ -113,11 +112,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El total del pedido suma precio final por cantidad, redondeado a centavos. _(`test_order_total_sums_final_price_times_quantity`)_
 - Una línea ajustada aporta su precio final rebajado al total. _(`test_order_total_with_adjusted_line`)_
 - El resumen de ítems lista cantidad por SKU separado por punto y coma. _(`test_build_items_summary_lists_each_line`)_
-- Sheets append is skipped at draft save and called once during approval registration. _(`test_sheets_append_belongs_to_approval_not_draft_persistence`)_
-- Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
-- Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
-- Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
-- La cuarentena de Sheets revierte la aprobación: el pedido sigue pendiente. _(`test_sheets_quarantine_rolls_back_approval`)_
+- Sheets append is skipped at draft save and called once during confirm. _(`test_sheets_append_belongs_to_confirm_not_draft_persistence`)_
+- Confirmar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_confirm_and_register_converts_deducts_and_confirms`)_
+- Confirmar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_confirm_on_expired_reservation_refuses_without_side_effects`)_
+- Confirmar dos veces es una transición inválida (idempotencia del ceremonia). _(`test_second_confirm_is_an_invalid_transition`)_
+- La cuarentena de Sheets NO revierte: el pedido queda Confirmado y se informa. _(`test_sheets_quarantine_is_tolerated_and_order_stays_confirmed`)_
+- Confirmar un pedido con precios pendientes de conversión se bloquea. _(`test_confirm_pending_conversion_order_is_blocked`)_
+- Classify at confirm: stock que cayó sin supplier cancela el pedido (Case C). _(`test_confirm_discovering_case_c_cancels_the_order`)_
+- Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B). _(`test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt`)_
 
 ## Orquestador y enrutamiento
 
@@ -126,6 +128,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un texto nuevo de cliente se enruta a Customer. _(`test_fresh_text_routes_to_customer`)_
 - La aprobación del dueño se enruta a Despacho reanudando el pedido. _(`test_owner_approval_routes_to_dispatch_resuming_order`)_
 - El rechazo del dueño se enruta a Despacho. _(`test_owner_rejection_routes_to_dispatch`)_
+- El comando 'sacá X' se enruta a Customer aunque haya un pedido en curso. _(`test_remove_product_command_routes_to_customer_with_order_context`)_
 - Una respuesta ambigua mientras se espera sigue en la conversación del dueño. _(`test_non_decision_reply_while_awaiting_goes_to_dispatch_menu`)_
 - Un pedido en curso con ítems se enruta a Ventas. _(`test_in_progress_order_with_items_routes_to_sales`)_
 - Un pedido en curso sin ítems se enruta a Desambiguación. _(`test_in_progress_order_without_items_routes_to_disambiguation`)_
@@ -191,6 +194,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - 'quiero 2' after a displayed product adds 2 of it with the finalize hint, no LLM. _(`test_bare_quantity_after_displayed_product_adds_qty_with_finalize_hint`)_
 - Un alta de un producto RAG con precio muestra el precio en la respuesta. _(`test_add_intent_reply_shows_rag_price_currency_and_unit`)_
 - Un alta de un producto local sin precio no muestra ningún precio. _(`test_add_intent_reply_omits_price_for_local_entry_without_price`)_
+- 'sacá X' quita la línea del draft en memoria sin llamar al LLM. _(`test_remove_command_removes_in_memory_draft_line`)_
+- Un objetivo que no está en el draft informa y no modifica nada. _(`test_remove_command_unknown_target_reports_without_touching_draft`)_
 - Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
 - Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
 - 'agregale 2' after a displayed product adds 2 of it without calling the LLM. _(`test_verb_quantity_add_after_displayed_product_adds_qty`)_
@@ -307,6 +312,16 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
 - A finalize command returns its customer name only when a draft exists. _(`test_parse_finalize_extracts_customer_name_from_non_empty_draft`)_
 - The handler can ask for a customer when a draft is being finalized anonymously. _(`test_is_finalize_recognizes_command_without_customer_name`)_
+- El comando 'sacá X' extrae el producto (artículo incluido); frases largas no. _(`test_parse_product_remove`)_
+  - sacá los clavos / clavos
+  - quitá la pintura / pintura
+  - eliminá el recolector de aceite / recolector de aceite
+  - borrá tornillos / tornillos
+  - Sacá el 2 / 2
+  - sacá clavos. / clavos
+  - no sacó nada
+  - me gustaría comprar clavos
+  - (vacío)
 
 ## Percepción (voz e imagen)
 
@@ -492,6 +507,19 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
 - La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
 - The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
+- Solo las acciones legales del estado se ofrecen en el tab (backoffice spec). _(`test_legal_actions_per_state`)_
+  - DRAFT
+  - CONFIRMED
+  - PICKING
+  - READY_FOR_DELIVERY
+  - CANCELED
+  - CLOSED
+- La acción start picking transiciona y hace commit (patrón po.py). _(`test_start_picking_action_commits_transition`)_
+- Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega. _(`test_fulfillment_chain_commits_to_closed_with_delivery_date`)_
+- Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice. _(`test_cancel_action_releases_reservations_with_backoffice_actor`)_
+- Cancelar desde Picking restaura stock y audita con actor backoffice. _(`test_cancel_action_restores_deducted_stock_with_audit`)_
+- El monitor muestra los seis estados del pedido. _(`test_monitor_shows_all_six_states`)_
+- El tab Customer Orders expone las cuatro acciones de cumplimiento. _(`test_app_customer_orders_tab_has_fulfillment_buttons`)_
 
 ## Feature flags por fase
 
@@ -505,9 +533,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## E2E: pedido completo
 
-- El pedido del dueño se aprueba: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_approves_and_deducts_stock`)_
-- Si Sheets falla, la aprobación se revierte y el pedido sigue pendiente. _(`test_e2e_sheets_failure_keeps_order_pending`)_
-- Al rechazar el pedido, la reserva se libera y el stock vuelve a estar libre. _(`test_e2e_owner_reject_releases_reservation`)_
+- El pedido del dueño se confirma: reserva convertida, Sheets y stock descontado. _(`test_e2e_owner_order_confirms_and_deducts_stock`)_
+- Si Sheets falla, el pedido IGUAL queda Confirmado (cuarentena tolerada). _(`test_e2e_sheets_failure_keeps_order_confirmed`)_
+- Al rechazar el pedido, se cancela y la reserva se libera. _(`test_e2e_owner_reject_cancels_order_and_releases_reservation`)_
 - Una nota de voz de WhatsApp se normaliza marcando media_type voice. _(`test_e2e_whatsapp_voice_payload_flags_media`)_
 
 ## E2E: ingesta de documentos

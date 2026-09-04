@@ -1,11 +1,11 @@
-"""Wired DISPATCH handler tests (task 3.4).
+"""Wired DISPATCH handler tests (Phase 7).
 
-The DISPATCH agent is no longer a stub: approve/reject replies run the real
-approval flow. These tests drive ``build_dispatch_handler`` with a real
-session and a mock ``SheetsWriter``: approve registers end-to-end, reject
-releases reservations, unknown replies re-ask, ``pedido #N`` overrides the
-rehydrated order, and a Sheets QUARANTINE rolls the approval back — the order
-stays PENDING and the owner gets an error reply.
+The DISPATCH agent is wired: confirm/cancel replies run the real flow. These
+tests drive ``build_dispatch_handler`` with a real session and a mock
+``SheetsWriter``: confirm registers end-to-end, cancel releases reservations,
+unknown replies re-ask, ``pedido #N`` overrides the rehydrated order, and a
+Sheets QUARANTINE IS TOLERATED — the order stays CONFIRMED and the owner gets
+an error surfaced in chat (spec: order MUST remain Confirmed).
 """
 
 from __future__ import annotations
@@ -77,14 +77,15 @@ def _clean_schema(db_engine):
             text(
                 "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
                 "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                "catalogo, suppliers, clientes, lista_precios RESTART IDENTITY CASCADE"
+                "stock_adjustments, catalogo, suppliers, clientes, lista_precios "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
 
 @pytest.fixture
 def shop(db_session):
-    """Seed a customer, product and TWO PENDING_APPROVAL orders."""
+    """Seed a product, TWO customers and one DRAFT order per customer."""
     db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
     db_session.add(
         Supplier(
@@ -94,15 +95,16 @@ def shop(db_session):
             default_margin_pct=Decimal(0),
         )
     )
-    db_session.add(
-        Cliente(
-            customer_id=1,
-            nombre_comercial="Ferretería Don Juan",
-            telefono_norm="+5491155551234",
-            lista_precios_id=1,
-            descuento_particular_pct=Decimal(0),
+    for customer_id, phone in ((1, "+5491155551234"), (2, "+5491155555678")):
+        db_session.add(
+            Cliente(
+                customer_id=customer_id,
+                nombre_comercial=f"Customer {customer_id}",
+                telefono_norm=phone,
+                lista_precios_id=1,
+                descuento_particular_pct=Decimal(0),
+            )
         )
-    )
     db_session.add(
         Catalogo(
             id=1,
@@ -119,8 +121,10 @@ def shop(db_session):
     db_session.flush()
     seed_inventory(db_session)
     orders = []
-    for _ in range(2):
-        order = Order(customer_id=1, estado=OrderEstado.PENDING_APPROVAL)
+    # One DRAFT per customer — the single-draft rule forbids two DRAFTs for the
+    # same customer (AD4), so the override test targets a different customer's.
+    for customer_id in (1, 2):
+        order = Order(customer_id=customer_id, estado=OrderEstado.DRAFT)
         db_session.add(order)
         db_session.flush()
         db_session.add(
@@ -131,6 +135,7 @@ def shop(db_session):
                 base_price=Decimal("100.00"),
                 final_price=Decimal("100.00"),
                 adjustment=Decimal(0),
+                source="LOCAL",
             )
         )
         orders.append(order)
@@ -155,8 +160,8 @@ def _on_hand(session, sku: str) -> int:
     return row.quantity_on_hand
 
 
-def test_approve_registers_order_and_confirms(shop):
-    """Aprobar registra el pedido en Sheets, descuenta stock y confirma en chat."""
+def test_approve_confirms_order_and_registers(shop):
+    """Confirmar registra el pedido en Sheets, descuenta stock y confirma en chat."""
     session = shop["session"]
     order = shop["orders"][0]
     reserve_stock(session, "CLV-001", customer_id=1, cantidad=2, order_id=order.order_id)
@@ -166,9 +171,9 @@ def test_approve_registers_order_and_confirms(shop):
     outcome = handler(_message("aprobá"), _state(lambda: session, order.order_id), None)
 
     assert isinstance(outcome, AgentOutcome)
-    assert "aprobado" in outcome.reply  # type: ignore[operator]
+    assert "confirmado" in outcome.reply  # type: ignore[operator]
     assert "Registrado en Google Sheets" in outcome.reply  # type: ignore[operator]
-    assert order.estado is OrderEstado.APPROVED
+    assert order.estado is OrderEstado.CONFIRMED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
@@ -181,8 +186,8 @@ def test_approve_registers_order_and_confirms(shop):
     assert outcome.state.order_id is None
 
 
-def test_reject_releases_reservations(shop):
-    """Rechazar libera las reservas y el stock vuelve a estar disponible."""
+def test_reject_cancels_order_and_releases_reservations(shop):
+    """Rechazar cancela el pedido: reservas liberadas y stock disponible."""
     session = shop["session"]
     order = shop["orders"][0]
     reserve_stock(session, "CLV-001", customer_id=1, cantidad=2, order_id=order.order_id)
@@ -191,8 +196,8 @@ def test_reject_releases_reservations(shop):
 
     outcome = handler(_message("no, rechazá"), _state(lambda: session, order.order_id), None)
 
-    assert "rechazado" in outcome.reply  # type: ignore[operator]
-    assert order.estado is OrderEstado.REJECTED
+    assert "cancelado" in outcome.reply  # type: ignore[operator]
+    assert order.estado is OrderEstado.CANCELED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
@@ -201,7 +206,7 @@ def test_reject_releases_reservations(shop):
 
 
 def test_unknown_decision_asks_again_without_touching_order(shop):
-    """Una respuesta que no es aprobar/rechazar re-pregunta sin tocar el pedido."""
+    """Una respuesta que no es confirmar/cancelar re-pregunta sin tocar el pedido."""
     session = shop["session"]
     order = shop["orders"][0]
     handler = build_dispatch_handler(lambda: session, FakeSheets())
@@ -209,7 +214,7 @@ def test_unknown_decision_asks_again_without_touching_order(shop):
     outcome = handler(_message("hablamos mañana"), _state(lambda: session, order.order_id), None)
 
     assert "aprobá" in outcome.reply  # type: ignore[operator]
-    assert order.estado is OrderEstado.PENDING_APPROVAL
+    assert order.estado is OrderEstado.DRAFT
     assert outcome.state is not None
     assert outcome.state.awaiting_decision is True  # still awaiting
 
@@ -224,9 +229,9 @@ def test_order_number_override_targets_specific_order(shop):
 
     outcome = handler(_message(f"aprobá el pedido #{first.order_id}"), state, None)
 
-    assert first.estado is OrderEstado.APPROVED
-    assert second.estado is OrderEstado.PENDING_APPROVAL  # untouched
-    assert "aprobado" in outcome.reply  # type: ignore[operator]
+    assert first.estado is OrderEstado.CONFIRMED
+    assert second.estado is OrderEstado.DRAFT  # untouched
+    assert "confirmado" in outcome.reply  # type: ignore[operator]
 
 
 def test_unknown_order_number_errors_cleanly(shop):
@@ -239,28 +244,26 @@ def test_unknown_order_number_errors_cleanly(shop):
     assert "No encuentro el pedido #999" in outcome.reply  # type: ignore[operator]
 
 
-def test_sheets_quarantine_rolls_back_approval(shop):
-    """Si Sheets no registra, la aprobación se revierte: el pedido sigue pendiente."""
+def test_sheets_quarantine_is_tolerated_and_order_stays_confirmed(shop):
+    """Si Sheets no registra, el pedido IGUAL queda Confirmado y se informa."""
     session = shop["session"]
     order = shop["orders"][0]
     order_id = order.order_id  # the handler closes the session and expires objects
     reserve_stock(session, "CLV-001", customer_id=1, cantidad=2, order_id=order_id)
-    session.commit()  # the reservation survives the handler's own rollback
+    session.commit()  # the reservation survives the handler's own transaction
     sheets = FakeSheets(status=SheetsWriteStatus.QUARANTINED)
     handler = build_dispatch_handler(lambda: session, sheets)
 
     outcome = handler(_message("aprobá"), _state(lambda: session, order_id), None)
 
-    assert "sigue pendiente" in outcome.reply  # type: ignore[operator]
-    # The handler's rollback reverted the approval: fresh reads prove the order
-    # stayed PENDING, the reservation ACTIVE and the stock undeducted.
+    assert "cuarentena" in outcome.reply  # type: ignore[operator]  # failure surfaced
+    # The order stayed CONFIRMED (spec) and the stock was still deducted.
     fresh_order = session.scalar(select(Order).where(Order.order_id == order_id))
-    assert fresh_order.estado is OrderEstado.PENDING_APPROVAL
+    assert fresh_order.estado is OrderEstado.CONFIRMED
     reservation = session.scalar(
         select(StockReservation).where(StockReservation.order_id == order_id)
     )
-    assert reservation.estado is ReservationEstado.ACTIVE  # not converted
-    assert _on_hand(session, "CLV-001") == 10  # nothing deducted
-    # The decision conversation stays open so the owner can retry.
+    assert reservation.estado is ReservationEstado.CONVERTED
+    assert _on_hand(session, "CLV-001") == 8  # deducted despite the quarantine
     assert outcome.state is not None
-    assert outcome.state.awaiting_decision is True
+    assert outcome.state.awaiting_decision is False  # the decision is closed

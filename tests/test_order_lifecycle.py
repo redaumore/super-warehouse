@@ -547,15 +547,19 @@ def test_add_remove_draft_item_on_persisted_draft(order_ctx):
     """add/remove mutan OrderItem rows; el Draft vacío sigue Draft."""
     ctx = order_ctx
     add_draft_item(ctx["session"], ctx["order"], "TRN-002", 2)
-    items = ctx["session"].scalars(
-        select(OrderItem).where(OrderItem.order_id == ctx["order"].order_id)
-    ).all()
+    items = (
+        ctx["session"]
+        .scalars(select(OrderItem).where(OrderItem.order_id == ctx["order"].order_id))
+        .all()
+    )
     assert {i.sku for i in items} == {"CLV-001", "TRN-002"}
 
     remove_draft_item(ctx["session"], ctx["order"], "CLV-001")
     remove_draft_item(ctx["session"], ctx["order"], "TRN-002")
-    remaining = ctx["session"].scalars(
-        select(OrderItem).where(OrderItem.order_id == ctx["order"].order_id)
-    ).all()
+    remaining = (
+        ctx["session"]
+        .scalars(select(OrderItem).where(OrderItem.order_id == ctx["order"].order_id))
+        .all()
+    )
     assert remaining == []  # remove is real
     assert ctx["order"].estado is OrderEstado.DRAFT  # empty draft stays DRAFT

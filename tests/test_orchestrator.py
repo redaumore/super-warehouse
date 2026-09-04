@@ -85,6 +85,18 @@ def test_owner_rejection_routes_to_dispatch():
     assert decision.agent is AgentName.DISPATCH
 
 
+def test_remove_product_command_routes_to_customer_with_order_context():
+    """El comando 'sacá X' se enruta a Customer aunque haya un pedido en curso."""
+    state = _state(
+        order_id=7,
+        items=(ResolvedItem(sku="CLV-001", cantidad=10),),
+        awaiting_decision=False,
+    )
+    decision = route_message(_message(text="sacá los clavos"), state)
+    assert decision.agent is AgentName.CUSTOMER
+    assert decision.context_loaded is True
+
+
 def test_non_decision_reply_while_awaiting_goes_to_dispatch_menu():
     """Una respuesta ambigua mientras se espera sigue en la conversación del dueño.
 
