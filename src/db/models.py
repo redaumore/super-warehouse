@@ -48,12 +48,14 @@ class ReservationEstado(str, enum.Enum):
 
 
 class OrderEstado(str, enum.Enum):
-    """Order state machine (fixed by spec — four states)."""
+    """Order state machine (fixed by spec — six states)."""
 
-    PENDING_APPROVAL = "PENDING_APPROVAL"
-    APPROVED = "APPROVED"
-    IN_DISPATCH = "IN_DISPATCH"
-    REJECTED = "REJECTED"
+    DRAFT = "DRAFT"
+    CONFIRMED = "CONFIRMED"
+    PICKING = "PICKING"
+    READY_FOR_DELIVERY = "READY_FOR_DELIVERY"
+    CANCELED = "CANCELED"
+    CLOSED = "CLOSED"
 
 
 class SourcingState(str, enum.Enum):
@@ -265,21 +267,32 @@ class StockAdjustment(Base):
 
 
 class Order(Base):
-    """Order with the fixed four-state machine plus a needs_requote flag.
+    """Order with the fixed six-state machine plus a needs_requote flag.
 
     ``sourcing_state`` is the separate sourcing/fulfillment axis (spec:
     PENDING_ASSEMBLY / IN_PREPARATION / CANCELLED) and MUST NOT change or
-    replace the four approval states. ``delivery_date`` is informational.
+    replace the six order states. ``delivery_date`` is informational.
     """
 
     __tablename__ = "orders"
+
+    __table_args__ = (
+        # AD4: at most one Draft per customer — DB backstop for the app guard,
+        # matching migration f2b2570aed04.
+        Index(
+            "uq_orders_one_draft_per_customer",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("estado = 'DRAFT'"),
+        ),
+    )
 
     order_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("clientes.customer_id"), nullable=False)
     estado: Mapped[OrderEstado] = mapped_column(
         Enum(OrderEstado, name="order_estado", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
-        default=OrderEstado.PENDING_APPROVAL,
+        default=OrderEstado.DRAFT,
     )
     sourcing_state: Mapped[SourcingState] = mapped_column(
         Enum(SourcingState, name="sourcing_state", values_callable=lambda e: [m.value for m in e]),
