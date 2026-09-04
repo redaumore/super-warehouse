@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 304, agrupados en 28 dominios.
+**Total de escenarios:** 307, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -27,7 +27,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 20
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 23
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
@@ -389,14 +389,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - code tiene índice único; cuit único parcial cuando no es NULL. _(`test_supplier_code_and_cuit_indexes`)_
 - La columna `catalogo.embedding` se declara como pgvector vector(1536). _(`test_catalogo_has_vector_1536_embedding`)_
 - El modelo `clientes` no modela límites de crédito ni condiciones de pago. _(`test_cliente_has_no_credit_or_payment_fields`)_
-- La máquina de estados del pedido se fija a los cuatro estados de la spec. _(`test_order_estado_enum_values`)_
+- La máquina de estados del pedido se fija a los seis estados de la spec. _(`test_order_estado_enum_values`)_
+- El modelo orders declara el índice único parcial de un draft por cliente. _(`test_order_has_one_draft_per_customer_partial_index`)_
 - La migración crea todas las tablas del diseño. _(`test_migration_creates_all_tables`)_
 - RED: la migración agrega sourcing_state y delivery_date a orders. _(`test_migration_creates_sourcing_columns`)_
 - RED: los enums del eje de sourcing existen tras la migración. _(`test_migration_creates_sourcing_enums`)_
+- La migración deja el enum order_estado con los seis estados de la spec. _(`test_migration_order_estado_has_six_values`)_
+- La migración crea el índice único parcial de un draft por cliente. _(`test_migration_creates_one_draft_per_customer_index`)_
 - RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
-- The customer-order migration downgrades, upgrades, and preserves legacy Case A writes. _(`test_customer_order_migration_round_trips_and_keeps_case_a_persistable`)_
+- The order-state-machine migration downgrades safely and re-upgrades. _(`test_order_state_machine_migration_downgrade_safety`)_
 - A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it. _(`test_migration_seeded_default_margin_is_read_by_pricing`)_
 
 ## Teléfonos y clientes

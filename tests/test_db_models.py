@@ -21,7 +21,6 @@ from src.db.models import (
     Base,
     Catalogo,
     Cliente,
-    Inventory,
     IvaCondition,
     ListaPrecios,
     Order,
@@ -31,9 +30,7 @@ from src.db.models import (
     SupplierPurchaseOrderState,
     SupplierStatus,
 )
-from src.orchestrator.session import ResolvedItem
 from src.pricing.order_pricing import PricingLine, compute_order
-from src.sourcing.case_a import persist_case_a_order
 
 
 def test_all_design_entities_are_modeled():
@@ -77,17 +74,19 @@ def test_order_has_sourcing_axis_and_delivery_date():
     """El pedido tiene sourcing_state y delivery_date, sin tocar order_estado.
 
     Order carries the separate sourcing axis and the informational delivery
-    date; the four approval states remain untouched.
+    date; the six order states remain untouched.
     """
     cols = Order.__table__.c
     assert "sourcing_state" in cols
     assert "delivery_date" in cols
-    assert "estado" in cols  # the four-state machine is still there
+    assert "estado" in cols  # the six-state machine is still there
     assert {m.value for m in OrderEstado} == {
-        "PENDING_APPROVAL",
-        "APPROVED",
-        "IN_DISPATCH",
-        "REJECTED",
+        "DRAFT",
+        "CONFIRMED",
+        "PICKING",
+        "READY_FOR_DELIVERY",
+        "CANCELED",
+        "CLOSED",
     }
 
 
@@ -176,12 +175,30 @@ def test_cliente_has_no_credit_or_payment_fields():
 
 
 def test_order_estado_enum_values():
-    """La máquina de estados del pedido se fija a los cuatro estados de la spec.
+    """La máquina de estados del pedido se fija a los seis estados de la spec.
 
-    The order state machine is fixed to the four spec states.
+    The order state machine is fixed to the six spec states.
     """
     values = {m.value for m in OrderEstado}
-    assert values == {"PENDING_APPROVAL", "APPROVED", "IN_DISPATCH", "REJECTED"}
+    assert values == {
+        "DRAFT",
+        "CONFIRMED",
+        "PICKING",
+        "READY_FOR_DELIVERY",
+        "CANCELED",
+        "CLOSED",
+    }
+
+
+def test_order_has_one_draft_per_customer_partial_index():
+    """El modelo orders declara el índice único parcial de un draft por cliente.
+
+    The Order model declares the partial unique index (one Draft per customer,
+    AD4) that migration f2b2570aed04 creates.
+    """
+    indexes = {index.name: index for index in Order.__table__.indexes}
+    assert "uq_orders_one_draft_per_customer" in indexes
+    assert indexes["uq_orders_one_draft_per_customer"].unique is True
 
 
 def test_migration_creates_all_tables(db_inspector):
@@ -222,6 +239,33 @@ def test_migration_creates_sourcing_enums(db_inspector):
     assert {"sourcing_state", "supplier_purchase_order_state"}.issubset(enums)
 
 
+def test_migration_order_estado_has_six_values(db_inspector):
+    """La migración deja el enum order_estado con los seis estados de la spec.
+
+    The migrated order_estado enum carries exactly the six spec states
+    (task 1.3: six enum values via db_inspector).
+    """
+    enums = {e["name"]: e for e in db_inspector.get_enums()}
+    assert "order_estado" in enums
+    assert set(enums["order_estado"]["labels"]) == {
+        "DRAFT",
+        "CONFIRMED",
+        "PICKING",
+        "READY_FOR_DELIVERY",
+        "CANCELED",
+        "CLOSED",
+    }
+
+
+def test_migration_creates_one_draft_per_customer_index(db_inspector):
+    """La migración crea el índice único parcial de un draft por cliente."""
+    indexes = {i["name"]: i for i in db_inspector.get_indexes("orders")}
+    assert "uq_orders_one_draft_per_customer" in indexes
+    assert indexes["uq_orders_one_draft_per_customer"]["unique"] is True
+    where = indexes["uq_orders_one_draft_per_customer"]["dialect_options"]["postgresql_where"]
+    assert "DRAFT" in where
+
+
 def test_migration_indexes_sourcing_needs(db_inspector):
     """RED: sourcing_needs queda indexado por order_id y supplier_id."""
     indexes = {i["name"] for i in db_inspector.get_indexes("sourcing_needs")}
@@ -248,102 +292,81 @@ def test_migration_enables_pgvector_extension(db_engine):
     assert row == 1
 
 
-def test_customer_order_migration_round_trips_and_keeps_case_a_persistable(db_engine, clean_schema):
-    """The customer-order migration downgrades, upgrades, and preserves legacy Case A writes."""
+def test_order_state_machine_migration_downgrade_safety(db_engine, clean_schema):
+    """The order-state-machine migration downgrades safely and re-upgrades.
+
+    One-step downgrade to 7d2f4a1e8b90 reconciles DRAFT/PICKING rows to the
+    legacy equivalents, drops the partial index, and leaves the two extra enum
+    labels behind (PG cannot drop enum values). The guarded re-upgrade then
+    succeeds (task 1.3: downgrade safety).
+
+    NOTE: the previous deep round-trip (downgrade to 46bdbdc4a575 + Case A
+    persist asserting OrderEstado.PENDING_APPROVAL) was replaced: that test
+    asserted a removed enum member and exercised a legacy write path that
+    Phase 3 rewrites to persist DRAFT.
+    """
     alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
     config = AlembicConfig(str(alembic_ini))
-    previous_revision = "46bdbdc4a575"
 
-    command.downgrade(config, previous_revision)
+    Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+    with Session() as session:
+        session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
+        session.add(
+            Supplier(
+                id=1,
+                code="DWG",
+                business_name="Downgrade Supplier",
+                default_margin_pct=Decimal(0),
+            )
+        )
+        for customer_id, phone in ((1, "+5491155551111"), (2, "+5491155552222")):
+            session.add(
+                Cliente(
+                    customer_id=customer_id,
+                    nombre_comercial=f"Downgrade Customer {customer_id}",
+                    telefono_norm=phone,
+                    lista_precios_id=1,
+                    descuento_particular_pct=Decimal(0),
+                )
+            )
+        session.flush()
+        session.add_all(
+            [
+                Order(customer_id=1, estado=OrderEstado.DRAFT),
+                Order(customer_id=2, estado=OrderEstado.PICKING),
+            ]
+        )
+        session.commit()
+
+    command.downgrade(config, "7d2f4a1e8b90")
     try:
-        with db_engine.connect() as connection:
-            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert revision == previous_revision
         inspector = inspect(db_engine)
-        assert "exchange_rates" not in inspector.get_table_names()
-        assert "app_settings" not in inspector.get_table_names()
-        assert not (
-            {column["name"] for column in inspector.get_columns("orders")}
-            & {"subtotal", "total", "conversion_pending"}
-        )
-        assert not (
-            {column["name"] for column in inspector.get_columns("order_items")}
-            & {"name", "source", "supplier", "moneda", "precio_original"}
-        )
-
-        command.upgrade(config, "head")
+        # The partial unique index is gone.
+        indexes = {i["name"] for i in inspector.get_indexes("orders")}
+        assert "uq_orders_one_draft_per_customer" not in indexes
+        # DRAFT/PICKING labels remain (PG cannot drop enum values)...
+        enums = {e["name"]: e for e in inspector.get_enums()}
+        labels = set(enums["order_estado"]["labels"])
+        assert {"DRAFT", "PICKING"}.issubset(labels)
+        # ...while the four legacy states are usable again.
+        assert {
+            "PENDING_APPROVAL",
+            "APPROVED",
+            "IN_DISPATCH",
+            "REJECTED",
+        }.issubset(labels)
         with db_engine.connect() as connection:
-            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert revision == "7d2f4a1e8b90"
-        inspector = inspect(db_engine)
-        assert {"exchange_rates", "app_settings"}.issubset(inspector.get_table_names())
-        assert {"subtotal", "total", "conversion_pending"}.issubset(
-            {column["name"] for column in inspector.get_columns("orders")}
-        )
-        assert {"name", "source", "supplier", "moneda", "precio_original"}.issubset(
-            {column["name"] for column in inspector.get_columns("order_items")}
-        )
-
-        with db_engine.begin() as connection:
-            connection.execute(
-                text(
-                    "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
-                    "sourcing_needs, inventory, order_items, orders, stock_reservations, "
-                    "stock_adjustments, catalogo, suppliers, clientes, lista_precios, "
-                    "supplier_sku_mappings, exchange_rates, app_settings "
-                    "RESTART IDENTITY CASCADE"
-                )
+            rows = dict(
+                connection.execute(
+                    text("SELECT order_id, estado FROM orders ORDER BY order_id")
+                ).all()
             )
-
-        Session = sessionmaker(bind=db_engine, expire_on_commit=False)
-        with Session() as session:
-            session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
-            session.add(
-                Supplier(
-                    id=1,
-                    code="LEG",
-                    business_name="Legacy Supplier",
-                    default_margin_pct=Decimal(0),
-                )
-            )
-            customer = Cliente(
-                customer_id=1,
-                nombre_comercial="Legacy Customer",
-                telefono_norm="+5491155551234",
-                lista_precios_id=1,
-                descuento_particular_pct=Decimal(0),
-            )
-            session.add(customer)
-            session.add(
-                Catalogo(
-                    id=1,
-                    codigo_interno="LEG-001",
-                    supplier_id=1,
-                    nombre_oficial="Legacy item",
-                    costo_proveedor=Decimal("100.00"),
-                    margen_aplicado_pct=Decimal("0.35"),
-                    precio_lista_base=Decimal("135.00"),
-                    stock_disponible=10,
-                    sinonimos=[],
-                )
-            )
-            session.add(Inventory(sku_id="LEG-001", quantity_on_hand=10))
-            session.flush()
-
-            order, quote = persist_case_a_order(
-                session,
-                customer,
-                (ResolvedItem(sku="LEG-001", cantidad=1, description="Legacy item"),),
-                delivery_date=None,
-            )
-            session.commit()
-
-            persisted = session.get(Order, order.order_id)
-            assert persisted is not None
-            assert persisted.estado is OrderEstado.PENDING_APPROVAL
-            assert persisted.items[0].sku == "LEG-001"
-            assert quote.total == Decimal("135.00")
+        # DRAFT -> CONFIRMED -> PENDING_APPROVAL; PICKING -> READY_FOR_DELIVERY
+        # -> APPROVED (reconciled before the reverse renames).
+        assert rows[1] == "PENDING_APPROVAL"
+        assert rows[2] == "APPROVED"
     finally:
+        # Guarded re-upgrade: leftover labels must not collide with ADD VALUE.
         command.upgrade(config, "head")
 
 
