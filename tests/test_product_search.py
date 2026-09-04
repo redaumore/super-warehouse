@@ -20,6 +20,8 @@ from src.agents.product_search import (
     PrecedenceProductSearcher,
     ProductEntry,
     ProductSource,
+    is_finalize,
+    parse_finalize,
     parse_product_add,
 )
 from src.config import Settings
@@ -42,6 +44,11 @@ def _options(n: int) -> tuple[ProductEntry, ...]:
         ("sumá 5 de eso", (1,), (0, 5)),
         ("sumale 3 de eso", (1,), (0, 3)),
         ("agregá 2 de esos", (1,), (0, 2)),
+        ("agregale 2", (1,), (0, 2)),
+        ("sumale 3", (1,), (0, 3)),
+        ("AGREGÁ 1", (1,), (0, 1)),
+        ("agregale 2 unidades", (1,), (0, 2)),
+        ("agregale 2 de eso", (1,), (0, 2)),
         ("el 2", (3,), (1, 1)),
         ("quiero el 3", (3,), (2, 1)),
         ("agregalo", (0,), None),
@@ -49,6 +56,32 @@ def _options(n: int) -> tuple[ProductEntry, ...]:
         ("el 2", (1,), None),
         ("pasame el precio", (2,), None),
         ("", (2,), None),
+        ("quiero 2", (1,), (0, 2)),
+        ("dame 3", (1,), (0, 3)),
+        ("anotame 2", (1,), (0, 2)),
+        ("llevo 2 unidades", (1,), (0, 2)),
+        ("necesito 2", (1,), (0, 2)),
+        ("quiero llevar 2", (1,), (0, 2)),
+        ("2 unidades", (1,), (0, 2)),
+        ("llevo 2 u.", (1,), (0, 2)),
+        ("dos", (1,), (0, 2)),
+        ("un", (1,), (0, 1)),
+        ("diez", (1,), (0, 10)),
+        ("veinte", (1,), (0, 20)),
+        ("2", (1,), (0, 2)),
+        ("Serían 2", (1,), (0, 2)),
+        ("si, está bien", (1,), None),
+        ("dale", (1,), None),
+        ("nada más", (1,), None),
+        ("ok", (1,), None),
+        ("sí", (1,), None),
+        ("no", (1,), None),
+        ("todo bien", (1,), None),
+        ("quiero 2 recolectores", (1,), None),
+        ("agregale 2 recolectores de aceite", (1,), None),
+        ("agregale", (1,), None),
+        ("agregale 2", (0,), None),
+        ("quiero 2", (0,), None),
     ],
     ids=[
         "agregalo-adds-one",
@@ -56,6 +89,11 @@ def _options(n: int) -> tuple[ProductEntry, ...]:
         "suma-five-de-eso",
         "sumale-three-de-eso",
         "agrega-two-de-esos",
+        "agregale-two-verb-quantity",
+        "sumale-three-verb-quantity",
+        "accented-agrega-one-verb-quantity",
+        "agregale-two-unidades",
+        "agregale-two-de-eso",
         "el-2-picks-second",
         "quiero-el-3-picks-third",
         "empty-options-none",
@@ -63,10 +101,36 @@ def _options(n: int) -> tuple[ProductEntry, ...]:
         "numbered-with-single-option-none",
         "non-add-phrase-none",
         "empty-text-none",
+        "quiero-two-bare",
+        "dame-three-bare",
+        "anotame-two-bare",
+        "llevo-two-unidades",
+        "necesito-two-bare",
+        "quiero-llevar-two",
+        "digit-with-unidades",
+        "digit-with-u-abbreviation",
+        "dos-word-two",
+        "un-word-one",
+        "diez-word-ten",
+        "veinte-word-twenty",
+        "bare-digit",
+        "accented-verb-prefix",
+        "si-esta-bien-none",
+        "dale-none",
+        "nada-mas-none",
+        "ok-none",
+        "si-none",
+        "no-none",
+        "todo-bien-none",
+        "quantity-with-product-name-none",
+        "verb-quantity-with-product-name-none",
+        "verb-without-number-none",
+        "empty-options-verb-quantity-none",
+        "empty-options-bare-none",
     ],
 )
 def test_parse_product_add(text: str, options: tuple[int, ...], expected: tuple[int, int] | None):
-    """Las frases de alta ('agregalo', 'sumá N de eso', 'el N') se resuelven a (índice, cantidad)."""
+    """Add phrases resolve to (index, quantity); bare quantity answers map to the last product."""
     opts = _options(options[0]) if options else ()
     assert parse_product_add(text, opts) == expected
 
@@ -260,3 +324,20 @@ def test_chain_normalizes_sku_from_real_client():
 
     assert result.source is ProductSource.RAG
     assert result.entries[0].sku == "AMX-AT-5044"
+
+
+def test_parse_finalize_extracts_customer_name_from_non_empty_draft():
+    """A finalize command returns its customer name only when a draft exists."""
+    draft = ((_entry(), 2),)
+
+    assert parse_finalize("cerrá el pedido para Ferretería Don Juan", draft) == (
+        "Ferretería Don Juan"
+    )
+    assert parse_finalize("finalizar orden: Cliente Uno", draft) == "Cliente Uno"
+    assert parse_finalize("cerrá el pedido para Cliente Uno", ()) is None
+
+
+def test_is_finalize_recognizes_command_without_customer_name():
+    """The handler can ask for a customer when a draft is being finalized anonymously."""
+    assert is_finalize("cerrá el pedido") is True
+    assert is_finalize("quiero más clavos") is False

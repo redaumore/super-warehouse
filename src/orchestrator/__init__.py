@@ -2,6 +2,7 @@
 
 from src.orchestrator.approval import (
     ApprovalResult,
+    PendingConversionError,
     approve_and_register,
     build_items_summary,
     order_total,
@@ -24,6 +25,7 @@ __all__ = [
     "ConversationState",
     "ConversationStore",
     "Orchestrator",
+    "PendingConversionError",
     "ResolvedItem",
     "RoutingDecision",
     "TurnResult",

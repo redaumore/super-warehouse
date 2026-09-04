@@ -20,9 +20,10 @@ conversation keeps answering while the DB is down.
 
 Order building rides the same seam: while an order is open, the owner can add
 the last displayed product with natural phrases ("agregalo", "sumá 5 de eso",
-"el 2") and the handler appends it to the state's ``draft_items`` without
-calling the LLM; without an open order the handler offers to create one
-through the existing sourcing path.
+"el 2", or a bare quantity answer like "quiero 2") and the handler appends it
+to the state's ``draft_items`` without calling the LLM; the add reply invites
+the owner to finalize with "cerrá el pedido para <cliente>". Without an open
+order the handler offers to create one through the existing sourcing path.
 
 The sourcing turn (parsed orders) resolves the customer by NAME
 (``src/agents/customers.py``), offers in-chat creation for unknown names and
@@ -35,7 +36,8 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Protocol
+from decimal import Decimal
+from typing import Protocol, TypedDict
 
 import phonenumbers
 from phonenumbers import PhoneNumber, PhoneNumberFormat
@@ -44,6 +46,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.agents.commands import (
+    ADD_QUANTITY,
+    APPROVE,
+    FINALIZE_WITH_CUSTOMER,
+    NEW_CUSTOMER,
+    REJECT,
+)
 from src.agents.customers import (
     CustomerResolutionKind,
     format_customer_menu,
@@ -65,16 +74,29 @@ from src.agents.product_search import (
     ProductSearcher,
     ProductSearchResult,
     ProductSource,
+    is_finalize,
+    parse_finalize,
     parse_product_add,
 )
 from src.agents.sales import Quote
 from src.channels.base import InboundMessage
-from src.db.models import Cliente, Order
+from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, Supplier
 from src.db.session import SessionLocal
+from src.integrations.rag import RagProductClient
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem, SourcingNeedItem
+from src.pricing.order_pricing import (
+    MarginSource,
+    MissingRateError,
+    PricedOrder,
+    PricingLine,
+    RateSource,
+    compute_order,
+    pending_order,
+)
 from src.sourcing.case_a import persist_case_a_order
 from src.sourcing.classify import MissingItem, SourcingCase, classify_case
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import SupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
@@ -89,14 +111,57 @@ OFFER_TO_CREATE_REPLY = (
     "Todavía no hay un pedido abierto para agregar productos. "
     "Mandá el pedido completo (cliente, productos y cantidades) y lo cargo."
 )
-ADDED_TO_ORDER_REPLY = "Listo: agregué {name} × {qty} al pedido en curso."
+ADDED_TO_ORDER_REPLY = (
+    "Listo: agregué {name} × {qty} al pedido en curso{price}. "
+    "¿Algo más? Si ya está completo, decime 'cerrá el pedido para <cliente>'."
+)
+
+EMPTY_DRAFT_FINALIZE_REPLY = (
+    "Todavía no hay productos en el pedido. Buscá el artículo (por ejemplo "
+    "'recolector de aceite') y después sumalo con 'agregale 2'. Cuando esté "
+    "completo, decime 'cerrá el pedido para <cliente>'."
+)
+
+ASK_CUSTOMER_FINALIZE_REPLY = (
+    "¿Para qué cliente es el pedido? Decime 'cerrá el pedido para <cliente>'. "
+    "Si es nuevo, dalo de alta con 'nuevo cliente <nombre> <teléfono>'."
+)
 
 SYSTEM_PROMPT = (
     "Sos el asistente del dueño de una ferretería de barrio, y te escribe el dueño "
     "por WhatsApp o Telegram. Tu trabajo es cargar los pedidos de sus clientes: "
     "primero identificás al cliente por nombre, después los productos y cantidades. "
-    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos."
+    "Respondé en español rioplatense, con tono cálido y directo, en mensajes cortos. "
+    "Los pedidos los crea la app, no el chat: nunca digas que un pedido quedó guardado, "
+    "confirmado, creado, cerrado o cancelado, que le agregaste productos, ni que lo "
+    "estás gestionando, ni prometas avisar cuando esté listo. "
+    "Nunca inventes cantidades que el dueño no escribió. "
+    "Cuando mostrás un producto, respondé breve y no cierres la venta: la app se encarga "
+    f"de agregar y finalizar (el dueño puede escribir '{ADD_QUANTITY}', "
+    f"'{FINALIZE_WITH_CUSTOMER}' o '{NEW_CUSTOMER}'). "
+    "Cuando el dueño te pida confirmar, cerrar o finalizar un pedido, no lo hagas vos: "
+    "recordale el comando exacto para hacerlo."
 )
+
+
+def format_added_to_order_reply(entry: ProductEntry, qty: int) -> str:
+    """Render the add-to-order confirmation, with a price part when known.
+
+    The price renders exactly like ``_rag_entry_fields``: ``{price:g}`` followed
+    by currency and/or unit only when present. An entry without a price renders
+    no price part at all.
+    """
+    price_part = ""
+    if entry.price is not None:
+        price_text = f"{entry.price:g}"
+        if entry.currency and entry.unit:
+            price_text = f"{price_text} {entry.currency}/{entry.unit}"
+        elif entry.currency:
+            price_text = f"{price_text} {entry.currency}"
+        elif entry.unit:
+            price_text = f"{price_text}/{entry.unit}"
+        price_part = f" ({price_text})"
+    return ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty, price=price_part)
 
 
 def _to_whatsapp_e164(number: PhoneNumber) -> str:
@@ -270,6 +335,7 @@ class SourcingDeps:
 
     session_factory: Callable[[], Session]
     searcher: SupplierCatalogSearcher
+    rag_client: RagProductClient | None = None
 
 
 def format_case_a_reply(
@@ -395,6 +461,273 @@ def _handle_create_client(
         session.commit()
     reply = f"Listo: di de alta a {client.nombre_comercial}. Ahora mandá el pedido con su nombre."
     return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+
+
+class DraftPricingError(ValueError):
+    """The draft cannot be priced from the available product snapshot."""
+
+
+def _default_margin(session: Session) -> Decimal:
+    """Read the DB default margin and normalize points or fractions."""
+    setting = session.get(AppSetting, "default_margin_pct")
+    if setting is None:
+        return Decimal("0.20")
+    value = Decimal(setting.value)
+    return value / Decimal(100) if value.copy_abs() > 1 else value
+
+
+def _rate_source(session: Session) -> Callable[[str], Decimal | None]:
+    """Build an exchange-rate source backed by the current session."""
+
+    def rate(currency: str) -> Decimal | None:
+        code = currency.strip().upper()
+        if code == "ARS":
+            return Decimal(1)
+        return session.scalar(select(ExchangeRate.rate_to_ars).where(ExchangeRate.currency == code))
+
+    return rate
+
+
+def _supplier_margin_source(session: Session) -> Callable[[str | None], Decimal | None]:
+    """Resolve a RAG supplier code to its current default margin."""
+
+    def margin(code: str | None) -> Decimal | None:
+        if not code:
+            return None
+        return session.scalar(
+            select(Supplier.default_margin_pct).where(Supplier.code == code.strip().upper())
+        )
+
+    return margin
+
+
+def _rag_price(
+    entry: ProductEntry, rag_client: RagProductClient | None
+) -> tuple[float | Decimal, str | None]:
+    """Use the displayed RAG price, falling back to the sibling service."""
+    if entry.price is not None:
+        return entry.price, entry.currency
+    if rag_client is None:
+        raise DraftPricingError(f"RAG price unavailable for SKU {entry.sku}")
+    lookup = rag_client.price_lookup(entry.sku, entry.codigo_proveedor or entry.provider)
+    if lookup is None or lookup.price is None:
+        raise DraftPricingError(f"RAG price unavailable for SKU {entry.sku}")
+    return lookup.price, lookup.currency
+
+
+def _draft_pricing_lines(
+    session: Session,
+    base: ConversationState,
+    rag_client: RagProductClient | None,
+) -> tuple[PricingLine, ...]:
+    """Enrich draft entries with local cost or RAG fallback price data."""
+    lines: list[PricingLine] = []
+    for entry, quantity in base.draft_items:
+        source = getattr(entry.source, "value", entry.source)
+        if str(source).upper() == ProductSource.LOCAL.value:
+            product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == entry.sku))
+            if product is None:
+                raise DraftPricingError(f"local product not found for SKU {entry.sku}")
+            lines.append(
+                PricingLine(
+                    sku=entry.sku,
+                    cantidad=quantity,
+                    source=entry.source,
+                    name=entry.name,
+                    cost=product.costo_proveedor,
+                    margin=product.margen_aplicado_pct,
+                    currency="ARS",
+                    supplier=product.supplier.code if product.supplier else None,
+                )
+            )
+            continue
+        if str(source).upper() != ProductSource.RAG.value:
+            raise DraftPricingError(f"unsupported product source for SKU {entry.sku}")
+        price, currency = _rag_price(entry, rag_client)
+        code = entry.codigo_proveedor or entry.provider
+        lines.append(
+            PricingLine(
+                sku=entry.sku,
+                cantidad=quantity,
+                source=entry.source,
+                name=entry.name,
+                price=price,
+                currency=currency,
+                supplier=entry.provider or code,
+                codigo_proveedor=code,
+            )
+        )
+    return tuple(lines)
+
+
+class DraftPricingSources(TypedDict):
+    """Typed pricing keyword bundle shared by ``compute_order`` and ``pending_order``."""
+
+    rate: RateSource
+    supplier_margin: MarginSource
+    default_margin: Decimal
+    list_discount: Decimal
+    particular_discount: Decimal
+
+
+def _price_draft(
+    session: Session,
+    customer: Cliente,
+    base: ConversationState,
+    rag_client: RagProductClient | None,
+) -> PricedOrder:
+    """Price a draft or produce its pending-conversion snapshot."""
+    lines = _draft_pricing_lines(session, base, rag_client)
+    kwargs: DraftPricingSources = {
+        "rate": _rate_source(session),
+        "supplier_margin": _supplier_margin_source(session),
+        "default_margin": _default_margin(session),
+        "list_discount": customer.lista_precios.descuento_lista_pct,
+        # Particular discounts are intentionally out of this change's scope.
+        "particular_discount": Decimal(0),
+    }
+    try:
+        return compute_order(lines, **kwargs)
+    except MissingRateError:
+        return pending_order(lines, **kwargs)
+
+
+def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> str:
+    """Render the owner-facing quote for a newly persisted draft."""
+    if priced.conversion_pending:
+        return (
+            f"Pedido #{order.order_id} para {customer.nombre_comercial}: conversión pendiente. "
+            "Cargá el tipo de cambio que falta en Customer Orders y aprobalo."
+        )
+    lines = " ".join(
+        f"{line.cantidad} × {line.name or line.sku}: {line.final_ars:.2f} ARS"
+        for line in priced.lines
+    )
+    return (
+        f"Pedido #{order.order_id} para {customer.nombre_comercial} — "
+        f"total {priced.total:.2f} ARS. {lines} "
+        f"Respondé '{APPROVE}' o '{REJECT}'."
+    )
+
+
+def _persist_finalized_draft(
+    session: Session,
+    customer: Cliente,
+    base: ConversationState,
+    rag_client: RagProductClient | None,
+) -> AgentOutcome:
+    """Price, persist, and close a draft for a resolved customer."""
+    try:
+        priced = _price_draft(session, customer, base, rag_client)
+    except DraftPricingError as exc:
+        return AgentOutcome(state=base, reply=f"I could not price the draft: {exc}")
+    order = persist_draft_order(session, customer, priced)
+    session.commit()
+    updated = base.with_updates(
+        customer_id=customer.customer_id,
+        order_id=order.order_id,
+        items=tuple(
+            ResolvedItem(sku=line.sku, cantidad=line.cantidad, description=line.name)
+            for line in priced.lines
+        ),
+        awaiting_decision=True,
+        customer_disambiguation_pending=False,
+        customer_candidates=(),
+        product_options=(),
+        draft_items=(),
+        parsed_order=None,
+    )
+    return AgentOutcome(state=updated, reply=_draft_quote_reply(order, customer, priced))
+
+
+def _create_customer_for_draft(
+    session: Session,
+    base: ConversationState,
+    nombre: str,
+    telefono: str,
+    rag_client: RagProductClient | None,
+) -> AgentOutcome:
+    """Create or reuse a client, then attach the waiting draft immediately."""
+    from src.backoffice.clients import InvalidClientDataError, create_client, default_price_list_id
+
+    normalized = normalize_phone(telefono)
+    if normalized is None:
+        return AgentOutcome(
+            state=base, reply=f"I could not create the customer: invalid phone {telefono}"
+        )
+    customer = session.scalar(select(Cliente).where(Cliente.telefono_norm == normalized))
+    if customer is None:
+        try:
+            customer = create_client(
+                session,
+                nombre_comercial=nombre,
+                telefono_raw=telefono,
+                lista_precios_id=default_price_list_id(session),
+            )
+        except InvalidClientDataError as exc:
+            session.rollback()
+            return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
+    return _persist_finalized_draft(session, customer, base, rag_client)
+
+
+def _run_finalize_turn(
+    message: InboundMessage,
+    base: ConversationState,
+    deps: SourcingDeps,
+) -> AgentOutcome:
+    """Resolve a draft's customer and persist its source-aware order."""
+    text = (message.text or "").strip()
+    rag_client = deps.rag_client
+    if rag_client is None:
+        rag_client = getattr(deps.searcher, "client", None)
+    create = parse_create_client_command(text)
+    if not base.draft_items:
+        if create is not None:
+            return _handle_create_client(deps, base, *create)
+        return AgentOutcome(state=base, reply=EMPTY_DRAFT_FINALIZE_REPLY)
+    finalize_name = parse_finalize(text, base.draft_items)
+    with deps.session_factory() as session:
+        if create is not None and not base.customer_disambiguation_pending:
+            return _create_customer_for_draft(session, base, *create, rag_client)
+        if base.customer_disambiguation_pending:
+            candidate = parse_customer_pick(text, base.customer_candidates)
+            if candidate is None:
+                return AgentOutcome(
+                    state=base, reply=format_customer_menu(base.customer_candidates)
+                )
+            customer = session.get(Cliente, candidate.customer_id)
+            if customer is None:
+                return AgentOutcome(state=base, reply="The selected customer no longer exists.")
+        elif base.customer_id is not None:
+            customer = session.get(Cliente, base.customer_id)
+            if customer is None:
+                return AgentOutcome(state=base, reply="The session customer no longer exists.")
+        else:
+            if not finalize_name:
+                return AgentOutcome(
+                    state=base,
+                    reply=ASK_CUSTOMER_FINALIZE_REPLY,
+                )
+            resolution = resolve_customer_name(session, finalize_name)
+            if resolution.kind is CustomerResolutionKind.AMBIGUOUS:
+                updated = base.with_updates(
+                    customer_disambiguation_pending=True,
+                    customer_candidates=resolution.candidates,
+                )
+                return AgentOutcome(
+                    state=updated, reply=format_customer_menu(resolution.candidates)
+                )
+            if resolution.kind is CustomerResolutionKind.NOT_FOUND:
+                return AgentOutcome(
+                    state=base,
+                    reply=(
+                        f"I could not find customer «{finalize_name}». To create it on the Base list, "
+                        "send: 'nuevo cliente <name> <phone>'."
+                    ),
+                )
+            customer = resolution.candidate
+        assert customer is not None
+        return _persist_finalized_draft(session, customer, base, rag_client)
 
 
 def _run_sourcing_turn(
@@ -545,9 +878,10 @@ def build_handler(
     note so the conversation survives a down database.
 
     While ``product_options`` hold the last displayed results, an add-intent
-    phrase ("agregalo", "sumá 5 de eso", "el 2") short-circuits the LLM: with an
-    open order the referenced entry is appended to ``draft_items``; without one
-    the handler offers to create an order through the sourcing path.
+    phrase ("agregalo", "sumá 5 de eso", "el 2", or a bare quantity answer
+    such as "quiero 2") short-circuits the LLM and appends the referenced
+    entry to ``draft_items`` even before an order exists. A finalize phrase
+    then resolves the customer and persists the draft.
 
     When ``sourcing`` is wired and the orchestrator's parse step flagged the
     turn (``decision.parsed``), the handler runs the sourcing workflow instead
@@ -561,11 +895,17 @@ def build_handler(
         state: ConversationState | None,
         decision: RoutingDecision,
     ) -> AgentOutcome:
-        if decision.parsed and sourcing is not None:
-            return _run_sourcing_turn(message, state, decision, sourcing)
         history = state.history if state is not None else ()
         base = state if state is not None else ConversationState(sender_id=message.sender_id)
         text = (message.text or "").strip()
+        if sourcing is not None and (
+            (base.customer_disambiguation_pending and base.draft_items)
+            or is_finalize(text)
+            or parse_create_client_command(text) is not None
+        ):
+            return _run_finalize_turn(message, base, sourcing)
+        if decision.parsed and sourcing is not None:
+            return _run_sourcing_turn(message, state, decision, sourcing)
         if not text:
             reply = fallback_reply
             new_history = (*history, ChatMessage("assistant", reply))
@@ -576,19 +916,12 @@ def build_handler(
                 index, qty = intent
                 entry = base.product_options[index]
                 turn_history = (*history, ChatMessage("user", text))
-                if base.order_id is None:
-                    reply = OFFER_TO_CREATE_REPLY
-                    updated = base.with_updates(
-                        history=(*turn_history, ChatMessage("assistant", reply)),
-                        product_options=(),
-                    )
-                else:
-                    reply = ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty)
-                    updated = base.with_updates(
-                        history=(*turn_history, ChatMessage("assistant", reply)),
-                        product_options=(),
-                        draft_items=(*base.draft_items, (entry, qty)),
-                    )
+                reply = format_added_to_order_reply(entry, qty)
+                updated = base.with_updates(
+                    history=(*turn_history, ChatMessage("assistant", reply)),
+                    product_options=(),
+                    draft_items=(*base.draft_items, (entry, qty)),
+                )
                 return AgentOutcome(state=updated, reply=reply)
             messages = [ChatMessage("system", system_prompt), *history]
             displayed: tuple[ProductEntry, ...] = ()
@@ -615,7 +948,12 @@ def build_handler(
             except ResponderNotConfigured:
                 reply = fallback_reply
             new_history = (*history, ChatMessage("user", text), ChatMessage("assistant", reply))
-            updated = base.with_updates(history=new_history, product_options=displayed)
+            updated = base.with_updates(history=new_history)
+            # A turn that displays nothing must not clear the last displayed
+            # product, or "agregale N" and bare-quantity adds die after any
+            # unrecognized message.
+            if displayed:
+                updated = updated.with_updates(product_options=displayed)
         return AgentOutcome(state=updated, reply=reply)
 
     return handler

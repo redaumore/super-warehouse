@@ -1,14 +1,15 @@
-"""Backoffice tests (tasks 3.5, 3.6, 3.7).
+"""Backoffice tests (tasks 3.5, 3.6, 3.7 and customer orders).
 
-App structure (no server): building the Blocks tree yields four tabs with the
-expected labels and key components. Module logic: catalog edits (stock, price,
-margin recompute), client registration/normalization, the live order monitor,
-and the ingestion preview→confirm flow. DB-backed cases run on Postgres and
-skip when it is down.
+App structure (no server): building the Blocks tree yields seven tabs with the
+expected labels and key components. Module logic covers catalog edits, client
+registration, customer-order maintenance, the live order monitor, and the
+ingestion preview→confirm flow. DB-backed cases run on Postgres and skip when
+it is down.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from src.backoffice.app import (
     _ingest_confirm,
     _ingest_preview,
     _register_client,
+    _save_exchange_rate,
     build_app,
 )
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
@@ -33,6 +35,15 @@ from src.backoffice.clients import (
     list_clients,
     update_client,
 )
+from src.backoffice.customer_orders import (
+    get_default_margin,
+    list_customer_orders,
+    list_exchange_rates,
+    order_detail,
+    recompute_pending_conversion,
+    set_default_margin,
+    set_exchange_rate,
+)
 from src.backoffice.ingestion import (
     ConfirmedIngest,
     confirm_items,
@@ -41,9 +52,20 @@ from src.backoffice.ingestion import (
 )
 from src.backoffice.monitor import list_orders
 from src.config import get_settings
-from src.db.models import Catalogo, Cliente, ListaPrecios, Order, OrderEstado, Supplier
+from src.db.models import (
+    AppSetting,
+    Catalogo,
+    Cliente,
+    ExchangeRate,
+    ListaPrecios,
+    Order,
+    OrderEstado,
+    OrderItem,
+    Supplier,
+)
 from src.db.session import SessionLocal
 from src.integrations.sheets import SheetsWriter
+from src.orchestrator.approval import PendingConversionError, register_approved_order
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
 # ---------------------------------------------------------------- app structure
@@ -54,8 +76,8 @@ def _tabs_block(demo) -> object:
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
 
 
-def test_build_app_creates_six_tabs_with_expected_labels():
-    """Construir la app genera seis pestañas con los títulos esperados."""
+def test_build_app_creates_seven_tabs_with_expected_labels():
+    """Building the app creates seven tabs with the expected labels."""
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
     assert labels == [
@@ -65,6 +87,7 @@ def test_build_app_creates_six_tabs_with_expected_labels():
         "Purchase Orders",
         "Ingestion",
         "Suppliers",
+        "Customer Orders",
     ]
 
 
@@ -148,7 +171,8 @@ def _clean_schema(db_engine):
         conn.execute(
             text(
                 "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
-                "clientes, lista_precios, supplier_sku_mappings RESTART IDENTITY CASCADE"
+                "clientes, lista_precios, supplier_sku_mappings, exchange_rates, app_settings "
+                "RESTART IDENTITY CASCADE"
             )
         )
 
@@ -312,6 +336,115 @@ def test_monitor_lists_orders_with_state_and_sheets_status(shop_ctx):
     assert rows[0]["active_reservations"] == 0
 
 
+def test_customer_orders_list_and_detail_include_ars_totals_and_snapshots(shop_ctx):
+    """Customer Orders returns persisted order totals and frozen line fields."""
+    db_session = shop_ctx["session"]
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.PENDING_APPROVAL,
+        subtotal=Decimal("270.00"),
+        total=Decimal("256.50"),
+        conversion_pending=False,
+    )
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="CLV-001",
+            cantidad=2,
+            base_price=Decimal("135.00"),
+            final_price=Decimal("128.25"),
+            adjustment=Decimal(0),
+            name="Clavos Paris 2 Pulgadas",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal("100.00"),
+        )
+    )
+    db_session.flush()
+
+    rows = list_customer_orders(db_session)
+    assert rows[0]["total"] == "256.50"
+    assert rows[0]["conversion_pending"] is False
+    detail = order_detail(db_session, order.order_id)
+    assert detail["lines"][0]["source"] == "LOCAL"
+    assert detail["lines"][0]["name"] == "Clavos Paris 2 Pulgadas"
+
+
+def test_exchange_rate_rejects_ars_and_persists_usd(shop_ctx):
+    """ARS cannot be edited while a USD rate is stored with a timestamp."""
+    db_session = shop_ctx["session"]
+    with pytest.raises(ValueError, match="ARS.*read-only"):
+        set_exchange_rate(db_session, "ARS", Decimal("1.00"))
+    usd = set_exchange_rate(db_session, "usd", Decimal("950.12345"))
+    assert usd.currency == "USD"
+    assert usd.rate_to_ars == Decimal("950.1235")
+    assert list_exchange_rates(db_session)[-1]["currency"] == "USD"
+
+
+def test_recompute_pending_conversion_clears_flag_and_fills_totals(shop_ctx):
+    """Loading a rate recomputes a pending RAG order and clears its flag."""
+    db_session = shop_ctx["session"]
+    db_session.add(AppSetting(key="default_margin_pct", value="20"))
+    db_session.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.PENDING_APPROVAL,
+        conversion_pending=True,
+    )
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-1",
+            cantidad=2,
+            base_price=Decimal(0),
+            final_price=Decimal(0),
+            adjustment=Decimal(0),
+            name="RAG item",
+            source="RAG",
+            supplier="UNMAPPED",
+            moneda="USD",
+            precio_original=Decimal("10.00"),
+        )
+    )
+    db_session.flush()
+
+    assert recompute_pending_conversion(db_session) == 1
+    assert order.conversion_pending is False
+    assert order.subtotal == Decimal("24000.00")
+    assert order.total == Decimal("24000.00")
+    item = db_session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.base_price == Decimal("12000.00")
+
+
+def test_default_margin_round_trips(client_ctx):
+    """The default RAG margin setting can be read and updated."""
+    session = client_ctx["session"]
+    session.add(AppSetting(key="default_margin_pct", value="20"))
+    session.flush()
+    assert get_default_margin(session) == Decimal(20)
+    assert set_default_margin(session, Decimal("27.50")) == Decimal("27.50")
+    assert get_default_margin(session) == Decimal("27.50")
+
+
+def test_pending_conversion_order_is_blocked_at_approval(shop_ctx):
+    """Approval registration refuses an order until its prices are converted."""
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.APPROVED,
+        conversion_pending=True,
+    )
+    shop_ctx["session"].add(order)
+    shop_ctx["session"].flush()
+
+    with pytest.raises(PendingConversionError, match="pending currency conversion"):
+        register_approved_order(shop_ctx["session"], order, sheets=SimpleNamespace())
+
+
 # ------------------------------------------------ app handler functions (DB)
 # NOTE: the app handlers open their own SessionLocal, which only sees COMMITTED
 # rows — so these tests commit the fixture seed before exercising the handler.
@@ -403,3 +536,51 @@ def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
     assert len(grid) == 1
     assert grid[0][1] == "Clavos Paris 2 Pulgadas"
     assert "1 filas extraídas" in message
+
+
+def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
+    """The app-level rate save bumps updated_at and recomputes pending orders."""
+    db_session = shop_ctx["session"]
+    db_session.add(AppSetting(key="default_margin_pct", value="20"))
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.PENDING_APPROVAL,
+        conversion_pending=True,
+    )
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-1",
+            cantidad=2,
+            base_price=Decimal(0),
+            final_price=Decimal(0),
+            adjustment=Decimal(0),
+            name="RAG item",
+            source="RAG",
+            supplier="UNMAPPED",
+            moneda="USD",
+            precio_original=Decimal("10.00"),
+        )
+    )
+    db_session.commit()
+
+    with patch("src.backoffice.customer_orders.datetime") as fake_datetime:
+        fake_datetime.now.side_effect = [
+            datetime(2024, 1, 1, tzinfo=UTC),
+            datetime(2024, 6, 1, tzinfo=UTC),
+        ]
+        first_message, first_rates, _ = _save_exchange_rate("USD", "1000.00")
+        second_message, second_rates, _ = _save_exchange_rate("USD", "1100.00")
+
+    assert "recomputed 1 pending order(s)" in first_message
+    assert "recomputed 0 pending order(s)" in second_message
+    assert first_rates[-1][0] == "USD"
+    assert first_rates[-1][2] == datetime(2024, 1, 1, tzinfo=UTC)
+    assert second_rates[-1][2] == datetime(2024, 6, 1, tzinfo=UTC)
+    with SessionLocal() as session:
+        reloaded = session.get(Order, order.order_id)
+        assert reloaded.conversion_pending is False
+        assert reloaded.subtotal == Decimal("24000.00")
+        assert reloaded.total == Decimal("24000.00")

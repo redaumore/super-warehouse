@@ -65,6 +65,15 @@ class RagProduct:
     specs: str | None = None
     source_file: str | None = None
     page: int | None = None
+    codigo_proveedor: str | None = None
+
+
+@dataclass(frozen=True)
+class RagPrice:
+    """Price snapshot returned by the RAG product lookup endpoint."""
+
+    price: float | None
+    currency: str | None
 
 
 class RagProductError(Exception):
@@ -173,6 +182,46 @@ class RagProductClient:
         logger.info("rag query=%r products=%d latency=%.1fs", text, len(mapped), latency)
         return mapped
 
+    def price_lookup(self, sku: str, codigo_proveedor: str | None = None) -> RagPrice | None:
+        """Look up one supplier offer price by SKU and optional supplier code.
+
+        The sibling service returns 404 when it has no matching product. That is
+        a normal absence and becomes ``None``; transport failures, malformed
+        JSON, and non-2xx responses remain domain errors.
+        """
+        clean_sku = str(sku or "").strip()
+        if not clean_sku:
+            raise ValueError("sku is required for RAG price lookup")
+        params = (
+            {"codigo_proveedor": codigo_proveedor.strip()}
+            if codigo_proveedor and codigo_proveedor.strip()
+            else None
+        )
+        try:
+            response = self._holder.client.get(f"/api/v1/products/{clean_sku}", params=params)
+        except httpx.HTTPError as exc:
+            raise RagProductError(f"rag price lookup failed for {clean_sku!r}: {exc}") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            raise RagProductError(
+                f"rag price lookup returned HTTP {response.status_code} for {clean_sku!r}"
+            )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RagProductError(f"rag price lookup returned non-JSON payload: {exc}") from exc
+        if not isinstance(data, dict):
+            raise RagProductError("rag price lookup returned an invalid payload")
+        raw_price = data.get("precio")
+        if raw_price is not None:
+            try:
+                raw_price = float(raw_price)
+            except (TypeError, ValueError) as exc:
+                raise RagProductError("rag price lookup returned an invalid price") from exc
+        currency = data.get("moneda")
+        return RagPrice(price=raw_price, currency=str(currency).upper() if currency else None)
+
     def _map_product(self, raw: dict[str, Any]) -> RagProduct:
         """Map one ``productos[]`` row into a typed ``RagProduct``.
 
@@ -192,4 +241,5 @@ class RagProductClient:
             specs=raw.get("especificaciones"),
             source_file=raw.get("archivo_origen"),
             page=raw.get("pagina"),
+            codigo_proveedor=raw.get("codigo_proveedor") or None,
         )

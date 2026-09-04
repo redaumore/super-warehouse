@@ -6,13 +6,19 @@ agents. The agent-orchestration spec scenarios covered:
 
 - voice note → Perception (transcribe); barcode/photo → Perception (vision);
 - owner decision → Dispatch, resuming the order awaiting the decision;
-- multi-step order preserves customer/order/items context between agents.
+- multi-step order preserves customer/order/items context between agents;
+- "hola bob" session-reset trigger drops the sender's state from any state
+  (media messages never trigger it; embedded words never match).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from src.agents.commands import RESET_GREETING, RESET_SESSION, is_session_reset
+from src.agents.product_search import ProductEntry, ProductSource
 from src.channels.base import InboundMessage
 from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route_message
 from src.orchestrator.session import ConversationState, ConversationStore, ResolvedItem
@@ -234,3 +240,123 @@ def test_orchestrator_surfaces_agent_reply():
 
     assert result.decision.agent is AgentName.CUSTOMER
     assert result.reply == "hola"
+
+
+# ------------------------------------------------------------ session reset
+
+
+def test_session_reset_drops_previous_state_and_greets():
+    """El gatillo "hola bob" descarta el estado previo y responde el saludo fijo."""
+    store = ConversationStore()
+    store.put(_state(sender_id="+5491155551234", order_id=7, awaiting_decision=True))
+    orchestrator = Orchestrator(store)
+
+    result = orchestrator.handle_inbound(_message(text="Hola Bob!"))
+
+    assert result.decision.agent is AgentName.CUSTOMER
+    assert result.reply == RESET_GREETING
+    fresh = store.get("+5491155551234")
+    assert fresh is not None  # a fresh conversation is seeded in place
+    assert fresh.order_id is None  # the previous state is gone
+    assert fresh.awaiting_decision is False
+
+
+def test_session_reset_clears_pending_decision_and_draft_for_next_turn():
+    """El reset borra awaiting_decision y draft: el próximo texto va a Customer.
+
+    Without the reset, the old flags would route the next reply to Dispatch
+    (pending decision) or the product-query draft. Exercised through two
+    ``handle_inbound`` turns.
+    """
+    draft = ((ProductEntry(sku="CLV-001", name="Clavo 1 pulgada", source=ProductSource.LOCAL), 3),)
+    store = ConversationStore()
+    store.put(
+        _state(
+            sender_id="+5491155551234",
+            order_id=7,
+            awaiting_decision=True,
+            draft_items=draft,
+        )
+    )
+    customer_handler, customer_calls = _capturing_handler(_state(sender_id="+5491155551234"))
+    orchestrator = Orchestrator(store, agents={AgentName.CUSTOMER: customer_handler})
+
+    reset = orchestrator.handle_inbound(_message(text=RESET_SESSION))
+    assert reset.decision.agent is AgentName.CUSTOMER
+    assert reset.reply == RESET_GREETING
+
+    next_turn = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
+
+    assert next_turn.decision.agent is AgentName.CUSTOMER  # not DISPATCH
+    assert len(customer_calls) == 1
+    assert store.get("+5491155551234").order_id is None
+
+
+@pytest.mark.parametrize(
+    "trigger",
+    [RESET_SESSION, RESET_SESSION.upper(), "Hola Bob!"],
+    ids=["lowercase", "uppercase", "trailing-punctuation"],
+)
+def test_session_reset_variants_match(trigger):
+    """Mayúsculas y puntuación final no impiden el reset."""
+    orchestrator = Orchestrator(ConversationStore())
+
+    result = orchestrator.handle_inbound(_message(text=trigger))
+
+    assert result.decision.agent is AgentName.CUSTOMER
+    assert result.reply == RESET_GREETING
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["decile hola a Bob", "hola bob, cómo va todo"],
+    ids=["embedded-words", "extended-greeting"],
+)
+def test_sentence_containing_trigger_words_does_not_reset(text):
+    """Una oración que contiene las palabras no resetea: sigue el flujo normal."""
+    store = ConversationStore()
+    store.put(_state(sender_id="+5491155551234", order_id=7, awaiting_decision=True))
+    dispatch_handler, dispatch_calls = _capturing_handler(
+        _state(sender_id="+5491155551234", order_id=7, awaiting_decision=True)
+    )
+    orchestrator = Orchestrator(store, agents={AgentName.DISPATCH: dispatch_handler})
+
+    result = orchestrator.handle_inbound(_message(text=text))
+
+    assert result.decision.agent is AgentName.DISPATCH  # normal pending-decision path
+    assert result.reply is None  # no reset greeting
+    assert len(dispatch_calls) == 1
+    assert dispatch_calls[0][1].order_id == 7  # state preserved, handler saw it
+    preserved = store.get("+5491155551234")
+    assert preserved is not None and preserved.awaiting_decision is True
+
+
+def test_voice_message_does_not_trigger_session_reset():
+    """Una nota de voz nunca dispara el reset, aunque su texto sea el gatillo."""
+    store = ConversationStore()
+    store.put(_state(sender_id="+5491155551234", order_id=7, awaiting_decision=True))
+    orchestrator = Orchestrator(store)
+
+    result = orchestrator.handle_inbound(_message(text="Hola Bob", media_type="voice"))
+
+    assert result.decision.agent is AgentName.PERCEPTION
+    assert result.reply is None
+    preserved = store.get("+5491155551234")
+    assert preserved is not None and preserved.order_id == 7  # state untouched
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("hola bob", True),
+        ("Hola Bob!", True),
+        ("", False),
+        (None, False),
+        ("decile hola a Bob", False),
+        ("hola bob, cómo va todo", False),
+    ],
+    ids=["bare", "punctuation", "empty", "none", "embedded-words", "extended-greeting"],
+)
+def test_is_session_reset_anchored_whole_message(text, expected):
+    """El matcher solo acepta el mensaje completo y exacto del gatillo."""
+    assert is_session_reset(text) is expected

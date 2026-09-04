@@ -1,0 +1,13 @@
+.venv
+.venv-py39
+.vscode
+data
+catalogo_estructurado.json
+__pycache__/
+*.pyc
+*.json
+!pyrightconfig.json
+*.egg-info/
+.DS_Store
+.env
+scratch/

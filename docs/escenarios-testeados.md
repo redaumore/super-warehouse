@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 279, agrupados en 28 dominios.
+**Total de escenarios:** 304, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,13 +12,13 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 7
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 8
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 24
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 30
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 13
-- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 9
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 11
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -27,12 +27,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 18
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 20
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 23
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 29
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -113,6 +113,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El total del pedido suma precio final por cantidad, redondeado a centavos. _(`test_order_total_sums_final_price_times_quantity`)_
 - Una línea ajustada aporta su precio final rebajado al total. _(`test_order_total_with_adjusted_line`)_
 - El resumen de ítems lista cantidad por SKU separado por punto y coma. _(`test_build_items_summary_lists_each_line`)_
+- Sheets append is skipped at draft save and called once during approval registration. _(`test_sheets_append_belongs_to_approval_not_draft_persistence`)_
 - Aprobar registra: convierte reservas, descuenta stock, agrega a Sheets y confirma. _(`test_approve_and_register_converts_deducts_and_confirms`)_
 - Registrar tras un ajuste usa el total reprecificado y confirma igual. _(`test_register_after_adjustment_approve_uses_revised_total`)_
 - Aprobar una reserva vencida exige recotizar y no produce efectos laterales. _(`test_approve_on_expired_reservation_refuses_without_side_effects`)_
@@ -138,6 +139,20 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
 - La respuesta que produce un agente viaja en el resultado del turno. _(`test_orchestrator_surfaces_agent_reply`)_
+- El gatillo "hola bob" descarta el estado previo y responde el saludo fijo. _(`test_session_reset_drops_previous_state_and_greets`)_
+- El reset borra awaiting_decision y draft: el próximo texto va a Customer. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
+- Mayúsculas y puntuación final no impiden el reset. _(`test_session_reset_variants_match`)_
+  - Hola Bob!
+- Una oración que contiene las palabras no resetea: sigue el flujo normal. _(`test_sentence_containing_trigger_words_does_not_reset`)_
+  - decile hola a Bob
+  - hola bob, cómo va todo
+- Una nota de voz nunca dispara el reset, aunque su texto sea el gatillo. _(`test_voice_message_does_not_trigger_session_reset`)_
+- El matcher solo acepta el mensaje completo y exacto del gatillo. _(`test_is_session_reset_anchored_whole_message`)_
+  - hola bob
+  - Hola Bob!
+  - (vacío)
+  - decile hola a Bob
+  - hola bob, cómo va todo
 
 ## Pipeline de orquestación (walking skeleton)
 
@@ -172,9 +187,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - 'agregalo' con pedido abierto agrega el producto al draft sin llamar al LLM. _(`test_add_intent_with_open_order_appends_draft_and_clears_options`)_
 - 'sumá 5 de eso' agrega 5 unidades del último producto mostrado al draft. _(`test_add_intent_with_quantity_appends_draft_with_qty`)_
 - 'el 2' selecciona el segundo resultado mostrado. _(`test_add_intent_numbered_reference_picks_displayed_result`)_
-- 'agregalo' sin pedido abierto ofrece crear un pedido y no agrega a ninguno. _(`test_add_intent_without_open_order_offers_to_create`)_
+- An add intent starts the draft even when no persisted order exists yet. _(`test_add_intent_without_open_order_starts_draft`)_
+- 'quiero 2' after a displayed product adds 2 of it with the finalize hint, no LLM. _(`test_bare_quantity_after_displayed_product_adds_qty_with_finalize_hint`)_
+- Un alta de un producto RAG con precio muestra el precio en la respuesta. _(`test_add_intent_reply_shows_rag_price_currency_and_unit`)_
+- Un alta de un producto local sin precio no muestra ningún precio. _(`test_add_intent_reply_omits_price_for_local_entry_without_price`)_
 - Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
 - Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
+- 'agregale 2' after a displayed product adds 2 of it without calling the LLM. _(`test_verb_quantity_add_after_displayed_product_adds_qty`)_
+- A turn whose search shows nothing keeps product_options, so a later bare '2' still adds. _(`test_turn_without_results_keeps_last_displayed_product_anchor`)_
 
 ## Ciclo de vida del pedido
 
@@ -214,15 +234,23 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un payload 200 no-JSON se convierte en RagProductError. _(`test_rag_client_malformed_json_raises_domain_error`)_
 - Sin RAG_BASE_URL el cliente lanza RagProductNotConfigured al usarse. _(`test_rag_client_without_base_url_raises_not_configured`)_
 - Un httpx.Client inyectado se usa tal cual, sin construir otro desde settings. _(`test_rag_client_injected_client_is_used_directly`)_
+- A successful price lookup returns the offer and forwards the supplier code. _(`test_price_lookup_200_maps_price_and_supplier_query_parameter`)_
+- A missing supplier product is a normal lookup miss. _(`test_price_lookup_404_returns_none`)_
+- Transport and server failures never leak raw HTTP exceptions. _(`test_price_lookup_transport_and_server_errors_raise_domain_error`)_
 
 ## Búsqueda de producto (precedencia local → RAG)
 
-- Las frases de alta ('agregalo', 'sumá N de eso', 'el N') se resuelven a (índice, cantidad). _(`test_parse_product_add`)_
+- Add phrases resolve to (index, quantity); bare quantity answers map to the last product. _(`test_parse_product_add`)_
   - agregalo
   - agregala
   - sumá 5 de eso
   - sumale 3 de eso
   - agregá 2 de esos
+  - agregale 2
+  - sumale 3
+  - AGREGÁ 1
+  - agregale 2 unidades
+  - agregale 2 de eso
   - el 2
   - quiero el 3
   - agregalo
@@ -230,6 +258,32 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - el 2
   - pasame el precio
   - (vacío)
+  - quiero 2
+  - dame 3
+  - anotame 2
+  - llevo 2 unidades
+  - necesito 2
+  - quiero llevar 2
+  - 2 unidades
+  - llevo 2 u.
+  - dos
+  - un
+  - diez
+  - veinte
+  - 2
+  - Serían 2
+  - si, está bien
+  - dale
+  - nada más
+  - ok
+  - sí
+  - no
+  - todo bien
+  - quiero 2 recolectores
+  - agregale 2 recolectores de aceite
+  - agregale
+  - agregale 2
+  - quiero 2
 - Un hit local (>= floor) resuelve LOCAL y nunca llama al RAG. _(`test_local_hit_skips_rag`)_
 - Un candidato local bajo el floor no es hit: el RAG se consulta. _(`test_local_below_floor_falls_back_to_rag`)_
 - Un local vacío cae al RAG y los campos del producto viajan al entry. _(`test_empty_local_falls_back_to_rag_and_maps_fields`)_
@@ -238,6 +292,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un SQLAlchemyError del hop local no propaga: el RAG igual se consulta. _(`test_local_sqlalchemy_error_still_calls_rag`)_
 - Hop local caído + RAG caído resuelve ERROR (la cadena nunca lanza). _(`test_local_error_and_rag_error_is_error`)_
 - La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
+- A finalize command returns its customer name only when a draft exists. _(`test_parse_finalize_extracts_customer_name_from_non_empty_draft`)_
+- The handler can ask for a customer when a draft is being finalized anonymously. _(`test_is_finalize_recognizes_command_without_customer_name`)_
 
 ## Percepción (voz e imagen)
 
@@ -340,6 +396,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - RED: sourcing_needs queda indexado por order_id y supplier_id. _(`test_migration_indexes_sourcing_needs`)_
 - La columna migrada `catalogo.embedding` es vector(1536). _(`test_migration_has_vector_1536_column`)_
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
+- The customer-order migration downgrades, upgrades, and preserves legacy Case A writes. _(`test_customer_order_migration_round_trips_and_keeps_case_a_persistable`)_
+- A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it. _(`test_migration_seeded_default_margin_is_read_by_pricing`)_
 
 ## Teléfonos y clientes
 
@@ -389,7 +447,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Construir la app genera seis pestañas con los títulos esperados. _(`test_build_app_creates_six_tabs_with_expected_labels`)_
+- Building the app creates seven tabs with the expected labels. _(`test_build_app_creates_seven_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
@@ -404,6 +462,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Confirmar filas con SKU existente aumenta el stock y el costo. _(`test_confirm_items_updates_existing_product_stock`)_
 - Una fila sin SKU existente crea un producto nuevo con margen del supplier. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
+- Customer Orders returns persisted order totals and frozen line fields. _(`test_customer_orders_list_and_detail_include_ars_totals_and_snapshots`)_
+- ARS cannot be edited while a USD rate is stored with a timestamp. _(`test_exchange_rate_rejects_ars_and_persists_usd`)_
+- Loading a rate recomputes a pending RAG order and clears its flag. _(`test_recompute_pending_conversion_clears_flag_and_fills_totals`)_
+- The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_
+- Approval registration refuses an order until its prices are converted. _(`test_pending_conversion_order_is_blocked_at_approval`)_
 - La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente desde la UI devuelve un mensaje de éxito. _(`test_app_register_client_returns_success_message`)_
 - Editar stock desde la UI persiste el cambio en el catálogo. _(`test_app_catalog_edit_persists_stock_change`)_
@@ -412,6 +475,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Confirmar una fila nueva desde la UI la crea en el catálogo. _(`test_app_ingest_confirm_creates_new_product`)_
 - La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
 - La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
+- The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
 
 ## Feature flags por fase
 

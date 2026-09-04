@@ -1,8 +1,8 @@
-"""Backoffice Gradio app (task 3.5): six tabs for the owner.
+"""Backoffice Gradio app (task 3.5): seven tabs for the owner.
 
-A lightweight web interface with six tabs — Catalog, Clients, Orders/Monitor,
-Purchase Orders, Ingestion and Suppliers — wired to the pure DB operations in
-``src.backoffice``. The build function only constructs the Blocks tree (no
+A lightweight web interface with seven tabs — Catalog, Clients, Orders/Monitor,
+Purchase Orders, Ingestion, Suppliers and Customer Orders — wired to the pure
+DB operations in ``src.backoffice``. The build function only constructs the Blocks tree (no
 server); ``launch()`` is guarded so importing the module never starts a server,
 which keeps tests and CI safe.
 """
@@ -19,6 +19,15 @@ import pandas as pd
 from src.agents.perception import VisionAnalyzer
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
 from src.backoffice.clients import create_client, list_clients, list_price_lists
+from src.backoffice.customer_orders import (
+    get_default_margin,
+    list_customer_orders,
+    list_exchange_rates,
+    order_detail,
+    recompute_pending_conversion,
+    set_default_margin,
+    set_exchange_rate,
+)
 from src.backoffice.ingestion import confirm_items, to_grid_rows
 from src.backoffice.monitor import list_orders
 from src.backoffice.po import (
@@ -322,8 +331,95 @@ def _price_list_choices() -> list[dict[str, object]]:
         return list_price_lists(session)
 
 
+def _customer_orders_grid() -> list[list[object]]:
+    """Render persisted customer orders for the seventh tab."""
+    with SessionLocal() as session:
+        rows = list_customer_orders(session)
+    return [
+        [
+            row["order_id"],
+            row["customer"],
+            row["estado"],
+            row["subtotal"] or "—",
+            row["total"] or "—",
+            row["conversion_pending"],
+        ]
+        for row in rows
+    ]
+
+
+def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
+    """Render the frozen lines for the selected customer order."""
+    if not order_id:
+        return []
+    with SessionLocal() as session:
+        try:
+            detail = order_detail(session, int(str(order_id)))
+        except KeyError:
+            return []
+    return [
+        [
+            line["sku"],
+            line["name"] or "—",
+            line["cantidad"],
+            line["base_price"] or "—",
+            line["final_price"] or "—",
+            line["source"] or "—",
+            line["supplier"] or "—",
+            line["moneda"] or "—",
+            line["precio_original"] or "—",
+        ]
+        for line in cast(list[dict[str, object]], detail["lines"])
+    ]
+
+
+def _exchange_rates_grid() -> list[list[object]]:
+    """Render the exchange-rate table with ARS marked read-only."""
+    with SessionLocal() as session:
+        rows = list_exchange_rates(session)
+    return [
+        [row["currency"], row["rate_to_ars"], row["updated_at"], row["editable"]] for row in rows
+    ]
+
+
+def _default_margin_value() -> float:
+    with SessionLocal() as session:
+        return float(get_default_margin(session))
+
+
+def _save_exchange_rate(
+    currency: str, rate_to_ars: object
+) -> tuple[str, list[list[object]], list[list[object]]]:
+    """Save a rate, recompute pending orders, and refresh both grids."""
+    with SessionLocal() as session:
+        try:
+            set_exchange_rate(session, currency, float(str(rate_to_ars)))
+            recomputed = recompute_pending_conversion(session)
+            session.commit()
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            session.rollback()
+            return f"Error: {exc}", _exchange_rates_grid(), _customer_orders_grid()
+    return (
+        f"Rate {currency.strip().upper()} saved; recomputed {recomputed} pending order(s).",
+        _exchange_rates_grid(),
+        _customer_orders_grid(),
+    )
+
+
+def _save_default_margin(value: object) -> str:
+    """Persist the default RAG margin setting."""
+    with SessionLocal() as session:
+        try:
+            saved = set_default_margin(session, float(str(value)))
+            session.commit()
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            session.rollback()
+            return f"Error: {exc}"
+    return f"Default margin saved: {saved}%"
+
+
 def build_app(settings: Settings | None = None) -> gr.Blocks:
-    """Construct the six-tab Blocks tree (no server is started).
+    """Construct the seven-tab Blocks tree (no server is started).
 
     Fase 4 gates the backoffice: when disabled the app refuses to build
     (``FeatureDisabledError``) — a clean stop at the boundary.
@@ -558,6 +654,87 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _suppliers_grid,
                 inputs=[supplier_search, supplier_status_filter],
                 outputs=suppliers_grid,
+            )
+
+        with gr.Tab("Customer Orders"):
+            gr.Markdown("### Customer orders and conversion maintenance")
+            customer_orders_grid = gr.Dataframe(
+                headers=[
+                    "Order",
+                    "Customer",
+                    "State",
+                    "Subtotal (ARS)",
+                    "Total (ARS)",
+                    "Pending conversion",
+                ],
+                datatype=["number", "str", "str", "str", "str", "bool"],
+                value=_customer_orders_grid,
+                label="Customer Orders",
+            )
+            customer_orders_refresh = gr.Button("Refresh orders")
+            customer_orders_refresh.click(_customer_orders_grid, outputs=customer_orders_grid)
+            with gr.Row():
+                customer_order_id = gr.Number(label="Order ID", precision=0)
+                customer_order_detail_button = gr.Button("Show line detail")
+            customer_order_detail_grid = gr.Dataframe(
+                headers=[
+                    "SKU",
+                    "Name",
+                    "Quantity",
+                    "Base (ARS)",
+                    "Final (ARS)",
+                    "Source",
+                    "Supplier",
+                    "Currency",
+                    "Original price",
+                ],
+                datatype=[
+                    "str",
+                    "str",
+                    "number",
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                ],
+                label="Order lines",
+            )
+            customer_order_detail_button.click(
+                _customer_order_detail_grid,
+                inputs=customer_order_id,
+                outputs=customer_order_detail_grid,
+            )
+
+            gr.Markdown("### Exchange rates")
+            exchange_rates_grid = gr.Dataframe(
+                headers=["Currency", "Rate to ARS", "Updated", "Editable"],
+                datatype=["str", "str", "str", "bool"],
+                value=_exchange_rates_grid,
+                label="Exchange rates (ARS is read-only)",
+                interactive=False,
+            )
+            with gr.Row():
+                exchange_currency = gr.Textbox(label="Currency code")
+                exchange_rate = gr.Number(label="Rate to ARS", minimum=0)
+                exchange_save = gr.Button("Save exchange rate", variant="primary")
+            exchange_status = gr.Textbox(label="Exchange-rate status", interactive=False)
+            exchange_save.click(
+                _save_exchange_rate,
+                inputs=[exchange_currency, exchange_rate],
+                outputs=[exchange_status, exchange_rates_grid, customer_orders_grid],
+            )
+
+            gr.Markdown("### Default RAG margin")
+            with gr.Row():
+                default_margin = gr.Number(label="Default margin (%)", value=_default_margin_value)
+                default_margin_save = gr.Button("Save default margin")
+            default_margin_status = gr.Textbox(label="Default-margin status", interactive=False)
+            default_margin_save.click(
+                _save_default_margin,
+                inputs=default_margin,
+                outputs=default_margin_status,
             )
     return cast(gr.Blocks, demo)
 

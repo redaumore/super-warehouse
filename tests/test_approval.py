@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 from sqlalchemy import create_engine, select, text
@@ -43,6 +44,8 @@ from src.orchestrator.approval import (
     register_approved_order,
 )
 from src.order_lifecycle.state import RequiresRequoteError
+from src.pricing.order_pricing import PricedLine, PricedOrder
+from src.sourcing.draft_order import persist_draft_order
 
 # ---------------------------------------------------------------- unit tests
 
@@ -75,6 +78,55 @@ def test_build_items_summary_lists_each_line():
         ]
     )
     assert build_items_summary(order) == "10 × CLV-001; 5 × TRN-002"
+
+
+def test_sheets_append_belongs_to_approval_not_draft_persistence():
+    """Sheets append is skipped at draft save and called once during approval registration."""
+    save_session = Mock()
+    customer = SimpleNamespace(customer_id=7)
+    priced = PricedOrder(
+        lines=(
+            PricedLine(
+                sku="RAG-1",
+                cantidad=1,
+                base_ars=Decimal("100.00"),
+                final_ars=Decimal("100.00"),
+                moneda="ARS",
+                source="RAG",
+                name="RAG item",
+                supplier="SUP",
+                precio_original=Decimal("100.00"),
+            ),
+        ),
+        subtotal=Decimal("100.00"),
+        total=Decimal("100.00"),
+    )
+
+    with patch.object(SheetsWriter, "append_order_row") as append_at_save:
+        persist_draft_order(save_session, customer, priced)
+
+    append_at_save.assert_not_called()
+
+    approval_session = Mock()
+    approval_session.scalars.return_value = ()
+    order = SimpleNamespace(
+        order_id=42,
+        conversion_pending=False,
+        items=[SimpleNamespace(sku="RAG-1", cantidad=1, final_price=Decimal("100.00"))],
+        customer=None,
+    )
+    sheets = Mock(spec=SheetsWriter)
+    sheets.append_order_row.return_value = SheetsWriteStatus.APPENDED
+
+    result = register_approved_order(approval_session, order, sheets=sheets)
+
+    sheets.append_order_row.assert_called_once_with(
+        42,
+        customer_name=None,
+        total="100.00",
+        items_summary="1 × RAG-1",
+    )
+    assert result.sheets_status is SheetsWriteStatus.APPENDED
 
 
 # -------------------------------------------------- integration (approval flow)

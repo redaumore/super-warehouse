@@ -7,13 +7,23 @@ pgvector extension.
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from decimal import Decimal
+from pathlib import Path
 
+from alembic.config import Config as AlembicConfig
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import sessionmaker
+
+from alembic import command
+from src.agents.customer import _default_margin
+from src.backoffice.customer_orders import get_default_margin
 from src.db.models import (
     Base,
     Catalogo,
     Cliente,
+    Inventory,
     IvaCondition,
+    ListaPrecios,
     Order,
     OrderEstado,
     SourcingState,
@@ -21,6 +31,9 @@ from src.db.models import (
     SupplierPurchaseOrderState,
     SupplierStatus,
 )
+from src.orchestrator.session import ResolvedItem
+from src.pricing.order_pricing import PricingLine, compute_order
+from src.sourcing.case_a import persist_case_a_order
 
 
 def test_all_design_entities_are_modeled():
@@ -233,3 +246,141 @@ def test_migration_enables_pgvector_extension(db_engine):
     with db_engine.connect() as conn:
         row = conn.execute(text("SELECT 1 FROM pg_extension WHERE extname='vector'")).scalar()
     assert row == 1
+
+
+def test_customer_order_migration_round_trips_and_keeps_case_a_persistable(db_engine, clean_schema):
+    """The customer-order migration downgrades, upgrades, and preserves legacy Case A writes."""
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    config = AlembicConfig(str(alembic_ini))
+    previous_revision = "46bdbdc4a575"
+
+    command.downgrade(config, previous_revision)
+    try:
+        with db_engine.connect() as connection:
+            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        assert revision == previous_revision
+        inspector = inspect(db_engine)
+        assert "exchange_rates" not in inspector.get_table_names()
+        assert "app_settings" not in inspector.get_table_names()
+        assert not (
+            {column["name"] for column in inspector.get_columns("orders")}
+            & {"subtotal", "total", "conversion_pending"}
+        )
+        assert not (
+            {column["name"] for column in inspector.get_columns("order_items")}
+            & {"name", "source", "supplier", "moneda", "precio_original"}
+        )
+
+        command.upgrade(config, "head")
+        with db_engine.connect() as connection:
+            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        assert revision == "7d2f4a1e8b90"
+        inspector = inspect(db_engine)
+        assert {"exchange_rates", "app_settings"}.issubset(inspector.get_table_names())
+        assert {"subtotal", "total", "conversion_pending"}.issubset(
+            {column["name"] for column in inspector.get_columns("orders")}
+        )
+        assert {"name", "source", "supplier", "moneda", "precio_original"}.issubset(
+            {column["name"] for column in inspector.get_columns("order_items")}
+        )
+
+        with db_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                    "sourcing_needs, inventory, order_items, orders, stock_reservations, "
+                    "stock_adjustments, catalogo, suppliers, clientes, lista_precios, "
+                    "supplier_sku_mappings, exchange_rates, app_settings "
+                    "RESTART IDENTITY CASCADE"
+                )
+            )
+
+        Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+        with Session() as session:
+            session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
+            session.add(
+                Supplier(
+                    id=1,
+                    code="LEG",
+                    business_name="Legacy Supplier",
+                    default_margin_pct=Decimal(0),
+                )
+            )
+            customer = Cliente(
+                customer_id=1,
+                nombre_comercial="Legacy Customer",
+                telefono_norm="+5491155551234",
+                lista_precios_id=1,
+                descuento_particular_pct=Decimal(0),
+            )
+            session.add(customer)
+            session.add(
+                Catalogo(
+                    id=1,
+                    codigo_interno="LEG-001",
+                    supplier_id=1,
+                    nombre_oficial="Legacy item",
+                    costo_proveedor=Decimal("100.00"),
+                    margen_aplicado_pct=Decimal("0.35"),
+                    precio_lista_base=Decimal("135.00"),
+                    stock_disponible=10,
+                    sinonimos=[],
+                )
+            )
+            session.add(Inventory(sku_id="LEG-001", quantity_on_hand=10))
+            session.flush()
+
+            order, quote = persist_case_a_order(
+                session,
+                customer,
+                (ResolvedItem(sku="LEG-001", cantidad=1, description="Legacy item"),),
+                delivery_date=None,
+            )
+            session.commit()
+
+            persisted = session.get(Order, order.order_id)
+            assert persisted is not None
+            assert persisted.estado is OrderEstado.PENDING_APPROVAL
+            assert persisted.items[0].sku == "LEG-001"
+            assert quote.total == Decimal("135.00")
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_migration_seeded_default_margin_is_read_by_pricing(db_engine, clean_schema):
+    """A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it."""
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    config = AlembicConfig(str(alembic_ini))
+    previous_revision = "46bdbdc4a575"
+
+    command.downgrade(config, previous_revision)
+    command.upgrade(config, "head")
+    try:
+        Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+        with Session() as session:
+            # First read on the fresh database must see the seeded 20%, with no
+            # test-inserted row involved.
+            assert get_default_margin(session) == Decimal(20)
+            assert _default_margin(session) == Decimal("0.20")
+
+            # The code path that applies it: an unmapped RAG supplier falls back
+            # to the seeded default, so 100.00 → 120.00.
+            priced = compute_order(
+                (
+                    PricingLine(
+                        sku="RAG-UNMAPPED-1",
+                        cantidad=1,
+                        source="RAG",
+                        name="RAG item",
+                        price=Decimal("100.00"),
+                        currency="ARS",
+                        supplier="UNMAPPED",
+                        codigo_proveedor="UNMAPPED",
+                    ),
+                ),
+                supplier_margin=lambda code: None,
+                default_margin=_default_margin(session),
+            )
+            assert priced.lines[0].base_ars == Decimal("120.00")
+    finally:
+        command.upgrade(config, "head")
