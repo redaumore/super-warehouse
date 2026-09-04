@@ -136,7 +136,8 @@ def build_orchestrator(
                 searcher
                 if searcher is not None
                 else PrecedenceProductSearcher(
-                    DbCatalogSearcher(), sourcing.rag_client if sourcing else RagProductClient()
+                    DbCatalogSearcher(),
+                    (sourcing.rag_client if sourcing else None) or RagProductClient(),
                 )
             ),
             sourcing=sourcing,
