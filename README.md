@@ -109,10 +109,10 @@ El sistema puede gestionarse utilizando `rag-cli` (instalado automáticamente en
 ### 1. Iniciar la API REST
 Levanta el servidor local con soporte de recarga en caliente:
 ```bash
-.venv/bin/python cli.py serve --port 8000 --reload
+.venv/bin/python cli.py serve --port 8001 --reload
 ```
-* Swagger UI interactivo: [http://localhost:8000/docs](http://localhost:8000/docs)
-* ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+* Swagger UI interactivo: [http://localhost:8001/docs](http://localhost:8001/docs)
+* ReDoc: [http://localhost:8001/redoc](http://localhost:8001/redoc)
 
 ### 2. Ingesta Batch de Catálogos PDF (Paso a Paso Automatizado)
 Ejecuta secuencialmente **Fase 0 $\rightarrow$ Fase 1 $\rightarrow$ Fase 2 $\rightarrow$ Fase 3**:
@@ -153,7 +153,7 @@ Evalúa el Golden Dataset y genera reportes en Markdown y JSON:
 
 ---
 
-## 🌐 Endpoints de la API REST
+## 🌐 Endpoints de la API REST y Ejemplos `curl`
 
 | Método | Ruta | Descripción |
 | :--- | :--- | :--- |
@@ -164,6 +164,230 @@ Evalúa el Golden Dataset y genera reportes en Markdown y JSON:
 | `GET` | `/api/v1/jobs/{job_id}` | Consulta de progreso y resultado de tareas de fondo. |
 | `POST` | `/api/v1/query` | Búsqueda semántica híbrida y generación LLM en tiempo real. |
 | `POST` | `/api/v1/evaluate` | Ejecución bajo demanda de la suite de evaluación de la Tríada RAG. |
+
+### Ejemplos de uso con `curl`
+
+#### 1. Diagnóstico de Salud (`GET /api/v1/health`)
+```bash
+curl -X GET "http://localhost:8001/api/v1/health?table_name=catalogo_productos_rag"
+```
+
+#### 2. Inventario de Catálogos (`GET /api/v1/catalogs`)
+```bash
+curl -X GET "http://localhost:8001/api/v1/catalogs?table_name=catalogo_productos_rag"
+```
+
+#### 3. Ingesta por Subida de Archivo PDF (`POST /api/v1/catalogs/ingest-file`)
+```bash
+curl -X POST "http://localhost:8001/api/v1/catalogs/ingest-file" \
+  -F "file=@data/raw_pdfs/LISTA AMX_2026.pdf" \
+  -F "codigo_proveedor=AMX" \
+  -F "nombre_proveedor=AMX Products" \
+  -F "start_page=4" \
+  -F "max_pages=13" \
+  -F "table_name=catalogo_productos_rag" \
+  -F "sync=false"
+```
+
+#### 4. Ingesta desde Ruta Local en Servidor (`POST /api/v1/catalogs/ingest-path`)
+```bash
+curl -X POST "http://localhost:8001/api/v1/catalogs/ingest-path" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pdf_path": "data/raw_pdfs/CATÁLOGO PZ FORCE.pdf",
+    "codigo_proveedor": "PZF",
+    "nombre_proveedor": "PZ Force",
+    "start_page": 1,
+    "max_pages": 9,
+    "table_name": "catalogo_productos_rag",
+    "sync": false
+  }'
+```
+
+#### 5. Consultar Estado de Trabajo Asíncrono (`GET /api/v1/jobs/{job_id}`)
+```bash
+curl -X GET "http://localhost:8001/api/v1/jobs/019c0b12-3456-789a-bcde-f0123456789a"
+```
+
+#### 6. Consulta Semántica RAG (`POST /api/v1/query`)
+```bash
+curl -X POST "http://localhost:8001/api/v1/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Llave de impacto 1/2 pulgada",
+    "top_n": 3,
+    "threshold": 0.45,
+    "structured_json": true,
+    "audit": false
+  }'
+```
+
+#### 7. Evaluación de la Tríada RAG (`POST /api/v1/evaluate`)
+```bash
+curl -X POST "http://localhost:8001/api/v1/evaluate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "table_name": "catalogo_productos_rag",
+    "output_dir": "./data/evaluation"
+  }'
+```
+
+---
+
+## 🤖 Guía de Integración para Agentes Externos (Tools / Function Calling)
+
+Este microservicio está optimizado para ser consumido como **Tool de Búsqueda y Validación de Catálogo** por sistemas agénticos externos (LangGraph, CrewAI, AutoGen, OpenAI Assistants, etc.) corriendo en la misma máquina o en red local.
+
+### 1. Parámetros de Conexión Local
+
+* **URL Base del Servidor:** `http://localhost:8001` (o el puerto configurado al levantar el servicio con `cli.py serve --port 8001`).
+* **Endpoint Principal de Búsqueda RAG:** `POST /api/v1/query`
+* **Esquema OpenAPI Completo:** `http://localhost:8001/openapi.json`
+* **Swagger UI interactivo:** `http://localhost:8001/docs`
+
+---
+
+### 2. Definición Estándar de la Tool (JSON Schema)
+
+Copia y registra la siguiente definición de herramienta en el LLM o framework del agente consumidor:
+
+```json
+{
+  "name": "search_industrial_catalog",
+  "description": "Busca especificaciones técnicas, precios, disponibilidad, medidas y códigos en los catálogos industriales utilizando recuperación híbrida (semántica + léxica BM25) y reranking. Usar SIEMPRE que se requiera validar un producto con el cliente o confeccionar una orden de compra.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Texto de búsqueda técnica, código de artículo, modelo o descripción funcional (ej: 'llave de impacto 1/2 pulgada', 'AMX-AT-5044', 'abrazaderas cremallera 9/13')."
+      },
+      "top_n": {
+        "type": "integer",
+        "description": "Cantidad de productos finalistas a recuperar tras el reranking (recomendado: 2 a 5).",
+        "default": 3
+      },
+      "structured_json": {
+        "type": "boolean",
+        "description": "Debe ser true para que la API devuelva la ficha técnica y comercial tipada en formato JSON.",
+        "default": true
+      }
+    },
+    "required": ["query"]
+  }
+}
+```
+
+---
+
+### 3. Contrato de Entrada (Request)
+
+```http
+POST /api/v1/query
+Content-Type: application/json
+
+{
+  "query": "Llave de impacto 1/2 pulgada",
+  "top_n": 3,
+  "threshold": 0.45,
+  "structured_json": true
+}
+```
+
+---
+
+### 4. Contrato de Salida (Response)
+
+La respuesta proyecta la **ficha completa del producto** para abastecer simultáneamente la **confirmación con el cliente** y la **confección de la orden de compra**:
+
+```json
+{
+  "query": "Llave de impacto 1/2 pulgada",
+  "response_text": "En base a la información técnica y comercial verificada en el catálogo:\n* **Llave de impacto neumática XMAX de 1/2\" AT-5044** (Código: `AMX-AT-5044` | Marca: XMAX | Precio: ARS 185,000.00 | Pág. 3): Encastre: 1/2 pulgada, Torque: 520 lb/ft (700 Nm), Velocidad: 7500 rpm. [Fragmento 1]",
+  "is_refusal": false,
+  "status": "SUCCESS",
+  "citations": ["[Fragmento 1]"],
+  "is_fully_grounded": true,
+  "structured_json": {
+    "respuesta_narrativa": "...",
+    "consulta_respondida": true,
+    "productos": [
+      {
+        "codigo": "AMX-AT-5044",
+        "codigo_orig": "AT-5044",
+        "codigo_proveedor": "AMX",
+        "nombre_proveedor": "AMX Products",
+        "marca": "XMAX",
+        "nombre": "Llave de impacto neumática 1/2\"",
+        "categoria_padre": "Herramientas Neumáticas",
+        "categoria": "Llaves de Impacto",
+        "subcategoria": "Encastre 1/2 pulgada",
+        "precio": 185000.0,
+        "moneda": "ARS",
+        "unidad_venta": "c/u",
+        "empaque": "Caja x 1",
+        "especificaciones": "Encastre: 1/2 pulgada, Torque: 520 lb/ft (700 Nm), Velocidad: 7500 rpm, Conexión: 1/4 NPT",
+        "archivo_origen": "LISTA AMX_2026.pdf",
+        "pagina": 3,
+        "fragmento_id": 1
+      }
+    ]
+  },
+  "context_chunks": [
+    {
+      "fragment_id": 1,
+      "codigo_producto": "AMX-AT-5044",
+      "marca": "XMAX",
+      "pagina": 3,
+      "archivo_origen": "LISTA AMX_2026.pdf",
+      "content": "archivo_origen: LISTA AMX_2026.pdf\nproveedor: AMX Products\ncodigo: AMX-AT-5044\n..."
+    }
+  ],
+  "total_latency_ms": 1250.4,
+  "model_name": "gpt-4o"
+}
+```
+
+#### Mapeo de Campos para el Agente Consumidor:
+* **Para Confirmar con el Cliente:** `nombre`, `marca`, `especificaciones`, `archivo_origen`, `pagina` (referencia visual directa del PDF).
+* **Para el Pedido / ERP:** `codigo` (SKU del negocio), `codigo_orig` (código de fábrica), `codigo_proveedor`, `precio`, `moneda`, `unidad_venta`, `empaque`.
+* **Manejo de Ausencia:** Si un producto no existe o está agotado, `is_refusal` es `true`, `structured_json.consulta_respondida` es `false` y `productos` es una lista vacía `[]`.
+
+---
+
+### 5. Ejemplo de Integración en Python (Cliente Agéntico)
+
+```python
+import httpx
+
+RAG_API_URL = "http://localhost:8001/api/v1/query"
+
+def search_catalog_tool(query: str, top_n: int = 3) -> dict:
+    """Función de ejecución de la Tool para agentes en Python."""
+    payload = {
+        "query": query,
+        "top_n": top_n,
+        "structured_json": True
+    }
+    with httpx.Client(timeout=15.0) as client:
+        response = client.post(RAG_API_URL, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Retorna el JSON estructurado con la lista de productos
+        return data.get("structured_json") or {
+            "consulta_respondida": False,
+            "respuesta_narrativa": data.get("response_text", ""),
+            "productos": []
+        }
+
+# Prueba directa
+if __name__ == "__main__":
+    result = search_catalog_tool("Llave de impacto 1/2 pulgada")
+    print(f"¿Respondida?: {result['consulta_respondida']}")
+    for prod in result.get("productos", []):
+        print(f"- {prod['codigo']}: {prod['nombre']} | {prod['moneda']} {prod['precio']} (Pág. {prod['pagina']} de {prod['archivo_origen']})")
+```
 
 ---
 

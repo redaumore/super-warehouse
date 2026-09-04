@@ -328,6 +328,7 @@ class ExtractedProduct(BaseModel):
     atributos: List[AttributeItem] = Field(default_factory=list, description="Lista de atributos técnicos normalizados de esta variante/fila")
     especificaciones_tabla: List[AttributeItem] = Field(default_factory=list, description="Lista de especificaciones exactas columna-valor presentes en la fila de la tabla")
     es_tabla: bool = Field(default=False, description="Indica si la variante/producto proviene de una grilla o tabla de especificaciones")
+    archivo_origen: Optional[str] = Field(default=None, description="Nombre del archivo PDF original del catálogo")
 
 
 class PageUsageMetrics(BaseModel):
@@ -609,6 +610,7 @@ class DirectLunaCatalogProcessor:
                 prod.proveedor_id = prov_id
                 prod.nombre_proveedor = nom_prov
                 prod.codigo_proveedor = cod_prov
+                prod.archivo_origen = os.path.basename(pdf_path) if pdf_path else None
                 prod.es_tabla = bool(prod.es_tabla or (prod.especificaciones_tabla and len(prod.especificaciones_tabla) > 0))
 
                 # Identificadores canónicos deterministas con safety net en Python

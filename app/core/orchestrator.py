@@ -254,6 +254,12 @@ class RAGOrchestrator:
 
             manager = PgVectorManager(db_url=effective_db_url, table_name=self.table_name, dimension=dimension)
             manager.init_schema(recreate=recreate_table)
+
+            # Limpieza previa de productos existentes del proveedor
+            if not recreate_table and cod_prov:
+                deleted_prev = manager.delete_records_by_provider(codigo_proveedor=cod_prov)
+                logger.info(f"Limpieza previa de productos: {deleted_prev} registros anteriores eliminados para proveedor '{cod_prov}'.")
+
             manager.ingest_records(records, batch_size=batch_size)
             manager.create_indexes()
 

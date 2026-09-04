@@ -110,16 +110,25 @@ def build_text_to_embed(product: Dict[str, Any]) -> str:
             lines.append(f"{key}: {sanitized_val}")
             seen_keys.add(key)
 
-    # 1. Jerarquía Macro
+    # 1. Jerarquía Macro y Origen
+    add_line("archivo_origen", product.get("archivo_origen"))
     add_line("proveedor", product.get("nombre_proveedor") or product.get("proveedor"))
+    add_line("codigo_proveedor", product.get("codigo_proveedor"))
     add_line("categoria_padre", product.get("categoria_padre"))
     add_line("categoria", product.get("categoria"))
     add_line("subcategoria", product.get("subcategoria"))
     add_line("marca", product.get("marca"))
 
-    # 2. Información del Producto
-    add_line("nombre", product.get("nombre_comercial") or product.get("nombre"))
-    add_line("descripcion", product.get("descripcion_completa") or product.get("descripcion"))
+    # 2. Información Comercial y Códigos del Producto
+    add_line("codigo", product.get("codigo") or product.get("sku_compuesto"))
+    add_line("codigo_orig", product.get("codigo_orig"))
+    add_line("nombre", product.get("nombre_comercial") or product.get("nombre_producto") or product.get("nombre"))
+    add_line("descripcion", product.get("descripcion_completa") or product.get("descripcion_tecnica") or product.get("descripcion"))
+    if product.get("precio") is not None:
+        add_line("precio", str(product.get("precio")))
+    add_line("moneda", product.get("moneda"))
+    add_line("unidad_venta", product.get("unidad_venta"))
+    add_line("empaque", product.get("empaque"))
 
     # 3. Especificaciones Técnicas (Atributos)
     atributos = product.get("atributos")
@@ -153,12 +162,17 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
 
     # Campos base primitivos
     base_fields = [
-        ("codigo", product.get("codigo")),
+        ("archivo_origen", product.get("archivo_origen")),
+        ("codigo", product.get("codigo") or product.get("sku_compuesto")),
         ("codigo_orig", product.get("codigo_orig")),
+        ("sku_compuesto", product.get("sku_compuesto")),
+        ("document_id", product.get("document_id")),
         ("nombre_proveedor", product.get("nombre_proveedor") or product.get("proveedor")),
         ("codigo_proveedor", product.get("codigo_proveedor")),
         ("precio", product.get("precio")),
         ("moneda", product.get("moneda")),
+        ("unidad_venta", product.get("unidad_venta")),
+        ("empaque", product.get("empaque")),
         ("marca", product.get("marca")),
         ("categoria_padre", product.get("categoria_padre")),
         ("categoria", product.get("categoria")),

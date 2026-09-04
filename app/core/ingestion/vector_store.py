@@ -112,6 +112,7 @@ class PgVectorManager:
                     precio NUMERIC(12, 2),
                     moneda VARCHAR(16),
                     pagina_origen INT,
+                    archivo_origen VARCHAR(256),
                     es_tabla BOOLEAN DEFAULT FALSE,
                     text_content TEXT NOT NULL,
                     metadata JSONB NOT NULL,
@@ -121,10 +122,50 @@ class PgVectorManager:
                 """).format(sql.Identifier(self.table_name), sql.Literal(self.dimension))
                 cur.execute(ddl_table)
 
+                # Migración no destructiva para columnas nuevas en tablas preexistentes
+                cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS archivo_origen VARCHAR(256);").format(
+                    sql.Identifier(self.table_name)
+                ))
+
         logger.info(f"[✓] Esquema DDL aprovisionado exitosamente en tabla '{self.table_name}'.")
 
     # -------------------------------------------------------------------------
-    # 2. Ingesta Masiva Transaccional (Batch DML Upsert)
+    # 2. Limpieza de Registros por Proveedor
+    # -------------------------------------------------------------------------
+    def delete_records_by_provider(self, codigo_proveedor: str) -> int:
+        """
+        Elimina todos los registros existentes en la tabla para un proveedor específico.
+        Permite el reemplazo total e idempotente del catálogo de un proveedor en nuevas ingestas.
+        """
+        if not codigo_proveedor:
+            return 0
+
+        clean_cod = str(codigo_proveedor).strip().upper()[:3]
+        logger.info(f"Limpiando registros previos del proveedor '{clean_cod}' en tabla '{self.table_name}'...")
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Comprobar si la tabla existe
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables WHERE table_name = %s;",
+                    (self.table_name,)
+                )
+                if not cur.fetchone():
+                    logger.info(f"La tabla '{self.table_name}' no existe todavía. 0 registros eliminados.")
+                    return 0
+
+                cur.execute(
+                    sql.SQL("DELETE FROM {} WHERE UPPER(codigo_proveedor) = UPPER(%s) OR codigo_proveedor = %s;").format(
+                        sql.Identifier(self.table_name)
+                    ),
+                    (clean_cod, clean_cod)
+                )
+                deleted = cur.rowcount
+                logger.info(f"[✓] Se eliminaron {deleted} registros previos del proveedor '{clean_cod}'.")
+                return deleted
+
+    # -------------------------------------------------------------------------
+    # 3. Ingesta Masiva Transaccional (Batch DML Upsert)
     # -------------------------------------------------------------------------
     def ingest_records(self, records: List[Dict[str, Any]], batch_size: int = 100) -> int:
         """
@@ -141,11 +182,11 @@ class PgVectorManager:
         INSERT INTO {} (
             node_id, codigo_producto, codigo_orig, nombre_proveedor, codigo_proveedor,
             marca, categoria_padre, categoria, subcategoria, precio, moneda,
-            pagina_origen, es_tabla, text_content, metadata, embedding
+            pagina_origen, archivo_origen, es_tabla, text_content, metadata, embedding
         ) VALUES (
             %(node_id)s, %(codigo_producto)s, %(codigo_orig)s, %(nombre_proveedor)s, %(codigo_proveedor)s,
             %(marca)s, %(categoria_padre)s, %(categoria)s, %(subcategoria)s, %(precio)s, %(moneda)s,
-            %(pagina_origen)s, %(es_tabla)s, %(text_content)s, %(metadata)s, %(embedding)s
+            %(pagina_origen)s, %(archivo_origen)s, %(es_tabla)s, %(text_content)s, %(metadata)s, %(embedding)s
         )
         ON CONFLICT (node_id) DO UPDATE SET
             codigo_producto = EXCLUDED.codigo_producto,
@@ -159,6 +200,7 @@ class PgVectorManager:
             precio = EXCLUDED.precio,
             moneda = EXCLUDED.moneda,
             pagina_origen = EXCLUDED.pagina_origen,
+            archivo_origen = EXCLUDED.archivo_origen,
             es_tabla = EXCLUDED.es_tabla,
             text_content = EXCLUDED.text_content,
             metadata = EXCLUDED.metadata,
@@ -168,6 +210,13 @@ class PgVectorManager:
         total_inserted = 0
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                # Asegurar que la columna archivo_origen exista si la tabla ya fue creada previamente
+                cur.execute(
+                    sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS archivo_origen VARCHAR(256);").format(
+                        sql.Identifier(self.table_name)
+                    )
+                )
+
                 batch = []
                 for i, rec in enumerate(records):
                     emb = rec.get("embedding", [])
@@ -213,6 +262,7 @@ class PgVectorManager:
                         "precio": precio_val,
                         "moneda": meta.get("moneda"),
                         "pagina_origen": pagina_val,
+                        "archivo_origen": meta.get("archivo_origen"),
                         "es_tabla": bool(meta.get("es_tabla", False)),
                         "text_content": rec.get("text_content") or rec.get("text_to_embed", ""),
                         "metadata": meta_json,
@@ -631,6 +681,12 @@ def main():
         help="Profundidad de exploración durante las consultas ANN ef_search (default: 128)."
     )
     parser.add_argument(
+        "--codigo-proveedor", "-c",
+        type=str,
+        default=None,
+        help="Código del proveedor (3 caracteres) para limpieza previa y verificación de paridad QA."
+    )
+    parser.add_argument(
         "--recreate-table",
         action="store_true",
         help="Si se especifica, elimina la tabla anterior si existe antes de crearla."
@@ -678,13 +734,21 @@ def main():
         # 3. Aprovisionar esquema DDL
         manager.init_schema(recreate=args.recreate_table)
 
-        # 4. Ingestar registros
+        # 4. Limpieza previa por proveedor si no se recreó la tabla completa
+        cod_prov = args.codigo_proveedor
+        if not cod_prov and records:
+            cod_prov = records[0].get("metadata", {}).get("codigo_proveedor")
+
+        if not args.recreate_table and cod_prov:
+            manager.delete_records_by_provider(codigo_proveedor=cod_prov)
+
+        # 5. Ingestar registros
         manager.ingest_records(records, batch_size=args.batch_size)
 
-        # 5. Compilar índices HNSW y Relacionales
+        # 6. Compilar índices HNSW y Relacionales
         manager.create_indexes(m=args.m, ef_construction=args.ef_construction)
 
-        # 6. Suite de QA y verificación
+        # 7. Suite de QA y verificación
         if not args.skip_qa and records:
             # Tomar el vector del primer registro para el test
             sample_vec = records[0].get("embedding", [])
@@ -692,7 +756,8 @@ def main():
             manager.run_qa_suite(
                 expected_count=len(records),
                 sample_vector=sample_vec,
-                sample_marca=sample_marca
+                sample_marca=sample_marca,
+                codigo_proveedor=cod_prov
             )
 
         logger.info("=" * 60)

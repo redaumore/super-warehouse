@@ -119,6 +119,9 @@ class RetrievedCandidate:
     precio: Optional[float] = None
     moneda: Optional[str] = None
     pagina_origen: Optional[int] = None
+    archivo_origen: Optional[str] = None
+    unidad_venta: Optional[str] = None
+    empaque: Optional[str] = None
     es_tabla: Optional[bool] = None
     text_content: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -541,6 +544,9 @@ class HybridRetriever:
                         "precio": float(r[9]) if r[9] is not None else None,
                         "moneda": r[10],
                         "pagina_origen": r[11],
+                        "archivo_origen": meta.get("archivo_origen"),
+                        "unidad_venta": meta.get("unidad_venta"),
+                        "empaque": meta.get("empaque"),
                         "es_tabla": r[12],
                         "text_content": r[13] or "",
                         "metadata": meta
@@ -658,6 +664,9 @@ class HybridRetriever:
                 precio=doc_data.get("precio"),
                 moneda=doc_data.get("moneda"),
                 pagina_origen=doc_data.get("pagina_origen"),
+                archivo_origen=doc_data.get("archivo_origen"),
+                unidad_venta=doc_data.get("unidad_venta"),
+                empaque=doc_data.get("empaque"),
                 es_tabla=doc_data.get("es_tabla"),
                 text_content=doc_data.get("text_content", ""),
                 metadata=doc_data.get("metadata", {}),

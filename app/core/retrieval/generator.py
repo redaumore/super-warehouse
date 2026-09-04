@@ -77,16 +77,27 @@ logger = logging.getLogger("RAG_Fase_6_Generator")
 
 @dataclass
 class InputContextChunk:
-    """Representa un fragmento finalista recibido desde la Fase 5."""
+    """Representa un fragmento finalista recibido desde la Fase 5 con su ficha técnica y comercial completa."""
     fragment_id: int  # Identificador secuencial en el prompt: 1, 2, 3...
     node_id: str
-    codigo_producto: Optional[str]
-    marca: Optional[str]
-    categoria: Optional[str]
-    pagina: Optional[int]
-    content: str
+    codigo_producto: Optional[str] = None
+    codigo_orig: Optional[str] = None
+    marca: Optional[str] = None
+    nombre_proveedor: Optional[str] = None
+    codigo_proveedor: Optional[str] = None
+    categoria_padre: Optional[str] = None
+    categoria: Optional[str] = None
+    subcategoria: Optional[str] = None
+    precio: Optional[float] = None
+    moneda: Optional[str] = None
+    unidad_venta: Optional[str] = None
+    empaque: Optional[str] = None
+    archivo_origen: Optional[str] = None
+    pagina: Optional[int] = None
+    content: str = ""
     relevance_score: float = 0.0
     prompt_position: int = 1
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -110,12 +121,24 @@ class CitationVerificationResult:
 
 @dataclass
 class StructuredProductItem:
-    """Elemento individual de producto para salida estructurada según Sección 5 de la guía."""
+    """Elemento individual de producto para salida estructurada completa (ERP y confirmación cliente)."""
     codigo: str
-    marca: Optional[str]
-    nombre: str
-    medidas: Optional[str]
-    fragmento_id: int
+    codigo_orig: Optional[str] = None
+    codigo_proveedor: Optional[str] = None
+    nombre_proveedor: Optional[str] = None
+    marca: Optional[str] = None
+    nombre: str = ""
+    categoria_padre: Optional[str] = None
+    categoria: Optional[str] = None
+    subcategoria: Optional[str] = None
+    precio: Optional[float] = None
+    moneda: Optional[str] = None
+    unidad_venta: Optional[str] = None
+    empaque: Optional[str] = None
+    especificaciones: Optional[str] = None
+    archivo_origen: Optional[str] = None
+    pagina: Optional[int] = None
+    fragmento_id: int = 1
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -239,14 +262,30 @@ class PromptBuilder:
 
         for c in chunks:
             attrs: List[str] = [f'id="{c.fragment_id}"']
+            if c.archivo_origen:
+                attrs.append(f'archivo="{c.archivo_origen}"')
+            if c.pagina is not None:
+                attrs.append(f'pagina="{c.pagina}"')
             if c.codigo_producto:
                 attrs.append(f'codigo="{c.codigo_producto}"')
+            if c.codigo_orig:
+                attrs.append(f'codigo_orig="{c.codigo_orig}"')
+            if c.codigo_proveedor:
+                attrs.append(f'cod_prov="{c.codigo_proveedor}"')
+            if c.nombre_proveedor:
+                attrs.append(f'proveedor="{c.nombre_proveedor}"')
             if c.marca:
                 attrs.append(f'marca="{c.marca}"')
             if c.categoria:
                 attrs.append(f'categoria="{c.categoria}"')
-            if c.pagina is not None:
-                attrs.append(f'pagina="{c.pagina}"')
+            if c.precio is not None:
+                attrs.append(f'precio="{c.precio}"')
+            if c.moneda:
+                attrs.append(f'moneda="{c.moneda}"')
+            if c.unidad_venta:
+                attrs.append(f'unidad_venta="{c.unidad_venta}"')
+            if c.empaque:
+                attrs.append(f'empaque="{c.empaque}"')
             
             header = f"  <fragmento {' '.join(attrs)}>"
             lines.append(header)
@@ -261,10 +300,10 @@ class PromptBuilder:
 
         # Zona de Recencia: Instrucciones finales y anclaje inmediato
         lines.append("=== INSTRUCCIONES FINALES DE RESPUESTA ===")
-        lines.append(f"Responde con precisión técnica a la consulta: \"{query}\".")
+        lines.append(f"Responde con precisión técnica y comercial a la consulta: \"{query}\".")
         lines.append(
             "Recuerda:\n"
-            "1. Cita obligatoriamente cada afirmación o dato técnico con `[Fragmento N]`.\n"
+            "1. Cita obligatoriamente cada afirmación, precio o dato técnico con `[Fragmento N]`.\n"
             f"2. Si la información solicitada no está presente en los fragmentos, responde exactamente:\n"
             f"   \"{PromptBuilder.REFUSAL_CANONICAL_MESSAGE}\""
         )
@@ -281,14 +320,26 @@ class PromptBuilder:
             "Tu única fuente de verdad es la información dentro de <contexto_conocimiento>.\n"
             "Debes responder EXCLUSIVAMENTE con un objeto JSON válido que cumpla la siguiente estructura:\n"
             "{\n"
-            "  \"respuesta_narrativa\": \"Explicación técnica en texto natural con citas [Fragmento N]\",\n"
+            "  \"respuesta_narrativa\": \"Explicación técnica en texto natural con citas [Fragmento N] incluyendo precio, moneda, empaque y detalles\",\n"
             "  \"consulta_respondida\": true | false,\n"
             "  \"productos\": [\n"
             "    {\n"
-            "      \"codigo\": \"Código o SKU exacto\",\n"
-            "      \"marca\": \"Marca del producto\",\n"
-            "      \"nombre\": \"Nombre / Título técnico\",\n"
-            "      \"medidas\": \"Medidas, torque, dimensiones relevantes\",\n"
+            "      \"codigo\": \"Código o SKU exacto de negocio (ej. 'FDN-XMAX-AT-5044')\",\n"
+            "      \"codigo_orig\": \"Código original de catálogo/fábrica (ej. 'AT-5044') o null\",\n"
+            "      \"codigo_proveedor\": \"Código de 3 letras del proveedor (ej. 'FDN') o null\",\n"
+            "      \"nombre_proveedor\": \"Nombre del proveedor o null\",\n"
+            "      \"marca\": \"Marca del fabricante\",\n"
+            "      \"nombre\": \"Nombre / Título comercial del producto\",\n"
+            "      \"categoria_padre\": \"Categoría principal o null\",\n"
+            "      \"categoria\": \"Categoría específica\",\n"
+            "      \"subcategoria\": \"Subcategoría o tipo o null\",\n"
+            "      \"precio\": 185000.0 (número float exacto o null si no figura),\n"
+            "      \"moneda\": \"ARS\" | \"USD\" | null,\n"
+            "      \"unidad_venta\": \"c/u\" | \"metro\" | \"paquete\" | null,\n"
+            "      \"empaque\": \"Caja x 100\" | \"Blister\" | null,\n"
+            "      \"especificaciones\": \"Medidas, torque, rosca, especificaciones técnicas clave\",\n"
+            "      \"archivo_origen\": \"Nombre del archivo PDF fuente de catálogo\",\n"
+            "      \"pagina\": número entero de página 1-indexed,\n"
             "      \"fragmento_id\": 1\n"
             "    }\n"
             "  ]\n"
@@ -539,7 +590,7 @@ class LLMInferenceEngine:
 
         # Síntesis estructurada
         productos_json: List[Dict[str, Any]] = []
-        response_lines: List[str] = ["En base a la información técnica verificada en el catálogo:\n"]
+        response_lines: List[str] = ["En base a la información técnica y comercial verificada en el catálogo:\n"]
 
         for c in matching_chunks:
             # Parsear pares clave: valor
@@ -552,32 +603,48 @@ class LLMInferenceEngine:
 
             nombre = (
                 attr_dict.get("nombre") or
+                attr_dict.get("nombre_producto") or
                 attr_dict.get("titulo") or
                 attr_dict.get("producto") or
                 attr_dict.get("descripcion", "Herramienta de Catálogo")
             )
-            codigo = c.codigo_producto or attr_dict.get("codigo_producto") or attr_dict.get("codigo") or "N/D"
+            codigo = c.codigo_producto or attr_dict.get("codigo") or attr_dict.get("codigo_producto") or "N/D"
+            codigo_orig = c.codigo_orig or attr_dict.get("codigo_orig")
             marca = c.marca or attr_dict.get("marca") or "Sin Marca"
 
+            precio_val = c.precio
+            if precio_val is None and "precio" in attr_dict:
+                try:
+                    precio_val = float(attr_dict["precio"])
+                except Exception:
+                    precio_val = None
+
+            moneda_val = c.moneda or attr_dict.get("moneda")
+            unidad_venta_val = c.unidad_venta or attr_dict.get("unidad_venta")
+            empaque_val = c.empaque or attr_dict.get("empaque")
+            archivo_val = c.archivo_origen or attr_dict.get("archivo_origen")
+            cod_prov_val = c.codigo_proveedor or attr_dict.get("codigo_proveedor")
+            nom_prov_val = c.nombre_proveedor or attr_dict.get("proveedor") or attr_dict.get("nombre_proveedor")
+            cat_padre_val = c.categoria_padre or attr_dict.get("categoria_padre")
+            subcat_val = c.subcategoria or attr_dict.get("subcategoria")
+
             detalles: List[str] = []
-            if "encastre" in attr_dict:
-                detalles.append(f"Encastre: {attr_dict['encastre']}")
-            if "torque" in attr_dict:
-                detalles.append(f"Torque: {attr_dict['torque']}")
-            elif "torque_maximo" in attr_dict:
-                detalles.append(f"Torque máximo: {attr_dict['torque_maximo']}")
-            if "velocidad" in attr_dict:
-                detalles.append(f"Velocidad: {attr_dict['velocidad']}")
-            if "presion_aire" in attr_dict:
-                detalles.append(f"Presión: {attr_dict['presion_aire']}")
-            if "conexion" in attr_dict:
-                detalles.append(f"Conexión: {attr_dict['conexion']}")
-            if "peso" in attr_dict:
-                detalles.append(f"Peso: {attr_dict['peso']}")
+            for k in ["encastre", "torque", "torque_maximo", "velocidad", "medida", "apertura", "rosca", "diametro", "presion_aire", "conexion", "peso"]:
+                if k in attr_dict:
+                    detalles.append(f"{k.replace('_', ' ').capitalize()}: {attr_dict[k]}")
 
             medidas_str = ", ".join(detalles) if detalles else "Consultar ficha técnica"
 
-            bullet = f"* **{nombre}** (Código: `{codigo}` | Marca: {marca})"
+            bullet = f"* **{nombre}** (Código: `{codigo}`"
+            if codigo_orig and codigo_orig != codigo:
+                bullet += f" | Cód. Fábrica: `{codigo_orig}`"
+            bullet += f" | Marca: {marca}"
+            if precio_val is not None:
+                mon_str = moneda_val or "ARS"
+                bullet += f" | Precio: {mon_str} {precio_val:,.2f}"
+            if c.pagina is not None:
+                bullet += f" | Pág. {c.pagina}"
+            bullet += ")"
             if detalles:
                 bullet += f": {', '.join(detalles)}. [Fragmento {c.fragment_id}]"
             else:
@@ -587,9 +654,21 @@ class LLMInferenceEngine:
 
             productos_json.append({
                 "codigo": codigo,
+                "codigo_orig": codigo_orig,
+                "codigo_proveedor": cod_prov_val,
+                "nombre_proveedor": nom_prov_val,
                 "marca": marca,
                 "nombre": nombre,
-                "medidas": medidas_str,
+                "categoria_padre": cat_padre_val,
+                "categoria": c.categoria or attr_dict.get("categoria"),
+                "subcategoria": subcat_val,
+                "precio": precio_val,
+                "moneda": moneda_val,
+                "unidad_venta": unidad_venta_val,
+                "empaque": empaque_val,
+                "especificaciones": medidas_str,
+                "archivo_origen": archivo_val,
+                "pagina": c.pagina,
                 "fragmento_id": c.fragment_id
             })
 
@@ -639,6 +718,31 @@ class StructuredOutputBuilder:
 
             parsed = json.loads(cleaned)
             if isinstance(parsed, dict) and "respuesta_narrativa" in parsed:
+                # Enriquecer productos que falten metadatos usando los chunks fuente
+                chunk_map = {c.fragment_id: c for c in chunks}
+                prods = parsed.get("productos", [])
+                if isinstance(prods, list):
+                    for p in prods:
+                        if isinstance(p, dict):
+                            f_id = p.get("fragmento_id")
+                            if f_id in chunk_map:
+                                src_c = chunk_map[f_id]
+                                if not p.get("archivo_origen") and src_c.archivo_origen:
+                                    p["archivo_origen"] = src_c.archivo_origen
+                                if p.get("pagina") is None and src_c.pagina is not None:
+                                    p["pagina"] = src_c.pagina
+                                if p.get("precio") is None and src_c.precio is not None:
+                                    p["precio"] = src_c.precio
+                                if not p.get("moneda") and src_c.moneda:
+                                    p["moneda"] = src_c.moneda
+                                if not p.get("codigo_proveedor") and src_c.codigo_proveedor:
+                                    p["codigo_proveedor"] = src_c.codigo_proveedor
+                                if not p.get("nombre_proveedor") and src_c.nombre_proveedor:
+                                    p["nombre_proveedor"] = src_c.nombre_proveedor
+                                if not p.get("unidad_venta") and src_c.unidad_venta:
+                                    p["unidad_venta"] = src_c.unidad_venta
+                                if not p.get("empaque") and src_c.empaque:
+                                    p["empaque"] = src_c.empaque
                 return parsed
         except Exception:
             pass
@@ -661,17 +765,42 @@ class StructuredOutputBuilder:
                     if len(p) == 2:
                         attr_dict[p[0].strip().lower()] = p[1].strip()
 
-            nombre = attr_dict.get("nombre") or attr_dict.get("titulo") or attr_dict.get("producto") or "Artículo de Catálogo"
+            nombre = (
+                attr_dict.get("nombre") or
+                attr_dict.get("nombre_producto") or
+                attr_dict.get("titulo") or
+                attr_dict.get("producto") or
+                "Artículo de Catálogo"
+            )
             medidas_parts: List[str] = []
-            for k in ["encastre", "torque", "torque_maximo", "velocidad", "medida", "apertura"]:
+            for k in ["encastre", "torque", "torque_maximo", "velocidad", "medida", "apertura", "rosca", "diametro", "presion_aire", "conexion", "peso"]:
                 if k in attr_dict:
-                    medidas_parts.append(f"{k}: {attr_dict[k]}")
+                    medidas_parts.append(f"{k.replace('_', ' ').capitalize()}: {attr_dict[k]}")
+
+            precio_val = c.precio
+            if precio_val is None and "precio" in attr_dict:
+                try:
+                    precio_val = float(attr_dict["precio"])
+                except Exception:
+                    precio_val = None
 
             productos.append({
-                "codigo": c.codigo_producto or attr_dict.get("codigo_producto") or "N/D",
+                "codigo": c.codigo_producto or attr_dict.get("codigo") or "N/D",
+                "codigo_orig": c.codigo_orig or attr_dict.get("codigo_orig"),
+                "codigo_proveedor": c.codigo_proveedor or attr_dict.get("codigo_proveedor"),
+                "nombre_proveedor": c.nombre_proveedor or attr_dict.get("proveedor"),
                 "marca": c.marca or attr_dict.get("marca") or "N/D",
                 "nombre": nombre,
-                "medidas": ", ".join(medidas_parts) if medidas_parts else None,
+                "categoria_padre": c.categoria_padre or attr_dict.get("categoria_padre"),
+                "categoria": c.categoria or attr_dict.get("categoria"),
+                "subcategoria": c.subcategoria or attr_dict.get("subcategoria"),
+                "precio": precio_val,
+                "moneda": c.moneda or attr_dict.get("moneda"),
+                "unidad_venta": c.unidad_venta or attr_dict.get("unidad_venta"),
+                "empaque": c.empaque or attr_dict.get("empaque"),
+                "especificaciones": ", ".join(medidas_parts) if medidas_parts else None,
+                "archivo_origen": c.archivo_origen or attr_dict.get("archivo_origen"),
+                "pagina": c.pagina,
                 "fragmento_id": c.fragment_id
             })
 
@@ -751,24 +880,55 @@ class Fase6Generator:
                 pos_raw = item.get("prompt_position")
                 prompt_pos = int(pos_raw) if pos_raw is not None else idx
 
-                meta = item.get("metadata")
+                meta = item.get("metadata") or {}
                 pagina_val: Optional[int] = None
                 if isinstance(meta, dict):
-                    p = meta.get("pagina")
+                    p = meta.get("pagina") or meta.get("pagina_origen")
                     pagina_val = int(p) if p is not None else None
                 if pagina_val is None and item.get("pagina") is not None:
                     pagina_val = int(item["pagina"])
+                elif pagina_val is None and item.get("pagina_origen") is not None:
+                    pagina_val = int(item["pagina_origen"])
+
+                raw_precio = item.get("precio") if item.get("precio") is not None else (meta.get("precio") if isinstance(meta, dict) else None)
+                precio_val: Optional[float] = None
+                if raw_precio is not None:
+                    try:
+                        precio_val = float(raw_precio)
+                    except Exception:
+                        precio_val = None
+
+                moneda_val = item.get("moneda") or (meta.get("moneda") if isinstance(meta, dict) else None)
+                cod_orig = item.get("codigo_orig") or (meta.get("codigo_orig") if isinstance(meta, dict) else None)
+                cod_prov = item.get("codigo_proveedor") or (meta.get("codigo_proveedor") if isinstance(meta, dict) else None)
+                nom_prov = item.get("nombre_proveedor") or (meta.get("nombre_proveedor") or meta.get("proveedor") if isinstance(meta, dict) else None)
+                cat_padre = item.get("categoria_padre") or (meta.get("categoria_padre") if isinstance(meta, dict) else None)
+                subcat = item.get("subcategoria") or (meta.get("subcategoria") if isinstance(meta, dict) else None)
+                u_venta = item.get("unidad_venta") or (meta.get("unidad_venta") if isinstance(meta, dict) else None)
+                emp = item.get("empaque") or (meta.get("empaque") if isinstance(meta, dict) else None)
+                arch_orig = item.get("archivo_origen") or (meta.get("archivo_origen") if isinstance(meta, dict) else None)
 
                 c = InputContextChunk(
                     fragment_id=idx,
                     node_id=str(item.get("node_id") or f"node_{idx}"),
-                    codigo_producto=item.get("codigo_producto"),
-                    marca=item.get("marca"),
-                    categoria=item.get("categoria"),
+                    codigo_producto=item.get("codigo_producto") or (meta.get("codigo") if isinstance(meta, dict) else None),
+                    codigo_orig=cod_orig,
+                    marca=item.get("marca") or (meta.get("marca") if isinstance(meta, dict) else None),
+                    nombre_proveedor=nom_prov,
+                    codigo_proveedor=cod_prov,
+                    categoria_padre=cat_padre,
+                    categoria=item.get("categoria") or (meta.get("categoria") if isinstance(meta, dict) else None),
+                    subcategoria=subcat,
+                    precio=precio_val,
+                    moneda=moneda_val,
+                    unidad_venta=u_venta,
+                    empaque=emp,
+                    archivo_origen=arch_orig,
                     pagina=pagina_val,
                     content=str(item.get("text_content") or ""),
                     relevance_score=relevance_score,
-                    prompt_position=prompt_pos
+                    prompt_position=prompt_pos,
+                    metadata=meta if isinstance(meta, dict) else {}
                 )
             else:
                 score_raw = getattr(item, "normalized_score", None)
@@ -779,24 +939,55 @@ class Fase6Generator:
                 pos_raw = getattr(item, "prompt_position", None)
                 prompt_pos = int(pos_raw) if pos_raw is not None else idx
 
-                meta = getattr(item, "metadata", None)
+                meta = getattr(item, "metadata", None) or {}
                 pagina_val = None
                 if isinstance(meta, dict):
-                    p = meta.get("pagina")
+                    p = meta.get("pagina") or meta.get("pagina_origen")
                     pagina_val = int(p) if p is not None else None
                 if pagina_val is None and getattr(item, "pagina", None) is not None:
                     pagina_val = int(getattr(item, "pagina"))
+                elif pagina_val is None and getattr(item, "pagina_origen", None) is not None:
+                    pagina_val = int(getattr(item, "pagina_origen"))
+
+                raw_precio = getattr(item, "precio", None) if getattr(item, "precio", None) is not None else (meta.get("precio") if isinstance(meta, dict) else None)
+                precio_val = None
+                if raw_precio is not None:
+                    try:
+                        precio_val = float(raw_precio)
+                    except Exception:
+                        precio_val = None
+
+                moneda_val = getattr(item, "moneda", None) or (meta.get("moneda") if isinstance(meta, dict) else None)
+                cod_orig = getattr(item, "codigo_orig", None) or (meta.get("codigo_orig") if isinstance(meta, dict) else None)
+                cod_prov = getattr(item, "codigo_proveedor", None) or (meta.get("codigo_proveedor") if isinstance(meta, dict) else None)
+                nom_prov = getattr(item, "nombre_proveedor", None) or (meta.get("nombre_proveedor") or meta.get("proveedor") if isinstance(meta, dict) else None)
+                cat_padre = getattr(item, "categoria_padre", None) or (meta.get("categoria_padre") if isinstance(meta, dict) else None)
+                subcat = getattr(item, "subcategoria", None) or (meta.get("subcategoria") if isinstance(meta, dict) else None)
+                u_venta = getattr(item, "unidad_venta", None) or (meta.get("unidad_venta") if isinstance(meta, dict) else None)
+                emp = getattr(item, "empaque", None) or (meta.get("empaque") if isinstance(meta, dict) else None)
+                arch_orig = getattr(item, "archivo_origen", None) or (meta.get("archivo_origen") if isinstance(meta, dict) else None)
 
                 c = InputContextChunk(
                     fragment_id=idx,
                     node_id=str(getattr(item, "node_id", f"node_{idx}")),
-                    codigo_producto=getattr(item, "codigo_producto", None),
-                    marca=getattr(item, "marca", None),
-                    categoria=getattr(item, "categoria", None),
+                    codigo_producto=getattr(item, "codigo_producto", None) or (meta.get("codigo") if isinstance(meta, dict) else None),
+                    codigo_orig=cod_orig,
+                    marca=getattr(item, "marca", None) or (meta.get("marca") if isinstance(meta, dict) else None),
+                    nombre_proveedor=nom_prov,
+                    codigo_proveedor=cod_prov,
+                    categoria_padre=cat_padre,
+                    categoria=getattr(item, "categoria", None) or (meta.get("categoria") if isinstance(meta, dict) else None),
+                    subcategoria=subcat,
+                    precio=precio_val,
+                    moneda=moneda_val,
+                    unidad_venta=u_venta,
+                    empaque=emp,
+                    archivo_origen=arch_orig,
                     pagina=pagina_val,
                     content=str(getattr(item, "text_content", "")),
                     relevance_score=relevance_score,
-                    prompt_position=prompt_pos
+                    prompt_position=prompt_pos,
+                    metadata=meta if isinstance(meta, dict) else {}
                 )
             chunks.append(c)
 

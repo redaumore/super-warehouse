@@ -9,3 +9,5 @@ __pycache__/
 !pyrightconfig.json
 *.egg-info/
 .DS_Store
+.env
+scratch/
