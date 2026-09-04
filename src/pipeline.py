@@ -6,9 +6,11 @@ round-trips end-to-end through routing and persistence. The owner is the only
 chat actor: every inbound message is gated at the pipeline edge
 (``src/orchestrator/owner.py``) BEFORE routing; non-owner senders get a polite
 rejection and are never routed. Customer replies come from the LLM responder
-(OpenAI, greeting fallback when unconfigured) and each text turn also queries
-Postgres for catalog context (``DbCatalogSearcher``), which degrades
-gracefully — no catalog note — when the DB is down.
+(OpenAI, greeting fallback when unconfigured) and each text turn is resolved
+through the local-first → RAG-fallback product searcher
+(``PrecedenceProductSearcher``: local ``DbCatalogSearcher`` first, supplier
+catalog ``RagProductClient`` on empty local results), which degrades
+gracefully — no catalog note — when the local database is down.
 
 When an owner sender key is configured, the order-sourcing workflow is
 enabled: the parse step extracts structured order fields (customer name, items,
@@ -34,7 +36,6 @@ import logging
 from collections.abc import Callable
 
 from src.agents.customer import (
-    CatalogSearcher,
     CustomerResponder,
     DbCatalogSearcher,
     SourcingDeps,
@@ -42,11 +43,13 @@ from src.agents.customer import (
 )
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.intake import OrderParser, SimpleOrderParser
+from src.agents.product_search import PrecedenceProductSearcher, ProductSearcher
 from src.channels import CHANNELS
 from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIResponder
+from src.integrations.rag import RagProductClient
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.owner import is_owner_sender, rejection_reply
 from src.orchestrator.router import (
@@ -93,7 +96,7 @@ def _sourcing_deps() -> SourcingDeps | None:
 
 def build_orchestrator(
     responder: CustomerResponder | None = None,
-    searcher: CatalogSearcher | None = None,
+    searcher: ProductSearcher | None = None,
     *,
     sourcing: SourcingDeps | None = None,
     parser: OrderParser | None = None,
@@ -103,12 +106,13 @@ def build_orchestrator(
     """Build the app's orchestrator.
 
     Customer is wired to the real OpenAI-backed responder (greeting fallback
-    when unconfigured) plus a Postgres-backed catalog searcher; the other
-    agents stay walking-skeleton stubs. With ``sourcing`` wired, the parse
-    step, the SOURCING confirm agent and the wired DISPATCH approval flow are
-    enabled, and the store rehydrates expired conversations from the database.
-    ``dispatch``/``sheets`` are injectable for tests; production uses
-    ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
+    when unconfigured) plus the local-first → RAG-fallback product searcher
+    (``PrecedenceProductSearcher`` over ``DbCatalogSearcher`` + the supplier
+    catalog ``RagProductClient``); the other agents stay walking-skeleton stubs.
+    With ``sourcing`` wired, the parse step, the SOURCING confirm agent and the
+    wired DISPATCH approval flow are enabled, and the store rehydrates expired
+    conversations from the database. ``dispatch``/``sheets`` are injectable for
+    tests; production uses ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
     """
     rehydrator = None
     if sourcing is not None:
@@ -126,7 +130,11 @@ def build_orchestrator(
         AgentName.CUSTOMER,
         build_handler(
             responder or OpenAIResponder(),
-            searcher=searcher if searcher is not None else DbCatalogSearcher(),
+            searcher=(
+                searcher
+                if searcher is not None
+                else PrecedenceProductSearcher(DbCatalogSearcher(), RagProductClient())
+            ),
             sourcing=sourcing,
         ),
     )

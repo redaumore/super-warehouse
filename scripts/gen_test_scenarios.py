@@ -37,6 +37,8 @@ DOMAINS: dict[str, str] = {
     "test_pipeline": "Pipeline de orquestación (walking skeleton)",
     "test_customer": "Agente Customer (respondedor conversacional)",
     "test_order_lifecycle": "Ciclo de vida del pedido",
+    "test_rag": "Integración con RAG de catálogo de proveedores",
+    "test_product_search": "Búsqueda de producto (precedencia local → RAG)",
     "test_perception": "Percepción (voz e imagen)",
     "test_openai": "Integración con OpenAI",
     "test_search": "Búsqueda en catálogo",

@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.agents.intake import ParsedOrder
+from src.agents.product_search import ProductEntry
 from src.db.models import (
     Cliente,
     Order,
@@ -88,6 +89,12 @@ class ConversationState:
     # Owner pivot axis: customer-name disambiguation (numbered menu pick).
     customer_disambiguation_pending: bool = False  # awaiting the owner's client pick
     customer_candidates: tuple[Cliente, ...] = ()  # the numbered menu options
+    # Product-query axis (rag-product-query change): the last displayed results
+    # (referenced by "el 2"-style add intents) and the order-building draft
+    # accumulation across queries (local + RAG entries, added by the add-intent
+    # short-circuit; draft-only, never persisted to the DB).
+    product_options: tuple[ProductEntry, ...] = ()
+    draft_items: tuple[tuple[ProductEntry, int], ...] = ()
 
     def with_updates(self, **changes: Any) -> ConversationState:
         """Return a copy with the given fields replaced and the clock touched."""

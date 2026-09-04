@@ -112,6 +112,22 @@ disabled fase refuses to run with `FeatureDisabledError` instead of
 half-working — the webhook still ACKs without dispatching, the backoffice
 refuses to build.
 
+## Product queries: local-first → RAG
+
+Conversational product queries (a plain chat turn, no parsed order) resolve
+through a precedence chain (`src/agents/product_search.py`): the local catalog
+search (`DbCatalogSearcher`) runs first, and only a zero-candidate local result
+— or a local database error — falls back to the supplier-catalog RAG
+(`RagProductClient`, the sibling `fase-0-pdf-parsing` service). The chain never
+raises: a RAG timeout or outage resolves to the `ERROR` source and the customer
+note says the supplier catalogs could not be consulted — it NEVER claims the
+item is out of stock; a RAG refusal or empty result resolves to `NONE` ("not
+found in current catalogs", suggest a synonym or reformulation). RAG results
+are numbered, cheapest first, with provider, price, specs and source page/PDF,
+and close with the footer "These are supplier-catalog items, not own stock."
+Note: the RAG service runs on port **8001** while some docs still say 8000 —
+`RAG_BASE_URL` defaults to 8001, which is the live port.
+
 ## Checklist: how to verify a change is safe
 
 - [ ] The new behavior has a test with a Spanish first-line docstring (feeds `docs/escenarios-testeados.md`)

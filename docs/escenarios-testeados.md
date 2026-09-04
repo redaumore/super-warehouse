@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 244, agrupados en 26 dominios.
+**Total de escenarios:** 279, agrupados en 28 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -14,9 +14,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 13
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 7
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 18
-- [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 5
-- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 13
+- [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
+- [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 25
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 15
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 13
+- [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 9
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
@@ -144,6 +146,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un segundo mensaje del mismo remitente continúa la conversación con el responder LLM. _(`test_second_message_resumes_context`)_
 - Una nota de voz se enruta a Percepción con una respuesta específica. _(`test_voice_routes_to_perception_reply`)_
 - Un canal sin adaptador no rompe la pipeline: descarta la respuesta. _(`test_unknown_channel_drops_reply_without_crash`)_
+- Un resultado RAG del searcher llega al responder como nota de catálogo de proveedores. _(`test_rag_fallback_result_reaches_responder_as_source_note`)_
 
 ## Agente Customer (respondedor conversacional)
 
@@ -155,11 +158,23 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Sin OPENAI_API_KEY, el responder OpenAI lanza ResponderNotConfigured. _(`test_openai_responder_raises_not_configured_without_key`)_
 - El responder OpenAI mapea roles y contenido y devuelve el texto del modelo. _(`test_openai_responder_maps_messages_and_returns_model_text`)_
 - Un modelo que no produce texto dispara ResponderError. _(`test_openai_responder_raises_when_model_returns_empty_reply`)_
-- Con catálogo vacío el responder recibe la nota 'sin resultados' y el historial no la guarda. _(`test_product_query_with_empty_catalog_injects_no_stock_note`)_
-- Con candidatos, la nota lista nombre oficial y SKU de cada producto. _(`test_catalog_candidates_become_note_listing_names_and_skus`)_
+- Un resultado NONE inyecta la nota de no encontrado y el historial no la guarda. _(`test_product_query_with_none_result_injects_not_found_note`)_
+- Un resultado LOCAL lista nombre oficial y SKU de cada producto bajo own stock. _(`test_local_candidates_become_note_listing_names_and_skus`)_
+- Un resultado RAG se numera, ordena por precio ascendente e incluye campos y footer. _(`test_rag_results_note_numbered_cheapest_first_with_fields_and_footer`)_
+- La nota RAG nunca muestra el codigo crudo con doble prefijo (higiene de SKU). _(`test_rag_note_never_leaks_raw_double_prefix_codigo`)_
+- El intent de alta conserva el SKU normalizado del producto RAG en el draft. _(`test_add_intent_preserves_normalized_rag_sku_in_draft`)_
+- La nota NONE sugiere sinónimos/reformulación y no afirma estado de stock. _(`test_refusal_none_note_suggests_reformulation_without_stock_claim`)_
+- La nota ERROR dice que los catálogos no pudieron consultarse, sin stock claim. _(`test_error_note_states_catalogs_unavailable_without_stock_claim`)_
+- Un draft mixto (local + RAG) renderiza local primero, numeración global y etiquetado. _(`test_dual_source_note_lists_local_first_labeled`)_
 - Un error de base de datos omite la nota y el responder igual contesta. _(`test_searcher_database_error_skips_note_and_keeps_reply`)_
 - Sin searcher, la lista de mensajes mantiene la forma del slice 1: system + historial + usuario. _(`test_handler_without_searcher_keeps_slice1_message_shape`)_
 - En una conversación en curso, la nota va después del historial y justo antes del último turno del usuario. _(`test_note_lands_after_history_and_before_latest_user_turn`)_
+- 'agregalo' con pedido abierto agrega el producto al draft sin llamar al LLM. _(`test_add_intent_with_open_order_appends_draft_and_clears_options`)_
+- 'sumá 5 de eso' agrega 5 unidades del último producto mostrado al draft. _(`test_add_intent_with_quantity_appends_draft_with_qty`)_
+- 'el 2' selecciona el segundo resultado mostrado. _(`test_add_intent_numbered_reference_picks_displayed_result`)_
+- 'agregalo' sin pedido abierto ofrece crear un pedido y no agrega a ninguno. _(`test_add_intent_without_open_order_offers_to_create`)_
+- Sin opciones mostradas, la frase de alta no es intent y sigue el camino LLM. _(`test_add_phrase_without_options_goes_to_llm`)_
+- Un query con resultados deja product_options listas para la referencia del próximo turno. _(`test_query_updates_product_options_for_next_turn`)_
 
 ## Ciclo de vida del pedido
 
@@ -178,6 +193,51 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Rechazar libera las reservas y restaura el stock disponible. _(`test_reject_releases_reservations_and_restores_stock`)_
 - Un pedido con reserva vencida no se puede aprobar: exige recotizar. _(`test_expired_order_cannot_be_approved`)_
 - Una reserva vigente no bloquea la aprobación. _(`test_fresh_reservation_can_be_approved`)_
+
+## Integración con RAG de catálogo de proveedores
+
+- El SKU RAG con prefijo duplicado se normaliza a una sola forma. _(`test_normalize_rag_sku`)_
+  - AMX-AMX-AT-5044 / AMX / AMX-AT-5044
+  - AMX-AT-5044 / AMX / AMX-AT-5044
+  - AMX-AMX-AMX-AT-5044 / AMX / AMX-AT-5044
+  - AT-5044 / AMX / AT-5044
+  - AMX-AMX-AT-5044 / (vacío) / AMX-AMX-AT-5044
+- Un query exitoso mapea productos tipados y pide structured_json=true. _(`test_rag_client_query_maps_products_and_sends_structured_json`)_
+- Un is_refusal=true se traduce a lista vacía (no encontrado en catálogos). _(`test_rag_client_refusal_returns_empty_tuple`)_
+- Un SUCCESS sin productos devuelve lista vacía, no un error. _(`test_rag_client_empty_products_returns_empty_tuple`)_
+- Los productos sin nombre se omiten del resultado tipado. _(`test_rag_client_skips_products_without_name`)_
+- El codigo_orig gana; el codigo normalizado es solo el fallback. _(`test_rag_client_prefers_codigo_orig_over_normalized_codigo`)_
+- Sin codigo_orig, el codigo con doble prefijo se normaliza al mostrarlo. _(`test_rag_client_normalizes_double_prefix_codigo`)_
+- Un error de conexión se convierte en RagProductError, nunca transport crudo. _(`test_rag_client_connect_error_raises_domain_error`)_
+- Un timeout de lectura se convierte en RagProductError. _(`test_rag_client_read_timeout_raises_domain_error`)_
+- Un HTTP 500 del servicio se convierte en RagProductError. _(`test_rag_client_http_500_raises_domain_error`)_
+- Un payload 200 no-JSON se convierte en RagProductError. _(`test_rag_client_malformed_json_raises_domain_error`)_
+- Sin RAG_BASE_URL el cliente lanza RagProductNotConfigured al usarse. _(`test_rag_client_without_base_url_raises_not_configured`)_
+- Un httpx.Client inyectado se usa tal cual, sin construir otro desde settings. _(`test_rag_client_injected_client_is_used_directly`)_
+
+## Búsqueda de producto (precedencia local → RAG)
+
+- Las frases de alta ('agregalo', 'sumá N de eso', 'el N') se resuelven a (índice, cantidad). _(`test_parse_product_add`)_
+  - agregalo
+  - agregala
+  - sumá 5 de eso
+  - sumale 3 de eso
+  - agregá 2 de esos
+  - el 2
+  - quiero el 3
+  - agregalo
+  - el 5
+  - el 2
+  - pasame el precio
+  - (vacío)
+- Un hit local (>= floor) resuelve LOCAL y nunca llama al RAG. _(`test_local_hit_skips_rag`)_
+- Un candidato local bajo el floor no es hit: el RAG se consulta. _(`test_local_below_floor_falls_back_to_rag`)_
+- Un local vacío cae al RAG y los campos del producto viajan al entry. _(`test_empty_local_falls_back_to_rag_and_maps_fields`)_
+- Un RAG que rechaza (sin productos) resuelve NONE, no un error. _(`test_empty_local_with_refusal_is_none`)_
+- Un error del RAG resuelve ERROR sin propagar la excepción. _(`test_empty_local_with_rag_error_is_error`)_
+- Un SQLAlchemyError del hop local no propaga: el RAG igual se consulta. _(`test_local_sqlalchemy_error_still_calls_rag`)_
+- Hop local caído + RAG caído resuelve ERROR (la cadena nunca lanza). _(`test_local_error_and_rag_error_is_error`)_
+- La cadena con un RagProductClient real normaliza el doble prefijo del codigo. _(`test_chain_normalizes_sku_from_real_client`)_
 
 ## Percepción (voz e imagen)
 
