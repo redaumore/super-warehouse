@@ -342,11 +342,11 @@ def confirm_and_register(
 
     - Case C (missing items, no supplier): the order is cancelled via the
       cancel path with sourcing CANCELLED and ``cancelled_case=True`` — no
-      stock is converted and no Sheets row is appended. Any quantities the
-      auto-sourced RAG lines had accumulated on suppliers' OPEN POs are
-      released first (``release_order_needs``): shared POs keep the other
-      orders' items, a PO left with no items is cancelled and the cancelled
-      ids are surfaced in the confirmation text.
+      stock is converted and no Sheets row is appended. The generalized
+      cancel releases any quantities the auto-sourced RAG lines had
+      accumulated on suppliers' OPEN POs: shared POs keep the other orders'
+      items, a PO left with no items is cancelled and the cancelled ids are
+      surfaced in the confirmation text.
     - Case B (missing items with suppliers): the order stays CONFIRMED (per
       the spec the order state is independent of PO progress), the SourcingNeed
       rows are persisted and the supplier-selection prompt is returned.
@@ -408,14 +408,14 @@ def confirm_and_register(
 
     if case is SourcingCase.C:
         from src.agents.customer import format_case_c_reply, unmapped_supplier_note
-        from src.purchasing.accumulate import release_order_needs
 
-        cancel_order(session, order, actor=actor, now=now)
+        cancel_result = cancel_order(session, order, actor=actor, now=now)
         order.sourcing_state = SourcingState.CANCELLED
-        # The auto-sourced RAG lines already accumulated quantities on the
-        # suppliers' OPEN POs: this cancelled order must release its share
-        # (only OPEN POs; shared POs keep the other orders' items).
-        cancelled_pos = release_order_needs(session, order.order_id)
+        # The generalized cancel path already released this order's
+        # auto-sourced quantities from the suppliers' OPEN POs (only OPEN POs;
+        # shared POs keep the other orders' items): the cancelled ids ride the
+        # CancelResult.
+        cancelled_po_ids = cancel_result.cancelled_po_ids
         session.flush()
         unmapped = tuple(dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ()))
         if unmapped:
@@ -425,13 +425,13 @@ def confirm_and_register(
                 {"order_id": order.order_id, "unmapped_codes": list(unmapped)},
                 level="WARNING",
             )
-        if cancelled_pos:
+        if cancelled_po_ids:
             log_session_event(
                 "orders",
                 "order_case_c_released_pos",
                 {
                     "order_id": order.order_id,
-                    "cancelled_po_ids": [po.po_id for po in cancelled_pos],
+                    "cancelled_po_ids": list(cancelled_po_ids),
                     "released_skus": [line.sku for line in autosourced],
                 },
                 level="WARNING",
@@ -448,8 +448,8 @@ def confirm_and_register(
             level="WARNING",
         )
         po_note = ""
-        if cancelled_pos:
-            po_ids = ", ".join(f"#{po.po_id}" for po in cancelled_pos)
+        if cancelled_po_ids:
+            po_ids = ", ".join(f"#{po_id}" for po_id in cancelled_po_ids)
             po_note = f" Se cancelaron las órdenes de compra abiertas por este pedido ({po_ids})."
         return ConfirmResult(
             order=order,

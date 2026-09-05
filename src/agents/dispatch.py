@@ -188,11 +188,14 @@ def apply_decision(
     REJECT → ``cancel_order`` with the owner as actor: Draft/Confirmed release
     every ACTIVE reservation; Picking/Ready for delivery restore the deducted
     stock with the audit trail (spec: cancellations release or restore stock).
+    The generalized cancel also releases auto-sourced needs from OPEN POs.
 
     UNKNOWN → ``UnknownDecisionError`` — the owner is asked to repeat.
     """
     if decision.action is DecisionAction.REJECT:
-        return cancel_order(session, order, actor="owner", now=now)
+        # cancel_order returns a CancelResult; the caller (handler) only needs
+        # the cancelled order itself.
+        return cancel_order(session, order, actor="owner", now=now).order
     if decision.action is DecisionAction.APPROVE:
         if decision.adjustments:
             _apply_line_adjustments(session, order, decision, quote)

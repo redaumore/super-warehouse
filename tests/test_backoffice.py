@@ -68,13 +68,19 @@ from src.db.models import (
     OrderEstado,
     OrderItem,
     ReservationEstado,
+    SourcingNeed,
     StockAdjustment,
     StockReservation,
     Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
 )
 from src.db.session import SessionLocal
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
+from src.purchasing.accumulate import accumulate_need
+from src.sourcing.persistence import upsert_sourcing_need
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
 # ---------------------------------------------------------------- app structure
@@ -180,7 +186,8 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, stock_adjustments, "
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, order_items, orders, stock_reservations, stock_adjustments, "
                 "inventory, catalogo, suppliers, clientes, lista_precios, "
                 "supplier_sku_mappings, exchange_rates, app_settings RESTART IDENTITY CASCADE"
             )
@@ -682,6 +689,27 @@ def test_cancel_action_releases_reservations_with_backoffice_actor(shop_ctx):
             select(StockReservation).where(StockReservation.order_id == order.order_id)
         )
         assert reservation.estado is ReservationEstado.RELEASED
+
+
+def test_cancel_action_releases_auto_sourced_needs_and_cancels_the_empty_po(shop_ctx):
+    """Cancelar desde backoffice libera la necesidad auto-sourced y cancela el PO vacío."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.CONFIRMED)
+    need = upsert_sourcing_need(db_session, order.order_id, "CLV-001", 3)
+    po = accumulate_need(db_session, need, 1)
+    db_session.commit()
+
+    with SessionLocal() as session:
+        message = cancel_order_action(session, order.order_id)
+
+    assert "cancelado" in message
+    with SessionLocal() as session:
+        assert session.get(Order, order.order_id).estado is OrderEstado.CANCELED
+        reloaded = session.get(SupplierPurchaseOrder, po.po_id)
+        assert reloaded.estado is SupplierPurchaseOrderState.CANCELLED
+        assert session.scalars(select(SupplierPurchaseOrderItem)).all() == []
+        reloaded_need = session.get(SourcingNeed, need.need_id)
+        assert reloaded_need.po_item_id is None  # detached: no phantom PO quantities
 
 
 def test_cancel_action_restores_deducted_stock_with_audit(shop_ctx):

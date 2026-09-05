@@ -262,8 +262,8 @@ def test_invalid_selection_number_asks_again(shop):
     assert session.scalar(select(SupplierPurchaseOrder)) is None
 
 
-def test_cancel_case_b_order_never_touches_pos_or_needs(shop):
-    """Cancelar un pedido Case B no toca POs abiertos ni SourcingNeed (AD9)."""
+def test_cancel_case_b_order_releases_its_open_po_quantities(shop):
+    """Cancelar un pedido Case B libera su parte del PO abierto (sin OC fantasma)."""
     session = shop["session"]
     orchestrator = _orchestrator(session)
     orchestrator.handle_inbound(_message(ORDER_MESSAGE))
@@ -277,15 +277,20 @@ def test_cancel_case_b_order_never_touches_pos_or_needs(shop):
     session.flush()
 
     assert order.estado is OrderEstado.CANCELED
-    # AD9: the shared OPEN PO and its accumulated line survive untouched.
+    # The PO held only this order's items: the release empties it and the
+    # generalized cancel path cancels it (no phantom supplier work).
     po = session.scalar(select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 1))
     assert po is not None
-    assert po.estado is SupplierPurchaseOrderState.OPEN
-    item = session.scalar(
-        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po.po_id)
+    assert po.estado is SupplierPurchaseOrderState.CANCELLED
+    assert (
+        session.scalar(
+            select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po.po_id)
+        )
+        is None
     )
-    assert item.quantity == 6  # no orphaned supplier work: the PO keeps its line
-    # The SourcingNeed keeps the selection (informational axis, never cancelled).
+    # The SourcingNeed keeps the selection (informational axis) but loses its
+    # PO link (idempotent: a re-release is a no-op).
     need = session.scalar(select(SourcingNeed).where(SourcingNeed.order_id == order.order_id))
     assert need is not None
     assert need.supplier_id == 1
+    assert need.po_item_id is None

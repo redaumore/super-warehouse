@@ -29,12 +29,18 @@ from src.db.models import (
     OrderEstado,
     OrderItem,
     ReservationEstado,
+    SourcingNeed,
     StockReservation,
     Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
 )
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.router import AgentOutcome
 from src.orchestrator.session import ConversationState
+from src.purchasing.accumulate import accumulate_need
+from src.sourcing.persistence import upsert_sourcing_need
 
 OWNER_SENDER = "+5491100000000"
 
@@ -203,6 +209,27 @@ def test_reject_cancels_order_and_releases_reservations(shop):
     )
     assert reservation.estado is ReservationEstado.RELEASED
     assert available_stock(session, "CLV-001") == 10
+
+
+def test_reject_releases_auto_sourced_needs_and_cancels_the_empty_po(shop):
+    """Rechazar un Confirmado con necesidad auto-sourced cancela el PO vaciado."""
+    session = shop["session"]
+    order = shop["orders"][0]
+    order.estado = OrderEstado.CONFIRMED  # reject path runs from Confirmed too
+    session.flush()
+    need = upsert_sourcing_need(session, order.order_id, "CLV-001", 3)
+    po = accumulate_need(session, need, 1)
+    handler = build_dispatch_handler(lambda: session, FakeSheets())
+
+    outcome = handler(_message("no, rechazá"), _state(lambda: session, order.order_id), None)
+
+    assert "cancelado" in outcome.reply  # type: ignore[operator]
+    assert order.estado is OrderEstado.CANCELED
+    reloaded = session.get(SupplierPurchaseOrder, po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.CANCELLED
+    assert session.scalars(select(SupplierPurchaseOrderItem)).all() == []
+    reloaded_need = session.get(SourcingNeed, need.need_id)
+    assert reloaded_need.po_item_id is None  # detached: no phantom PO quantities
 
 
 def test_unknown_decision_asks_again_without_touching_order(shop):

@@ -34,9 +34,13 @@ from src.db.models import (
     OrderEstado,
     OrderItem,
     ReservationEstado,
+    SourcingNeed,
     StockAdjustment,
     StockReservation,
     Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
 )
 from src.order_lifecycle.state import (
     InvalidTransitionError,
@@ -52,6 +56,9 @@ from src.order_lifecycle.state import (
     requires_requote,
     start_picking,
 )
+from src.purchasing.accumulate import accumulate_need
+from src.purchasing.state import send_po
+from src.sourcing.persistence import upsert_sourcing_need
 
 # ---------------------------------------------------------------- unit tests
 
@@ -81,7 +88,17 @@ class _FakeSession:
         return 1 if self.stale else None
 
     def scalars(self, _statement):
-        return _ScalarResult(list(self.stale_rows) + list(self.reservations) + list(self.added))
+        # Filter by the queried entity: cancel_order runs a second scalars
+        # query (SourcingNeed) whose rows must not be the reservations.
+        entity = None
+        try:
+            entity = _statement.column_descriptions[0]["entity"]
+        except (AttributeError, IndexError, KeyError, TypeError):
+            pass
+        rows = list(self.stale_rows) + list(self.reservations) + list(self.added)
+        if entity is not None:
+            rows = [row for row in rows if isinstance(row, entity)]
+        return _ScalarResult(rows)
 
     def execute(self, statement):
         self.executed.append(statement)
@@ -104,6 +121,9 @@ class _ScalarResult:
 
     def all(self):
         return list(self._rows)
+
+    def __iter__(self):
+        return iter(self._rows)
 
 
 def _order(order_id: int = 1, *, estado: OrderEstado, needs_requote: bool = False) -> Order:
@@ -521,6 +541,86 @@ def test_late_cancel_restores_deducted_stock_with_audit(order_ctx):
     assert adjustments[0].delta == 4
     reservation = ctx["session"].get(StockReservation, reservation.reservation_id)
     assert reservation.estado is ReservationEstado.RELEASED  # never restores twice
+
+
+# ------------------------- cancel releases auto-sourced needs from OPEN POs
+
+
+def _autosourced_need(ctx, sku: str = "CLV-001", missing: int = 3):
+    """Accumulate one sourcing need of the ctx order into supplier 1's OPEN PO."""
+    need = upsert_sourcing_need(ctx["session"], ctx["order"].order_id, sku, missing)
+    po = accumulate_need(ctx["session"], need, 1)
+    return need, po
+
+
+def test_cancel_confirmed_order_cancels_the_open_po_it_emptied(order_ctx):
+    """Cancelar un Confirmado con necesidades auto-sourced cancela el PO vaciado."""
+    ctx = order_ctx
+    confirm_order(ctx["session"], ctx["order"])
+    need, po = _autosourced_need(ctx)
+
+    result = cancel_order(ctx["session"], ctx["order"], actor="owner")
+
+    assert ctx["order"].estado is OrderEstado.CANCELED
+    assert result.cancelled_po_ids == (po.po_id,)
+    reloaded = ctx["session"].get(SupplierPurchaseOrder, po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.CANCELLED
+    assert ctx["session"].scalars(select(SupplierPurchaseOrderItem)).all() == []
+    reloaded_need = ctx["session"].get(SourcingNeed, need.need_id)
+    assert reloaded_need.po_item_id is None  # detached: a re-release is a no-op
+    assert reloaded_need.supplier_id == 1  # the selection itself is kept
+
+
+def test_cancel_leaves_a_shared_open_po_with_the_other_orders_items(order_ctx):
+    """OC compartida: el PO sigue OPEN con la cantidad del otro pedido."""
+    ctx = order_ctx
+    confirm_order(ctx["session"], ctx["order"])
+    need, shared_po = _autosourced_need(ctx)
+    other = Order(customer_id=1, estado=OrderEstado.CONFIRMED, needs_requote=False)
+    ctx["session"].add(other)
+    ctx["session"].flush()
+    other_need = upsert_sourcing_need(ctx["session"], other.order_id, "CLV-001", 2)
+    accumulate_need(ctx["session"], other_need, 1)  # merges into the shared PO
+
+    result = cancel_order(ctx["session"], ctx["order"], actor="owner")
+
+    assert result.cancelled_po_ids == ()  # the PO still holds the other order
+    reloaded = ctx["session"].get(SupplierPurchaseOrder, shared_po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.OPEN
+    item = ctx["session"].scalar(
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == shared_po.po_id)
+    )
+    assert item.quantity == 2  # only the other order's share remains
+    reloaded_need = ctx["session"].get(SourcingNeed, need.need_id)
+    assert reloaded_need.po_item_id is None
+
+
+def test_cancel_keeps_an_executed_po_and_its_need_link(order_ctx):
+    """PO ya enviado (SENT): la cancelación no lo toca ni desvincula la necesidad."""
+    ctx = order_ctx
+    confirm_order(ctx["session"], ctx["order"])
+    need, po = _autosourced_need(ctx)
+    send_po(ctx["session"], po)
+
+    result = cancel_order(ctx["session"], ctx["order"], actor="owner")
+
+    assert result.cancelled_po_ids == ()
+    reloaded = ctx["session"].get(SupplierPurchaseOrder, po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.SENT  # untouched
+    reloaded_need = ctx["session"].get(SourcingNeed, need.need_id)
+    assert reloaded_need.po_item_id is not None  # keeps its executed link
+
+
+def test_plain_cancel_without_needs_releases_nothing(order_ctx):
+    """Cancelar sin necesidades: sin POs tocados y sin ids en el resultado."""
+    ctx = order_ctx
+    confirm_order(ctx["session"], ctx["order"])
+
+    result = cancel_order(ctx["session"], ctx["order"], actor="owner")
+
+    assert ctx["order"].estado is OrderEstado.CANCELED
+    assert result.cancelled_po_ids == ()
+    assert ctx["session"].scalar(select(SupplierPurchaseOrder)) is None
 
 
 def test_modify_restores_deducted_stock_without_double_count(order_ctx):

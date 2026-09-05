@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 355, agrupados en 30 dominios.
+**Total de escenarios:** 360, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -16,7 +16,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
-- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
+- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
@@ -32,7 +32,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 5
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 36
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 37
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -245,6 +245,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Una reserva vigente no bloquea la confirmación. _(`test_fresh_reservation_can_be_confirmed`)_
 - Cancelar un Draft libera las reservas: el stock vuelve a estar disponible. _(`test_cancel_draft_releases_reservations_and_stock_is_available`)_
 - Cancelar desde Picking restaura el stock descontado y audita el ajuste. _(`test_late_cancel_restores_deducted_stock_with_audit`)_
+- Cancelar un Confirmado con necesidades auto-sourced cancela el PO vaciado. _(`test_cancel_confirmed_order_cancels_the_open_po_it_emptied`)_
+- OC compartida: el PO sigue OPEN con la cantidad del otro pedido. _(`test_cancel_leaves_a_shared_open_po_with_the_other_orders_items`)_
+- PO ya enviado (SENT): la cancelación no lo toca ni desvincula la necesidad. _(`test_cancel_keeps_an_executed_po_and_its_need_link`)_
+- Cancelar sin necesidades: sin POs tocados y sin ids en el resultado. _(`test_plain_cancel_without_needs_releases_nothing`)_
 - Modify restaura el stock descontado y libera las reservas convertidas. _(`test_modify_restores_deducted_stock_without_double_count`)_
 - add/remove mutan OrderItem rows; el Draft vacío sigue Draft. _(`test_add_remove_draft_item_on_persisted_draft`)_
 
@@ -533,6 +537,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La acción start picking transiciona y hace commit (patrón po.py). _(`test_start_picking_action_commits_transition`)_
 - Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega. _(`test_fulfillment_chain_commits_to_closed_with_delivery_date`)_
 - Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice. _(`test_cancel_action_releases_reservations_with_backoffice_actor`)_
+- Cancelar desde backoffice libera la necesidad auto-sourced y cancela el PO vacío. _(`test_cancel_action_releases_auto_sourced_needs_and_cancels_the_empty_po`)_
 - Cancelar desde Picking restaura stock y audita con actor backoffice. _(`test_cancel_action_restores_deducted_stock_with_audit`)_
 - El monitor muestra los seis estados del pedido. _(`test_monitor_shows_all_six_states`)_
 - El tab Customer Orders expone las cuatro acciones de cumplimiento. _(`test_app_customer_orders_tab_has_fulfillment_buttons`)_
