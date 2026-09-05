@@ -19,65 +19,19 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
-from datetime import date
 
 from sqlalchemy.orm import Session
 
 from src.channels.base import InboundMessage
-from src.db.models import Cliente, Order, OrderEstado, SourcingState, SupplierPurchaseOrder
+from src.db.models import Order, OrderEstado, SourcingState, SupplierPurchaseOrder
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ConversationState
 from src.order_lifecycle.state import confirm_order
 from src.purchasing.accumulate import accumulate_need
-from src.sourcing.classify import MissingItem
-from src.sourcing.persistence import sourcing_needs_for_order, upsert_sourcing_need
-from src.supplier.searcher import SupplierCandidate, SupplierCatalogSearcher
+from src.sourcing.persistence import sourcing_needs_for_order
+from src.supplier.searcher import SupplierCandidate
 
 _NUMBER_RE = re.compile(r"\d+")
-
-
-def persist_case_b_order(
-    session: Session,
-    customer: Cliente,
-    *,
-    delivery_date: date | None = None,
-    missing: tuple[MissingItem, ...],
-) -> Order:
-    """Persist the order as DRAFT with its SourcingNeed rows.
-
-    Sourcing stays PENDING_ASSEMBLY here: per the order-sourcing spec,
-    IN_PREPARATION is set when the owner's selection is confirmed (the POs are
-    accumulated), not at order creation. The order itself is a Draft awaiting
-    the confirm ceremony — independent of the PO progress.
-    """
-    order = Order(
-        customer_id=customer.customer_id,
-        delivery_date=delivery_date,
-    )
-    session.add(order)
-    session.flush()
-    for item in missing:
-        upsert_sourcing_need(session, order.order_id, item.sku, item.missing_quantity)
-    session.flush()
-    return order
-
-
-def list_missing_with_suppliers(
-    session: Session,
-    order: Order,
-    searcher: SupplierCatalogSearcher,
-) -> tuple[MissingItem, ...]:
-    """The order's needs enriched with today's supplier candidates."""
-    return tuple(
-        MissingItem(
-            sku=need.sku,
-            description=None,
-            requested=need.missing_quantity,
-            missing_quantity=need.missing_quantity,
-            candidates=searcher.search(sku=need.sku),
-        )
-        for need in sourcing_needs_for_order(session, order.order_id)
-    )
 
 
 def confirm_selection(

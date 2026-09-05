@@ -13,16 +13,16 @@ catalog ``RagProductClient`` on empty local results), which degrades
 gracefully — no catalog note — when the local database is down.
 
 When an owner sender key is configured, the order-sourcing workflow is
-enabled: the parse step extracts structured order fields (customer name, items,
-delivery date) before the Customer agent, the Customer handler resolves the
-customer by name and classifies each order into Case A/B/C, the SOURCING agent
-handles the owner's supplier-selection replies, and the DISPATCH agent runs the
-confirm ceremony (``parse_decision`` → ``apply_decision`` →
-``confirm_and_register`` with the ``SheetsWriter``). The conversation store
-is wired to rehydrate expired conversations from the database (latest DRAFT
-order across customers), so multi-turn flows survive the 30-minute in-memory
-TTL. Clearing both owner keys disables the parse step and keeps the legacy
-conversational intake.
+enabled: the GUIDED agent owns the scripted order-creation flow the session
+reset starts (client → products → quantity → finalize through
+``persist_finalized_draft``), the DISPATCH agent runs the confirm ceremony
+(``parse_decision`` → ``apply_decision`` → ``confirm_and_register`` with the
+``SheetsWriter``) and the SOURCING agent handles the owner's supplier-selection
+replies when a confirm discovers a Case B (stock gap with candidates). The
+conversation store is wired to rehydrate expired conversations from the
+database (latest DRAFT order across customers), so multi-turn flows survive
+the 30-minute in-memory TTL. The guided flow is the ONLY order-creation path:
+the legacy free-form (parsed) intake was removed.
 
 Quotes, cancellations and approvals are IN-CHAT replies: the old
 ``_ChannelNotifier`` owner push (``owner_phone``) is gone — the pipeline edge
@@ -44,7 +44,6 @@ from src.agents.customer import (
 )
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import build_guided_handler
-from src.agents.intake import OrderParser, SimpleOrderParser
 from src.agents.product_search import PrecedenceProductSearcher, ProductSearcher
 from src.channels import CHANNELS
 from src.channels.base import InboundMessage
@@ -91,7 +90,7 @@ def _sourcing_deps() -> SourcingDeps | None:
     when a mapped provider exists. Case C only happens when the RAG is
     unreachable or the provider is unknown/inactive — the safe degraded
     behavior. The flow is enabled by configuring an owner sender key (either
-    channel); with both keys empty the legacy intake keeps working.
+    channel).
     """
     settings = get_settings()
     if not (settings.owner_telegram_chat_id or settings.owner_whatsapp_phone):
@@ -109,7 +108,6 @@ def build_orchestrator(
     searcher: ProductSearcher | None = None,
     *,
     sourcing: SourcingDeps | None = None,
-    parser: OrderParser | None = None,
     dispatch: Callable[..., AgentOutcome | None] | None = None,
     sheets: SheetsWriter | None = None,
 ) -> Orchestrator:
@@ -121,9 +119,9 @@ def build_orchestrator(
     catalog ``RagProductClient``); the other agents stay walking-skeleton
     stubs. The GUIDED agent owns the scripted order-creation flow that the
     session reset starts, sharing the same product searcher and sourcing
-    persistence boundaries as Customer. With ``sourcing`` wired, the parse
-    step, the SOURCING confirm agent and the wired DISPATCH approval flow are
-    enabled, and the store rehydrates expired conversations from the database.
+    persistence boundaries as Customer. With ``sourcing`` wired, the SOURCING
+    confirm agent and the wired DISPATCH approval flow are enabled, and the
+    store rehydrates expired conversations from the database.
     ``dispatch``/``sheets`` are injectable for tests; production uses
     ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
     """
@@ -136,7 +134,7 @@ def build_orchestrator(
                 return rehydrate_conversation(session, sender_id, searcher=searcher_ref)
 
         rehydrator = _db_rehydrate
-    orchestrator = Orchestrator(ConversationStore(rehydrator=rehydrator), parser=parser)
+    orchestrator = Orchestrator(ConversationStore(rehydrator=rehydrator))
     for agent in AgentName:
         orchestrator.register(agent, _stub_agent)
     product_searcher = (
@@ -172,20 +170,10 @@ def build_orchestrator(
     return orchestrator
 
 
-def _default_sourcing() -> tuple[SourcingDeps | None, OrderParser | None]:
-    """Resolve the enabled sourcing flow: deps + parser, or legacy (None, None)."""
-    deps = _sourcing_deps()
-    parser = SimpleOrderParser() if deps is not None else None
-    return deps, parser
-
-
 # The single orchestrator instance the intake dispatches to. Its session store
 # is in-memory (a persistent store is a later concern; see docs/architecture.md).
-_DEFAULT_DEPS, _DEFAULT_PARSER = _default_sourcing()
-ORCHESTRATOR: Orchestrator = build_orchestrator(
-    sourcing=_DEFAULT_DEPS,
-    parser=_DEFAULT_PARSER,
-)
+_DEFAULT_DEPS = _sourcing_deps()
+ORCHESTRATOR: Orchestrator = build_orchestrator(sourcing=_DEFAULT_DEPS)
 
 
 def _reply_for(message: InboundMessage, decision: RoutingDecision, reply: str | None) -> str:
@@ -265,7 +253,6 @@ async def handle_inbound(message: InboundMessage) -> None:
         {
             "agent": result.decision.agent.value,
             "media_kind": result.decision.media_kind,
-            "parsed": result.decision.parsed,
             "context_loaded": result.decision.context_loaded,
         },
     )

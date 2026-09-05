@@ -27,7 +27,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.intake import ParsedOrder
 from src.agents.product_search import ProductEntry
 from src.db.models import (
     Cliente,
@@ -82,7 +81,6 @@ class ConversationState:
     history: tuple[ChatMessage, ...] = ()  # multi-turn chat log shared by agents
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     # Sourcing axis (added by the order-sourcing workflow).
-    parsed_order: ParsedOrder | None = None  # parse-step output for the current turn
     sourcing_selection_pending: bool = False  # awaiting the owner's supplier choice
     sourcing_needs: tuple[SourcingNeedItem, ...] = ()
     sourcing_candidates: tuple[SupplierCandidate, ...] = ()
@@ -178,12 +176,15 @@ def rehydrate_conversation(
     Owner-keyed: the latest DRAFT order ACROSS ALL customers is restored (there
     is no owner entity — the latest open draft IS the owner's, per the design).
     An explicit ``order_ref`` (``pedido #N``) targets that specific order
-    instead of the latest. The state carries the order's items, its SourcingNeed
-    rows and the routing flags: a Case B order still awaiting supplier choices
-    is restored with ``sourcing_selection_pending`` and the candidates
-    recomputed through the searcher; a Draft awaiting confirm restores
-    ``awaiting_decision`` so the owner's confirm/cancel reply routes correctly.
-    CANCELED replaces the legacy REJECTED: cancelled orders never rehydrate.
+    instead of the latest. When no DRAFT exists, the latest CONFIRMED order
+    with UNASSIGNED sourcing needs is restored instead — the confirm ceremony
+    confirms a Case B order while its supplier selection is still pending, and
+    that selection turn must survive the TTL. The state carries the order's
+    items, its SourcingNeed rows and the routing flags: a Case B order still
+    awaiting supplier choices is restored with ``sourcing_selection_pending``
+    and the candidates recomputed through the searcher; a Draft awaiting
+    confirm restores ``awaiting_decision`` so the owner's confirm/cancel reply
+    routes correctly. CANCELED orders never rehydrate.
     """
     if order_ref is not None:
         order = session.get(Order, order_ref)
@@ -196,8 +197,20 @@ def rehydrate_conversation(
             .order_by(Order.order_id.desc())
             .limit(1)
         )
-    if order is None:
-        return None
+        if order is None:
+            order = session.scalar(
+                select(Order)
+                .where(
+                    Order.estado == OrderEstado.CONFIRMED,
+                    Order.order_id.in_(
+                        select(SourcingNeed.order_id).where(SourcingNeed.supplier_id.is_(None))
+                    ),
+                )
+                .order_by(Order.order_id.desc())
+                .limit(1)
+            )
+            if order is None:
+                return None
     items = tuple(ResolvedItem(sku=item.sku, cantidad=item.cantidad) for item in order.items)
     needs = tuple(
         SourcingNeedItem(

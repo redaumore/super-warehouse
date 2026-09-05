@@ -25,7 +25,6 @@ from src.agents.customers import (
     parse_customer_pick,
     resolve_customer_name,
 )
-from src.agents.intake import SimpleOrderParser
 from src.agents.inventory import seed_inventory
 from src.backoffice.clients import InvalidClientDataError, default_price_list_id
 from src.channels.base import InboundMessage
@@ -34,11 +33,9 @@ from src.db.models import (
     Catalogo,
     Cliente,
     ListaPrecios,
-    Order,
     Supplier,
 )
 from src.orchestrator.router import AgentName, RoutingDecision
-from src.orchestrator.session import ConversationState
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"
@@ -314,12 +311,6 @@ def _handler(session):
     return build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
 
 
-def _parsed_state(session, text: str) -> ConversationState:
-    parsed = SimpleOrderParser().parse(text)
-    assert parsed is not None
-    return ConversationState(sender_id=OWNER_SENDER, parsed_order=parsed)
-
-
 def test_create_client_in_chat_creates_and_reports(shop_with_catalog):
     """El comando 'nuevo cliente' crea el cliente y puede resolverse por nombre."""
     session = shop_with_catalog["session"]
@@ -329,7 +320,7 @@ def test_create_client_in_chat_creates_and_reports(shop_with_catalog):
         sender_id=OWNER_SENDER,
         text="nuevo cliente Ferretería La Esquina 1133445566",
     )
-    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER, parsed=True))
+    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER))
 
     assert "di de alta a Ferretería La Esquina" in outcome.reply  # type: ignore[operator]
     created = session.scalar(select(Cliente).where(Cliente.telefono_norm == "+5491133445566"))
@@ -351,7 +342,7 @@ def test_create_client_duplicate_phone_reports_existing(shop_with_catalog):
         sender_id=OWNER_SENDER,
         text="nuevo cliente Otro Nombre 1155551234",  # same phone as client 1
     )
-    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER, parsed=True))
+    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER))
 
     assert "ya es de Ferretería Don Juan" in outcome.reply  # type: ignore[operator]
     assert "no creé un duplicado" in outcome.reply  # type: ignore[operator]
@@ -368,87 +359,7 @@ def test_create_client_invalid_phone_reports_error(shop_with_catalog):
     message = InboundMessage(
         channel="whatsapp", sender_id=OWNER_SENDER, text="nuevo cliente Ferretería X abc"
     )
-    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER, parsed=True))
+    outcome = handler(message, None, RoutingDecision(agent=AgentName.CUSTOMER))
 
     assert "No pude crear el cliente" in outcome.reply  # type: ignore[operator]
     assert session.scalar(select(Cliente).where(Cliente.nombre_comercial == "Ferretería X")) is None
-
-
-def test_ambiguous_customer_name_shows_numbered_menu(shop_with_catalog):
-    """Un nombre ambiguo muestra el menú numerado y queda pendiente de elegir."""
-    session = shop_with_catalog["session"]
-    handler = _handler(session)
-    message = InboundMessage(
-        channel="whatsapp", sender_id=OWNER_SENDER, text="para ferreteria, 10 clavos de 2 pulgadas"
-    )
-    outcome = handler(
-        message,
-        _parsed_state(session, message.text),
-        RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
-    )
-
-    assert "elegí el número" in outcome.reply  # type: ignore[operator]
-    assert "1) Ferretería Don Juan" in outcome.reply  # type: ignore[operator]
-    assert "2) Ferretería El Zorro" in outcome.reply  # type: ignore[operator]
-    assert outcome.state is not None
-    assert outcome.state.customer_disambiguation_pending is True
-    assert {c.customer_id for c in outcome.state.customer_candidates} == {1, 2}
-    # The parsed order waits in the state for the pick turn.
-    assert outcome.state.parsed_order is not None
-    assert session.scalar(select(Order)) is None  # nothing persisted yet
-
-
-def test_disambiguation_pick_continues_to_case_a(shop_with_catalog):
-    """Elegir el número del menú continúa el pedido con ese cliente."""
-    session = shop_with_catalog["session"]
-    handler = _handler(session)
-    message = InboundMessage(
-        channel="whatsapp", sender_id=OWNER_SENDER, text="para ferreteria, 10 clavos de 2 pulgadas"
-    )
-    first = handler(
-        message,
-        _parsed_state(session, message.text),
-        RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
-    )
-    assert first.state is not None
-
-    second = handler(
-        InboundMessage(channel="whatsapp", sender_id=OWNER_SENDER, text="1"),
-        first.state,
-        RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
-    )
-
-    assert "Pedido #1 de Ferretería Don Juan" in second.reply  # type: ignore[operator]
-    assert second.state is not None
-    assert second.state.customer_disambiguation_pending is False
-    assert second.state.customer_id == 1
-    assert second.state.awaiting_decision is True
-    order = session.scalar(select(Order))
-    assert order is not None
-    assert order.customer_id == 1
-
-
-def test_invalid_disambiguation_pick_reshows_menu(shop_with_catalog):
-    """Un pick fuera de rango re-muestra el menú sin persistir nada."""
-    session = shop_with_catalog["session"]
-    handler = _handler(session)
-    message = InboundMessage(
-        channel="whatsapp", sender_id=OWNER_SENDER, text="para ferreteria, 10 clavos de 2 pulgadas"
-    )
-    first = handler(
-        message,
-        _parsed_state(session, message.text),
-        RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
-    )
-    assert first.state is not None
-
-    second = handler(
-        InboundMessage(channel="whatsapp", sender_id=OWNER_SENDER, text="9"),
-        first.state,
-        RoutingDecision(agent=AgentName.CUSTOMER, parsed=True),
-    )
-
-    assert "elegí el número" in second.reply  # type: ignore[operator]
-    assert second.state is not None
-    assert second.state.customer_disambiguation_pending is True
-    assert session.scalar(select(Order)) is None

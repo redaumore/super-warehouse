@@ -14,8 +14,7 @@ Implements the agent-orchestration routing contract:
 - an in-progress order with resolved items goes back to Sales (adjustments,
   confirmations); one still resolving items goes to Disambiguation;
 - a fresh message with no context starts the pipeline at the Customer agent —
-  after a parse step that extracts structured order fields when a parser is
-  wired (the parse step is the intake seam; disabling it keeps legacy routing).
+  the scripted GUIDED flow (session reset) is the only order-creation path.
 
 ``Orchestrator`` wires routing to the store: it loads the sender's context
 (rehydrating from the DB when the in-memory entry expired), routes, hands the
@@ -31,7 +30,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from src.agents.commands import GUIDED_ASK_CLIENT, is_session_reset
-from src.agents.intake import OrderParser
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
 from src.observability.session_logger import generate_session_id, get_current_session_id
@@ -58,7 +56,6 @@ class RoutingDecision:
     agent: AgentName
     media_kind: str | None = None  # "voice" | "image" for the perception agent
     context_loaded: bool = False
-    parsed: bool = False  # True when the parse step extracted an order from the text
 
 
 @dataclass(frozen=True)
@@ -140,12 +137,9 @@ class Orchestrator:
         self,
         store: ConversationStore,
         agents: dict[AgentName, Callable[..., AgentOutcome | None]] | None = None,
-        *,
-        parser: OrderParser | None = None,
     ) -> None:
         self.store = store
         self.agents: dict[AgentName, Callable[..., AgentOutcome | None]] = agents or {}
-        self.parser = parser
 
     def register(self, agent: AgentName, handler: Callable[..., AgentOutcome | None]) -> None:
         """Bind an agent handler to its name."""
@@ -156,11 +150,8 @@ class Orchestrator:
 
         Context is loaded (rehydrated from the DB when expired) before routing
         and persisted after the handler, so a multi-step order never loses its
-        identity between agents. When a parser is wired and the message would
-        start a fresh Customer conversation, the parse step runs first: the
-        extracted order rides the state so the Customer agent can classify it
-        into Case A/B/C instead of answering as plain chat. The agent's
-        optional reply rides the turn result back to the pipeline.
+        identity between agents. The agent's optional reply rides the turn
+        result back to the pipeline.
 
         The session-reset trigger ("hola bob", case-insensitive, whole
         message, optional trailing punctuation) is checked first: it drops
@@ -190,23 +181,6 @@ class Orchestrator:
             state = state.with_updates(session_id=sid)
             self.store.put(state)
         decision = route_message(message, state)
-        if (
-            self.parser is not None
-            and decision.agent is AgentName.CUSTOMER
-            and not decision.context_loaded
-            and message.media_type is None
-        ):
-            parsed = self.parser.parse((message.text or "").strip())
-            if parsed is not None:
-                sid = (
-                    state.session_id
-                    if state and state.session_id
-                    else (get_current_session_id() or generate_session_id(message.sender_id))
-                )
-                state = ConversationState(
-                    sender_id=message.sender_id, session_id=sid, parsed_order=parsed
-                )
-                decision = RoutingDecision(agent=AgentName.CUSTOMER, parsed=True)
         handler = self.agents.get(decision.agent)
         outcome = None
         if handler is not None:

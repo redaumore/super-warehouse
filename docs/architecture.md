@@ -50,14 +50,16 @@ that owns that step and carries conversation context between them.
 3. **Route** (`src/orchestrator/router.py`): voice/image → Perception;
    awaiting-decision replies → wired Dispatch; customer-name menu picks and
    supplier-selection replies → Customer / Sourcing; in-progress orders →
-   Sales or Disambiguation; fresh messages → Customer (after the parse step).
+   Sales or Disambiguation; fresh messages → Customer. The GUIDED agent owns
+   the scripted order-creation flow (session reset "hola bob"): it is the
+   ONLY order-creation path — the legacy free-form parsed intake was removed.
    Context lives in an in-memory store with a 30-minute TTL
    (`src/orchestrator/session.py`), rehydrated from the DB (latest open order
    across all customers — the owner-keyed rule).
-4. **Resolve** (`src/agents/customers.py`): the parsed customer name is matched
-   against `Cliente.nombre_comercial` (exact → folded containment); `nuevo
-   cliente <nombre> <teléfono>` creates a client in chat reusing
-   `backoffice.clients.create_client`.
+4. **Resolve** (`src/agents/customers.py`): the customer name is matched
+    against `Cliente.nombre_comercial` (exact → folded containment); `nuevo
+    cliente <nombre> <teléfono>` creates a client in chat reusing
+    `backoffice.clients.create_client`.
 5. **Reserve** (`src/agents/inventory.py`): each quoted line soft-locks stock
    with a TTL; the sweeper (`src/scheduler/sweeper.py`) makes expiry durable
    (EXPIRED + `needs_requote`).
@@ -125,7 +127,7 @@ refuses to build.
 
 ## Product queries: local-first → RAG
 
-Conversational product queries (a plain chat turn, no parsed order) resolve
+Conversational product queries (a plain chat turn) resolve
 through a precedence chain (`src/agents/product_search.py`): the local catalog
 search (`DbCatalogSearcher`) runs first, and only a zero-candidate local result
 — or a local database error — falls back to the supplier-catalog RAG

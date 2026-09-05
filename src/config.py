@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Owner sender allowlist. The owner is the ONLY chat actor: every inbound
     # message is gated against these keys before routing (Telegram senders are
     # chat ids, WhatsApp senders are phone numbers). When both are empty the
-    # gate is open and the legacy customer intake keeps working (rollback path).
+    # gate is open and every sender is routed (local development).
     owner_telegram_chat_id: str = ""
     owner_whatsapp_phone: str = ""
 

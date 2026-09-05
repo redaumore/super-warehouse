@@ -213,7 +213,6 @@ def _selection_state_updates(result, order, state: ConversationState) -> Convers
         awaiting_decision=False,
         order_id=order.order_id,
         items=(),
-        parsed_order=None,
         sourcing_selection_pending=True,
         sourcing_needs=needs,
         sourcing_candidates=candidates,
@@ -360,9 +359,7 @@ def build_dispatch_handler(
                     state = _selection_state_updates(result, order, state)
                 else:
                     # Success: the decision conversation is closed.
-                    state = state.with_updates(
-                        awaiting_decision=False, order_id=None, items=(), parsed_order=None
-                    )
+                    state = state.with_updates(awaiting_decision=False, order_id=None, items=())
         return AgentOutcome(state=state, reply=reply)
 
     return handler
