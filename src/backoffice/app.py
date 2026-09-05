@@ -426,7 +426,12 @@ def _exchange_rates_grid() -> list[list[object]]:
         return to_buenos_aires(value).strftime("%Y-%m-%d %H:%M:%S")
 
     return [
-        [row["currency"], row["rate_to_ars"], _render_updated_at(row["updated_at"]), row["editable"]]
+        [
+            row["currency"],
+            row["rate_to_ars"],
+            _render_updated_at(row["updated_at"]),
+            row["editable"],
+        ]
         for row in rows
     ]
 

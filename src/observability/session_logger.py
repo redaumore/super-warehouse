@@ -57,7 +57,9 @@ def format_event_for_human(event: dict[str, Any]) -> str:
         # Event timestamps are the machine contract (UTC ISO); the human header
         # renders them in Buenos Aires local time.
         try:
-            time_str = f"{to_buenos_aires(datetime.fromisoformat(ts)).strftime('%Y-%m-%d %H:%M:%S')} ART"
+            time_str = (
+                f"{to_buenos_aires(datetime.fromisoformat(ts)).strftime('%Y-%m-%d %H:%M:%S')} ART"
+            )
         except ValueError:
             time_str = ts
     else:
@@ -247,9 +249,11 @@ def log_session_event(
             if is_new:
                 # The event payload timestamp stays UTC (machine contract); the
                 # human-facing "Created:" header renders Buenos Aires local time.
-                created_display = to_buenos_aires(datetime.now(UTC)).isoformat(
-                    timespec="seconds"
-                ).replace("T", " ")
+                created_display = (
+                    to_buenos_aires(datetime.now(UTC))
+                    .isoformat(timespec="seconds")
+                    .replace("T", " ")
+                )
                 f.write(
                     "================================================================================\n"
                 )

@@ -9,7 +9,7 @@ from src.tz import BUENOS_AIRES, now_buenos_aires, to_buenos_aires
 
 def test_to_buenos_aires_assumes_utc_for_naive_datetime():
     """Naive input is treated as UTC and shifted to UTC-3 for display."""
-    naive = datetime(2026, 1, 1, 0, 30, 0)
+    naive = datetime(2026, 1, 1, 0, 30, 0)  # noqa: DTZ001 — naive input is the case under test
     result = to_buenos_aires(naive)
     assert result == datetime(2025, 12, 31, 21, 30, 0, tzinfo=BUENOS_AIRES)
     assert result.utcoffset().total_seconds() == -3 * 3600
