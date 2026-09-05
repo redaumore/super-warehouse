@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 380, agrupados en 31 dominios.
+**Total de escenarios:** 392, agrupados en 32 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -23,6 +23,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
 - [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
+- [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 12
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
@@ -391,6 +392,23 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - tarugo
   - pintura
 - Un solo token conserva token_sort puro: el blend parcial solo aplica a 2–3 tokens. _(`test_single_token_keeps_token_sort_only`)_
+
+## Adopción de productos RAG (use case de backoffice)
+
+- Una adopción feliz crea Catalogo + Inventory + StockAdjustment en una transacción. _(`test_adopcion_crea_catalogo_inventory_y_stock_adjustment`)_
+- El SKU es RAG-{codigo}-{codigo_orig normalizado} y nunca supera 64 chars. _(`test_sku_sigue_plantilla_deterministica_y_se_trunca_a_64`)_
+- Un SKU ya existente en catalogo devuelve 409 y no persiste nada nuevo. _(`test_sku_colision_rechazada_sin_persistir`)_
+- Precio None se normaliza a Decimal("0.00") siguiendo el patrón _coerce_cost. _(`test_precio_ausente_se_guarda_como_cero`)_
+- La moneda se guarda en mayúsculas; ausente queda None. _(`test_moneda_se_normaliza_a_mayusculas`)_
+  - usd / USD
+  - ARS / ARS
+- El embedding compone nombre+marca+categoria+subcategoria normalizados. _(`test_composicion_del_embedding_texto_normalizado`)_
+- Un embedder que falla revierte la adopción: nada se persiste (502). _(`test_embedding_falla_y_rollback_total`)_
+- Stock <= 0 se rechaza con error de validación y no persiste nada. _(`test_stock_no_positivo_rechazado`)_
+- El origen JSONB guarda rag.node_id, archivo_origen y pagina_origen. _(`test_provenance_almacenada_write_once`)_
+- Sin node_id la adopción falla cerrado y no persiste nada. _(`test_provenance_faltante_fail_closed`)_
+- Un codigo_proveedor sin proveedor da error explícito y no persiste nada. _(`test_proveedor_desconocido_error_explicito`)_
+- Un proveedor INACTIVO da error explícito y no persiste nada. _(`test_proveedor_inactivo_error_explicito`)_
 
 ## Vencimiento de reservas (scheduler)
 
