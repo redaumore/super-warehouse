@@ -391,8 +391,8 @@ def test_migration_seeded_default_margin_is_read_by_pricing(db_engine, clean_sch
             assert get_default_margin(session) == Decimal(20)
             assert _default_margin(session) == Decimal("0.20")
 
-            # The code path that applies it: an unmapped RAG supplier falls back
-            # to the seeded default, so 100.00 → 120.00.
+            # RAG lines carry NO margin (owner decision): the converted offer
+            # price is the base even when the supplier is unmapped.
             priced = compute_order(
                 (
                     PricingLine(
@@ -409,6 +409,6 @@ def test_migration_seeded_default_margin_is_read_by_pricing(db_engine, clean_sch
                 supplier_margin=lambda code: None,
                 default_margin=_default_margin(session),
             )
-            assert priced.lines[0].base_ars == Decimal("120.00")
+            assert priced.lines[0].base_ars == Decimal("100.00")
     finally:
         command.upgrade(config, "head")

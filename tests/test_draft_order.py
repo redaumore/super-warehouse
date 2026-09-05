@@ -186,7 +186,7 @@ def test_supplier_margin_edit_keeps_persisted_order_lines_frozen(customer_ctx):
         supplier_margin=_supplier_margin_source(session),
         default_margin=Decimal("0.20"),
     )
-    assert priced.lines[0].base_ars == Decimal("125.00")  # 100 × 1.25 at persist time
+    assert priced.lines[0].base_ars == Decimal("100.00")  # RAG lines carry no margin
 
     order = persist_draft_order(session, customer, priced)
     session.commit()
@@ -197,10 +197,10 @@ def test_supplier_margin_edit_keeps_persisted_order_lines_frozen(customer_ctx):
 
     session.refresh(order)
     item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
-    assert item.base_price == Decimal("125.00")
-    assert item.final_price == Decimal("125.00")
-    assert order.subtotal == Decimal("125.00")
-    assert order.total == Decimal("125.00")
+    assert item.base_price == Decimal("100.00")
+    assert item.final_price == Decimal("100.00")
+    assert order.subtotal == Decimal("100.00")
+    assert order.total == Decimal("100.00")
 
 
 def test_persist_draft_order_keeps_totals_null_when_conversion_is_pending(customer_ctx):

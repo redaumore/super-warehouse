@@ -425,10 +425,10 @@ def test_recompute_pending_conversion_clears_flag_and_fills_totals(shop_ctx):
 
     assert recompute_pending_conversion(db_session) == 1
     assert order.conversion_pending is False
-    assert order.subtotal == Decimal("24000.00")
-    assert order.total == Decimal("24000.00")
+    assert order.subtotal == Decimal("20000.00")
+    assert order.total == Decimal("20000.00")
     item = db_session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
-    assert item.base_price == Decimal("12000.00")
+    assert item.base_price == Decimal("10000.00")
 
 
 def test_default_margin_round_trips(client_ctx):
@@ -592,8 +592,8 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
     with SessionLocal() as session:
         reloaded = session.get(Order, order.order_id)
         assert reloaded.conversion_pending is False
-        assert reloaded.subtotal == Decimal("24000.00")
-        assert reloaded.total == Decimal("24000.00")
+        assert reloaded.subtotal == Decimal("20000.00")  # 2 × 10 USD × 1000, no margin
+        assert reloaded.total == Decimal("20000.00")
 
 
 # ------------------------------------------------ fulfillment actions (Phase 6)

@@ -3,6 +3,10 @@
 The module is deliberately free of database and network access. Callers provide
 exchange-rate and supplier-margin sources, which keeps the pricing rules easy to
 test and prevents the chat agent from re-deriving them ad hoc.
+
+LOCAL lines derive their base from cost + margin. RAG lines carry NO margin
+(owner decision): the converted offer price is both the base and the reference
+for discounts — no supplier margin and no default margin ever applies to them.
 """
 
 from __future__ import annotations
@@ -62,12 +66,12 @@ class PricedLine:
     @property
     def subtotal_ars(self) -> Decimal:
         """Base subtotal for the line, rounded to cents."""
-        return (self.base_ars * self.cantidad).quantize(_CENT, rounding=ROUND_HALF_UP)
+        return line_subtotal(self.base_ars, self.cantidad)
 
     @property
     def total_ars(self) -> Decimal:
         """Final total for the line, rounded to cents."""
-        return (self.final_ars * self.cantidad).quantize(_CENT, rounding=ROUND_HALF_UP)
+        return line_subtotal(self.final_ars, self.cantidad)
 
 
 @dataclass(frozen=True)
@@ -108,6 +112,11 @@ def _as_fraction(value: PriceInput | None) -> Decimal:
     """Coerce either a fraction (``0.20``) or percentage points (``20``)."""
     decimal = _as_decimal(value)
     return decimal / Decimal(100) if decimal.copy_abs() > 1 else decimal
+
+
+def line_subtotal(unit_price: Decimal, quantity: int) -> Decimal:
+    """Quantized (HALF_UP, cent) extension of a unit ARS price by quantity."""
+    return (unit_price * quantity).quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
 def _quantize(value: Decimal) -> Decimal:
@@ -177,23 +186,6 @@ def _resolve_rate(
     return None if value is None else _as_decimal(value)
 
 
-def _resolve_margin(
-    supplier_margin: MarginSource | Mapping[str, PriceInput] | PriceInput | None,
-    code: str | None,
-    default_margin: PriceInput | None,
-) -> Decimal:
-    value: PriceInput | None
-    if supplier_margin is None:
-        value = None
-    elif callable(supplier_margin):
-        value = supplier_margin(code)
-    elif isinstance(supplier_margin, Mapping):
-        value = supplier_margin.get(code) if code is not None else None
-    else:
-        value = supplier_margin
-    return _as_fraction(value if value is not None else default_margin)
-
-
 def _price_line(
     fields: dict[str, Any],
     *,
@@ -238,12 +230,10 @@ def _price_line(
                 raise MissingRateError(currency)
             base = Decimal(0)
         else:
-            base = compute_base(
-                _quantize(original * conversion_rate),
-                _resolve_margin(
-                    supplier_margin, str(code) if code is not None else None, default_margin
-                ),
-            )
+            # RAG lines carry NO margin: the converted offer price IS the base
+            # (owner decision). Discounts still apply downstream, only the
+            # markup goes away.
+            base = _quantize(original * conversion_rate)
     else:
         raise ValueError(f"unsupported order line source: {source}")
 
@@ -274,9 +264,10 @@ def compute_order(
 ) -> PricedOrder:
     """Compute source-aware line prices and ARS subtotal/total.
 
-    LOCAL lines use their catalog cost and applied margin. RAG lines convert the
-    offer price to ARS first, then apply the mapped supplier margin or fallback
-    default. Missing non-ARS rates raise :class:`MissingRateError`.
+    LOCAL lines use their catalog cost and applied margin. RAG lines carry NO
+    margin: the converted offer price is the base (the mapped supplier margin
+    and the fallback default never apply to them), and only list/particular
+    discounts still apply. Missing non-ARS rates raise :class:`MissingRateError`.
     """
     priced = tuple(
         _price_line(
