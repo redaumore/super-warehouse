@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 352, agrupados en 30 dominios.
+**Total de escenarios:** 355, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,7 +12,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 21
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 24
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
@@ -132,6 +132,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Dos suppliers ACTIVO con el mismo business_name → la línea queda sin resolver. _(`test_confirm_ambiguous_rag_business_name_is_unresolved`)_
 - Un código de proveedor INACTIVO no resuelve la línea RAG (nunca auto-source). _(`test_confirm_inactive_supplier_code_match_is_unresolved`)_
 - Sin código, un business_name único ACTIVO resuelve la línea RAG. _(`test_confirm_rag_line_resolves_by_unique_business_name`)_
+- Case C tras auto-sourcing: los OCs vacíos se cancelan y el pedido lo informa. _(`test_confirm_case_c_after_autosourcing_cancels_the_empty_pos`)_
+- OC compartida: la cancelación de un pedido NO toca lo del otro pedido. _(`test_confirm_case_c_releases_only_this_order_from_a_shared_po`)_
+- Necesidad ligada a una OC SENT: release no toca link ni cantidades. _(`test_release_order_needs_leaves_an_executed_po_untouched`)_
 
 ## Orquestador y enrutamiento
 

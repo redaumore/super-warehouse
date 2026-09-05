@@ -344,6 +344,10 @@ def test_confirm_discovering_case_c_cancels_the_order(order_ctx):
     assert "no están disponibles" in result.confirmation_text
     assert result.converted == 0
     assert result.sheets_status is SheetsWriteStatus.SKIPPED
+    # Plain Case C (no needs, no POs touched): no release event noise.
+    assert not [
+        e for e in read_session_events("unassigned") if e["action"] == "order_case_c_released_pos"
+    ]
 
 
 class _UnmappedSearcher:
@@ -704,7 +708,11 @@ def test_confirm_ambiguous_rag_business_name_is_unresolved(rag_ctx):
 
     assert result.cancelled_case is True  # unresolved + no searcher candidates → Case C
     assert result.order.estado is OrderEstado.CANCELED
-    assert {po.supplier_id for po in _all_pos(session)} == {3}  # only the resolvable line
+    from src.db.models import SupplierPurchaseOrderState
+
+    (pfz_po,) = _all_pos(session)  # only the resolvable line had auto-sourced
+    assert pfz_po.supplier_id == 3
+    assert pfz_po.estado is SupplierPurchaseOrderState.CANCELLED  # its only items were released
     assert _need_for(session, order.order_id, "AMX-GRA-1416") is None
 
 
@@ -744,3 +752,125 @@ def test_confirm_rag_line_resolves_by_unique_business_name(rag_ctx):
     need = _need_for(session, order.order_id, "AMX-GRA-1416")
     assert need.supplier_id == 2
     assert {po.supplier_id for po in _all_pos(session)} == {2, 3}
+
+
+# ------------------------------- Case C releases auto-sourced PO quantities
+
+
+def _no_stock_local_item(order_id: int) -> OrderItem:
+    """A LOCAL line for an unknown SKU: zero availability, no candidates."""
+    return OrderItem(
+        order_id=order_id,
+        sku="CLV-999",
+        cantidad=1,
+        base_price=Decimal("50.00"),
+        final_price=Decimal("50.00"),
+        adjustment=Decimal(0),
+        source="LOCAL",
+    )
+
+
+def test_confirm_case_c_after_autosourcing_cancels_the_empty_pos(rag_ctx):
+    """Case C tras auto-sourcing: los OCs vacíos se cancelan y el pedido lo informa."""
+    from src.db.models import SupplierPurchaseOrderItem, SupplierPurchaseOrderState
+
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    session.add(_no_stock_local_item(order.order_id))
+    session.flush()
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    # Both POs held only this order's items: both end CANCELLED, empty.
+    pos = _all_pos(session)
+    assert {po.supplier_id for po in pos} == {2, 3}
+    assert all(po.estado is SupplierPurchaseOrderState.CANCELLED for po in pos)
+    assert session.scalars(select(SupplierPurchaseOrderItem)).all() == []
+    # The needs lost their PO link (the supplier selection itself is kept).
+    need_amx = _need_for(session, order.order_id, "AMX-GRA-1416")
+    need_pfz = _need_for(session, order.order_id, "PFZ-KIT-27")
+    assert need_amx.po_item_id is None
+    assert need_pfz.po_item_id is None
+    # The reply names the cancelled purchase orders.
+    po_ids = ", ".join(f"#{po.po_id}" for po in sorted(pos, key=lambda p: p.po_id))
+    assert (
+        f"Se cancelaron las órdenes de compra abiertas por este pedido ({po_ids})."
+        in result.confirmation_text
+    )
+    # The anomaly rides the session log as a WARNING.
+    events = [
+        e for e in read_session_events("unassigned") if e["action"] == "order_case_c_released_pos"
+    ]
+    assert len(events) == 1
+    assert events[0]["level"] == "WARNING"
+    assert events[0]["details"]["order_id"] == order.order_id
+    assert events[0]["details"]["cancelled_po_ids"] == sorted(po.po_id for po in pos)
+    assert events[0]["details"]["released_skus"] == ["AMX-GRA-1416", "PFZ-KIT-27"]
+
+
+def test_confirm_case_c_releases_only_this_order_from_a_shared_po(rag_ctx):
+    """OC compartida: la cancelación de un pedido NO toca lo del otro pedido."""
+    from src.db.models import SupplierPurchaseOrderItem, SupplierPurchaseOrderState
+    from src.purchasing.accumulate import accumulate_need
+    from src.sourcing.persistence import upsert_sourcing_need
+
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    session.add(_no_stock_local_item(order.order_id))
+    # Another (already confirmed) order's need is accumulated into supplier 2's
+    # OPEN PO: the PO is shared across orders by design.
+    other = Order(customer_id=1, estado=OrderEstado.CONFIRMED, needs_requote=False)
+    session.add(other)
+    session.flush()
+    other_need = upsert_sourcing_need(session, other.order_id, "ZZZ-OTRO", 2)
+    accumulate_need(session, other_need, 2)
+    shared_po_id = session.get(SupplierPurchaseOrderItem, other_need.po_item_id).po_id
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is True
+    from src.db.models import SupplierPurchaseOrder
+
+    shared = session.get(SupplierPurchaseOrder, shared_po_id)
+    assert shared.estado is SupplierPurchaseOrderState.OPEN  # NOT cancelled
+    items = session.scalars(
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == shared_po_id)
+    ).all()
+    assert [(i.sku, i.quantity) for i in items] == [("ZZZ-OTRO", 2)]  # this order's 5 released
+    assert _need_for(session, order.order_id, "AMX-GRA-1416").po_item_id is None
+    assert other_need.po_item_id is not None  # the other order keeps its link
+    # The PFZ PO held only this order's items: it is cancelled and reported.
+    pfz_po = session.scalar(
+        select(SupplierPurchaseOrder).where(SupplierPurchaseOrder.supplier_id == 3)
+    )
+    assert pfz_po.estado is SupplierPurchaseOrderState.CANCELLED
+    assert (
+        "Se cancelaron las órdenes de compra abiertas por este pedido "
+        f"(#{pfz_po.po_id})." in result.confirmation_text
+    )
+
+
+def test_release_order_needs_leaves_an_executed_po_untouched(order_ctx):
+    """Necesidad ligada a una OC SENT: release no toca link ni cantidades."""
+    from src.purchasing.accumulate import accumulate_need, release_order_needs
+    from src.purchasing.state import send_po
+    from src.sourcing.persistence import upsert_sourcing_need
+
+    session, order = order_ctx["session"], order_ctx["order"]
+    need = upsert_sourcing_need(session, order.order_id, "CLV-001", 4)
+    po = accumulate_need(session, need, 1)
+    send_po(session, po)  # executed before the order is cancelled
+
+    cancelled = release_order_needs(session, order.order_id)
+
+    from src.db.models import (
+        SupplierPurchaseOrder,
+        SupplierPurchaseOrderItem,
+        SupplierPurchaseOrderState,
+    )
+
+    assert cancelled == []
+    assert need.po_item_id is not None  # executed POs keep their link
+    item = session.get(SupplierPurchaseOrderItem, need.po_item_id)
+    assert item.quantity == 4
+    assert session.get(SupplierPurchaseOrder, po.po_id).estado is SupplierPurchaseOrderState.SENT

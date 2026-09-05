@@ -7,7 +7,10 @@ that complete an order (design data flow):
       availability check, no selection prompt)
       → classify A/B/C from latest availability (LOCAL lines + unresolved
         RAG leftovers only)
-      → Case C: cancel_order + sourcing CANCELLED (no registration)
+      → Case C: cancel_order + sourcing CANCELLED (no registration); the
+        order's contribution is released from the OPEN POs its auto-sourced
+        lines had accumulated (shared POs keep other orders' items; a PO left
+        empty is cancelled)
       → Case B: persist SourcingNeed rows, hand the selection prompt back
       → Case A: confirm (TTL guard) → reserve→convert→deduct → append Sheets row
 
@@ -339,7 +342,11 @@ def confirm_and_register(
 
     - Case C (missing items, no supplier): the order is cancelled via the
       cancel path with sourcing CANCELLED and ``cancelled_case=True`` — no
-      stock is converted and no Sheets row is appended.
+      stock is converted and no Sheets row is appended. Any quantities the
+      auto-sourced RAG lines had accumulated on suppliers' OPEN POs are
+      released first (``release_order_needs``): shared POs keep the other
+      orders' items, a PO left with no items is cancelled and the cancelled
+      ids are surfaced in the confirmation text.
     - Case B (missing items with suppliers): the order stays CONFIRMED (per
       the spec the order state is independent of PO progress), the SourcingNeed
       rows are persisted and the supplier-selection prompt is returned.
@@ -401,9 +408,14 @@ def confirm_and_register(
 
     if case is SourcingCase.C:
         from src.agents.customer import format_case_c_reply, unmapped_supplier_note
+        from src.purchasing.accumulate import release_order_needs
 
         cancel_order(session, order, actor=actor, now=now)
         order.sourcing_state = SourcingState.CANCELLED
+        # The auto-sourced RAG lines already accumulated quantities on the
+        # suppliers' OPEN POs: this cancelled order must release its share
+        # (only OPEN POs; shared POs keep the other orders' items).
+        cancelled_pos = release_order_needs(session, order.order_id)
         session.flush()
         unmapped = tuple(dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ()))
         if unmapped:
@@ -411,6 +423,17 @@ def confirm_and_register(
                 "orders",
                 "case_c_unmapped_suppliers",
                 {"order_id": order.order_id, "unmapped_codes": list(unmapped)},
+                level="WARNING",
+            )
+        if cancelled_pos:
+            log_session_event(
+                "orders",
+                "order_case_c_released_pos",
+                {
+                    "order_id": order.order_id,
+                    "cancelled_po_ids": [po.po_id for po in cancelled_pos],
+                    "released_skus": [line.sku for line in autosourced],
+                },
                 level="WARNING",
             )
         log_session_event(
@@ -424,13 +447,17 @@ def confirm_and_register(
             },
             level="WARNING",
         )
+        po_note = ""
+        if cancelled_pos:
+            po_ids = ", ".join(f"#{po.po_id}" for po in cancelled_pos)
+            po_note = f" Se cancelaron las órdenes de compra abiertas por este pedido ({po_ids})."
         return ConfirmResult(
             order=order,
             converted=0,
             sheets_status=SheetsWriteStatus.SKIPPED,
             total=order_total(order),
             confirmation_text=(
-                format_case_c_reply(order, missing) + unmapped_supplier_note(searcher)
+                format_case_c_reply(order, missing) + po_note + unmapped_supplier_note(searcher)
             ),
             cancelled_case=True,
             missing=missing,
