@@ -1,22 +1,32 @@
-"""Pruebas unitarias del use case de adopción de productos RAG (tasks 2.1–2.5).
+"""Pruebas del use case y del endpoint de adopción de productos RAG (tasks 2.1–4.1).
 
 Cubren el contrato de ``adopt_product`` contra la base real (docker pgvector):
 plantilla de SKU determinística y su colisión, normalización de precio/moneda,
 composición del texto de embedding, rollback total cuando el embedding falla,
 stock no positivo, provenance write-once (y fail-closed si falta) y resolución
-de proveedor ACTIVO con errores explícitos.
+de proveedor ACTIVO con errores explícitos. También cubren el endpoint
+completo (task 4.1): happy path con 3 filas atómicas, colisión 409, rollback
+502 ante falla de embedding y el up/down de la migración de metadatos.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import create_engine, select
+from alembic.config import Config as AlembicConfig
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from alembic import command
+from src.api.adoption import app, settings
 from src.backoffice.adoption import (
     AdoptRequest,
     EmbeddingUnavailableError,
@@ -33,6 +43,7 @@ from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier, Suppli
 from src.supplier.guards import SupplierInactiveError
 
 EMBED_VECTOR = [0.1] * 1536
+ADOPTION_SECRET = "integration-secret"
 
 
 def _postgres_up() -> bool:
@@ -85,6 +96,11 @@ def _seed_supplier(
 
 
 def _dto(**overrides: Any) -> AdoptRequest:
+    return AdoptRequest(**_payload(**overrides))
+
+
+def _payload(**overrides: Any) -> dict[str, Any]:
+    """Payload crudo del endpoint (mismo contrato que ``AdoptRequest``)."""
     base: dict[str, Any] = {
         "sku": "at-5044",
         "nombre": "Tornillo 5/16 x 2 pulgadas",
@@ -100,10 +116,45 @@ def _dto(**overrides: Any) -> AdoptRequest:
         "stock": 50,
     }
     base.update(overrides)
-    return AdoptRequest(**base)
+    return base
 
 
 OWNER = OwnerContext(owner_id="owner-1")
+
+
+@pytest.fixture(autouse=True)
+def _adoption_endpoint_settings(monkeypatch: pytest.MonkeyPatch):
+    """Settings de auth del endpoint para la sesión de tests (independiente del .env)."""
+    monkeypatch.setattr(settings, "adoption_owner_secret", ADOPTION_SECRET)
+    monkeypatch.setattr(settings, "adoption_owner_secret_old", "")
+    monkeypatch.setattr(settings, "adoption_owner_ids", "owner-1")
+    monkeypatch.setattr(settings, "fase4_enabled", True)
+
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
+
+
+@pytest.fixture
+def fake_embedder(monkeypatch: pytest.MonkeyPatch) -> FakeEmbedder:
+    """Inyecta un embedder fake en el handler real del endpoint (vector fijo)."""
+    embedder = FakeEmbedder()
+    monkeypatch.setattr("src.api.adoption.EMBEDDER_FACTORY", lambda cfg: embedder)
+    return embedder
+
+
+def _sign(body: bytes) -> str:
+    return hmac.new(ADOPTION_SECRET.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _post_adoption(client: TestClient, payload: dict[str, Any]) -> Any:
+    body = json.dumps(payload).encode()
+    return client.post(
+        "/adoption",
+        content=body,
+        headers={"x-signature": _sign(body), "x-owner-id": "owner-1"},
+    )
 
 
 def test_adopcion_crea_catalogo_inventory_y_stock_adjustment(db_session):
@@ -262,3 +313,117 @@ def test_proveedor_inactivo_error_explicito(db_session):
 
     db_session.rollback()
     assert db_session.scalar(select(Catalogo)) is None
+
+
+# ── Endpoint integración (task 4.1): scenarios del spec 1:1 ──────────────
+
+
+def test_endpoint_adopcion_feliz_crea_tres_filas_y_no_toca_rag(
+    db_session, client, fake_embedder, db_engine
+):
+    """El endpoint adopta: 3 filas atómicas, provenance guardada y RAG intacto."""
+    _seed_supplier(db_session)
+    db_session.commit()
+    tables_before = set(inspect(db_engine).get_table_names())
+
+    r = _post_adoption(client, _payload())
+
+    assert r.status_code == 200
+    assert r.text == "adopted"
+    product = db_session.scalar(select(Catalogo))
+    assert product is not None
+    assert product.codigo_interno == "RAG-AMX-AT-5044"
+    assert product.stock_disponible == 50
+    assert product.origen == {
+        "rag": {
+            "node_id": "node-abc-123",
+            "archivo_origen": "catalogo_amx_2026.pdf",
+            "pagina_origen": 12,
+        }
+    }
+    inventory = db_session.scalar(select(Inventory))
+    assert inventory is not None and inventory.quantity_on_hand == 50
+    adjustment = db_session.scalar(select(StockAdjustment))
+    assert adjustment is not None
+    assert adjustment.delta == 50
+    assert adjustment.reason == "product_adoption"
+    assert adjustment.actor == "owner:owner-1"
+    assert list(product.embedding) == EMBED_VECTOR
+    assert set(inspect(db_engine).get_table_names()) == tables_before
+
+
+def test_endpoint_colision_sku_rechazada_409(db_session, client, fake_embedder):
+    """Un SKU ya existente devuelve 409 por el endpoint y no persiste nada."""
+    _seed_supplier(db_session)
+    db_session.add(
+        Catalogo(
+            codigo_interno="RAG-AMX-AT-5044",
+            supplier_id=1,
+            nombre_oficial="Ya existe",
+            costo_proveedor=Decimal("1.00"),
+            margen_aplicado_pct=Decimal(0),
+            precio_lista_base=Decimal("1.00"),
+            stock_disponible=1,
+            sinonimos=["Ya existe"],
+        )
+    )
+    db_session.commit()
+
+    r = _post_adoption(client, _payload())
+
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "sku_collision"
+    assert db_session.scalar(select(Inventory)) is None
+    assert db_session.scalar(select(StockAdjustment)) is None
+
+
+def test_endpoint_embedding_falla_502_y_rollback(db_session, client, monkeypatch):
+    """Un embedder que falla devuelve 502 y la transacción se revierte."""
+    _seed_supplier(db_session)
+    db_session.commit()
+    monkeypatch.setattr(
+        "src.api.adoption.EMBEDDER_FACTORY",
+        lambda cfg: FakeEmbedder(error=RuntimeError("openai down")),
+    )
+
+    r = _post_adoption(client, _payload())
+
+    assert r.status_code == 502
+    assert r.json()["error"]["code"] == "embedding_unavailable"
+    assert db_session.scalar(select(Catalogo)) is None
+    assert db_session.scalar(select(Inventory)) is None
+    assert db_session.scalar(select(StockAdjustment)) is None
+
+
+@pytest.mark.parametrize("stock", [0, -3], ids=["cero", "negativo"])
+def test_endpoint_stock_no_positivo_rechazado_422(db_session, client, fake_embedder, stock):
+    """Stock <= 0 por el endpoint devuelve 422 invalid_stock y no persiste nada."""
+    _seed_supplier(db_session)
+    db_session.commit()
+
+    r = _post_adoption(client, _payload(stock=stock))
+
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "invalid_stock"
+    assert db_session.scalar(select(Catalogo)) is None
+
+
+def test_migracion_metadatos_adopcion_up_down(db_engine, clean_schema):
+    """La migración de adopción sube y baja las 5 columnas sin tocar el RAG."""
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    config = AlembicConfig(str(alembic_ini))
+    adoption_columns = {"marca", "categoria", "subcategoria", "moneda", "origen"}
+    try:
+        command.downgrade(config, "f2b2570aed04")
+        cols = {c["name"] for c in inspect(db_engine).get_columns("catalogo")}
+        assert adoption_columns.isdisjoint(cols)
+
+        command.upgrade(config, "head")
+        cols = {c["name"] for c in inspect(db_engine).get_columns("catalogo")}
+        assert adoption_columns.issubset(cols)
+        origen = next(
+            c for c in inspect(db_engine).get_columns("catalogo") if c["name"] == "origen"
+        )
+        assert origen["type"].__class__.__name__ == "JSONB"
+    finally:
+        command.upgrade(config, "head")
