@@ -22,12 +22,9 @@ Order building rides the same seam: while an order is open, the owner can add
 the last displayed product with natural phrases ("agregalo", "sumá 5 de eso",
 "el 2", or a bare quantity answer like "quiero 2") and the handler appends it
 to the state's ``draft_items`` without calling the LLM; the add reply invites
-the owner to finalize with "cerrá el pedido para <cliente>". Without an open
-order the handler offers to create one through the existing sourcing path.
-
-The sourcing turn (parsed orders) resolves the customer by NAME
-(``src/agents/customers.py``), offers in-chat creation for unknown names and
-runs the Case A/B/C flows; quotes and cancellations are in-chat replies.
+the owner to finalize with "cerrá el pedido para <cliente>". The guided
+(scripted) flow is the ONLY order-creation path: the legacy free-form parsed
+intake was removed.
 """
 
 from __future__ import annotations
@@ -35,7 +32,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 from typing import Protocol, TypedDict
 
@@ -61,14 +57,10 @@ from src.agents.customers import (
     resolve_customer_name,
 )
 from src.agents.disambiguation import (
-    ResolutionKind,
     SearchCandidate,
     normalize_text,
-    resolve_item,
     search_catalog,
 )
-from src.agents.intake import ParsedItem
-from src.agents.inventory import available_stock
 from src.agents.product_search import (
     ProductEntry,
     ProductSearcher,
@@ -79,13 +71,12 @@ from src.agents.product_search import (
     parse_product_add,
     parse_product_remove,
 )
-from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, OrderEstado, Supplier
 from src.db.session import SessionLocal
 from src.integrations.rag import RagProductClient
 from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem, SourcingNeedItem
+from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem
 from src.order_lifecycle.state import remove_draft_item
 from src.pricing.order_pricing import (
     MarginSource,
@@ -94,10 +85,10 @@ from src.pricing.order_pricing import (
     PricingLine,
     RateSource,
     compute_order,
+    line_subtotal,
     pending_order,
 )
-from src.sourcing.case_a import persist_case_a_order
-from src.sourcing.classify import MissingItem, SourcingCase, classify_case
+from src.sourcing.classify import MissingItem
 from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import SupplierCatalogSearcher
 
@@ -105,14 +96,11 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_REGION = "AR"
 
-# Fallback reply when the LLM responder is unavailable.
-GREETING = "¿Qué pedido cargamos hoy? Decime el cliente, los productos y la cantidad."
+# Fallback reply when the LLM responder is unavailable: the guided flow is the
+# only order path, so the fallback points at its session-reset trigger.
+GREETING = "¿Qué pedido cargamos hoy? Mandá 'hola bob' y lo armamos paso a paso."
 
 # Add-intent short-circuit replies (owner-facing, rioplatense).
-OFFER_TO_CREATE_REPLY = (
-    "Todavía no hay un pedido abierto para agregar productos. "
-    "Mandá el pedido completo (cliente, productos y cantidades) y lo cargo."
-)
 ADDED_TO_ORDER_REPLY = (
     "Listo: agregué {name} × {qty} al pedido en curso{price}. "
     "¿Algo más? Si ya está completo, decime 'cerrá el pedido para <cliente>'."
@@ -208,6 +196,7 @@ class CustomerResponder(Protocol):
 
     def respond(self, messages: Sequence[ChatMessage]) -> str:
         """Answer the customer from the full message list (system + history + latest user turn)."""
+        ...
 
 
 class DbCatalogSearcher:
@@ -340,23 +329,6 @@ class SourcingDeps:
     rag_client: RagProductClient | None = None
 
 
-def format_case_a_reply(
-    order: Order, quote: Quote, delivery_date: date | None, customer_name: str | None = None
-) -> str:
-    """Owner confirmation for a full-stock (Case A) order, in the owner's chat.
-
-    The quote step (Draft stays DRAFT) shows the total and asks for the
-    confirm; the "confirmado" wording belongs to the confirm ceremony reply.
-    """
-    who = f" de {customer_name}" if customer_name else ""
-    date_part = f" Fecha estimada de entrega: {delivery_date.isoformat()}." if delivery_date else ""
-    return (
-        f"Pedido #{order.order_id}{who}: tenemos todo el stock. "
-        f"Total estimado: {quote.total:.2f} ARS.{date_part} "
-        "¿Lo aprobás? Respondé 'aprobá' o 'rechazá'."
-    )
-
-
 def format_case_b_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
     """Case B reply: list each missing item and its numbered supplier options."""
     lines = [
@@ -391,30 +363,23 @@ def format_case_c_reply(
     return f"Pedido #{order.order_id}{who} cancelado: {names} no están disponibles por el momento."
 
 
-def _resolve_items(
-    session: Session, parsed_items: Sequence[ParsedItem]
-) -> tuple[ResolvedItem, ...]:
-    """Resolve parsed descriptions to catalog SKUs; unknown items stay missing."""
-    resolved: list[ResolvedItem] = []
-    for item in parsed_items:
-        resolution = resolve_item(session, item.description)
-        if resolution.kind is ResolutionKind.AUTO_MAPPED and resolution.candidate is not None:
-            resolved.append(
-                ResolvedItem(
-                    sku=resolution.candidate.sku,
-                    cantidad=item.quantity,
-                    description=item.description,
-                )
-            )
-        else:
-            resolved.append(
-                ResolvedItem(
-                    sku=normalize_text(item.description),
-                    cantidad=item.quantity,
-                    description=item.description,
-                )
-            )
-    return tuple(resolved)
+def unmapped_supplier_note(searcher: object | None) -> str:
+    """Owner-facing note for a Case C caused by RAG hits with unmapped providers.
+
+    Reads the searcher's ``last_unmapped_codes`` diagnostic (duck-typed so any
+    searcher exposing it works). Returns an empty string when the searcher does
+    not report dropped codes — then the generic unavailable reply stands alone.
+    The codes ARE the actionable part: the supplier master is missing entries
+    the ingesta should have matched (auto-creating suppliers is not allowed).
+    """
+    codes = tuple(dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ()))
+    if not codes:
+        return ""
+    return (
+        "\n\nAtención: el catálogo de proveedores tiene productos cuyo proveedor "
+        f"(códigos: {', '.join(codes)}) no está cargado en la maestra. "
+        "Revisá la ingesta de listas antes de reintentar."
+    )
 
 
 def _handle_create_client(
@@ -445,7 +410,7 @@ def _handle_create_client(
         )
         if existing is not None:
             return AgentOutcome(
-                state=base.with_updates(parsed_order=None),
+                state=base,
                 reply=(
                     f"Ese teléfono ya es de {existing.nombre_comercial}; "
                     "no creé un duplicado. Usalo por nombre en el próximo pedido."
@@ -461,12 +426,12 @@ def _handle_create_client(
         except InvalidClientDataError as exc:
             session.rollback()
             return AgentOutcome(
-                state=base.with_updates(parsed_order=None),
+                state=base,
                 reply=f"No pude crear el cliente: {exc}",
             )
         session.commit()
     reply = f"Listo: di de alta a {client.nombre_comercial}. Ahora mandá el pedido con su nombre."
-    return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
+    return AgentOutcome(state=base, reply=reply)
 
 
 class DraftPricingError(ValueError):
@@ -559,7 +524,11 @@ def _draft_pricing_lines(
                 name=entry.name,
                 price=price,
                 currency=currency,
-                supplier=entry.provider or code,
+                # Prefer the 3-char codigo_proveedor: the backoffice treats
+                # OrderItem.supplier AS the codigo_proveedor code, and the
+                # confirm ceremony resolves it against the supplier master.
+                # The provider display name is only the no-code fallback.
+                supplier=code or entry.provider,
                 codigo_proveedor=code,
             )
         )
@@ -599,20 +568,26 @@ def _price_draft(
 
 
 def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> str:
-    """Render the owner-facing quote for a newly persisted draft."""
+    """Render the owner-facing quote for a newly persisted draft.
+
+    Multi-line layout (one item per line with its quantity and subtotal, the
+    total at the end) so a multi-item order stays readable in chat.
+    """
     if priced.conversion_pending:
         return (
             f"Pedido #{order.order_id} para {customer.nombre_comercial}: conversión pendiente. "
             "Cargá el tipo de cambio que falta en Customer Orders y aprobalo."
         )
-    lines = " ".join(
-        f"{line.cantidad} × {line.name or line.sku}: {line.final_ars:.2f} ARS"
+    lines = [
+        f"{line.cantidad} × {line.name or line.sku} — "
+        f"{line_subtotal(line.final_ars, line.cantidad):.2f} ARS"
         for line in priced.lines
-    )
+    ]
     return (
-        f"Pedido #{order.order_id} para {customer.nombre_comercial} — "
-        f"total {priced.total:.2f} ARS. {lines} "
-        f"Respondé '{APPROVE}' o '{REJECT}'."
+        f"Pedido #{order.order_id} para {customer.nombre_comercial}:\n"
+        + "\n".join(lines)
+        + f"\nTotal: {priced.total:.2f} ARS\n"
+        + f"Respondé '{APPROVE}' o '{REJECT}'."
     )
 
 
@@ -630,23 +605,32 @@ def _reserve_quote_lines(
 
     RAG lines are supplier snapshots and never reserve stock; the Draft stays
     DRAFT. The confirm ceremony converts these reservations and deducts stock.
+    A LOCAL line whose quantity exceeds the available stock is left
+    UNRESERVED (the soft-lock is all-or-nothing per line): the draft still
+    persists and the confirm ceremony classifies the gap from the latest
+    availability — Case B (supplier selection) or Case C (cancel) — instead
+    of crashing the finalize turn.
     """
-    from src.agents.inventory import reserve_stock
+    from src.agents.inventory import InsufficientStockError, reserve_stock
 
     for line in priced.lines:
         source = getattr(line.source, "value", line.source)
         if str(source).upper() != "LOCAL":
             continue
-        reserve_stock(
-            session,
-            line.sku,
-            customer.customer_id,
-            line.cantidad,
-            order_id=order.order_id,
-        )
+        try:
+            reserve_stock(
+                session,
+                line.sku,
+                customer.customer_id,
+                line.cantidad,
+                order_id=order.order_id,
+            )
+        except InsufficientStockError:
+            # Stock gap: no partial soft-lock. The confirm ceremony re-classifies.
+            continue
 
 
-def _persist_finalized_draft(
+def persist_finalized_draft(
     session: Session,
     customer: Cliente,
     base: ConversationState,
@@ -654,12 +638,14 @@ def _persist_finalized_draft(
 ) -> AgentOutcome:
     """Price, persist, and reserve a draft for a resolved customer (quote step).
 
-    The first add that knows the customer persists an ``Order`` with
-    ``estado=DRAFT`` (design AD2). Per AD10 the quote step soft-locks the LOCAL
-    lines with an ACTIVE reservation while the Draft stays DRAFT; RAG lines
-    never reserve. The single-draft rule (spec: at most one DRAFT per customer)
-    is enforced by an app guard plus the ``uq_orders_one_draft_per_customer``
-    partial index as the DB backstop for the add race.
+    The one persistence path shared by the free-form finalize command and the
+    guided (scripted) order-creation flow. The first add that knows the
+    customer persists an ``Order`` with ``estado=DRAFT`` (design AD2). Per
+    AD10 the quote step soft-locks the LOCAL lines with an ACTIVE reservation
+    while the Draft stays DRAFT; RAG lines never reserve. The single-draft
+    rule (spec: at most one DRAFT per customer) is enforced by an app guard
+    plus the ``uq_orders_one_draft_per_customer`` partial index as the DB
+    backstop for the add race.
     """
     try:
         priced = _price_draft(session, customer, base, rag_client)
@@ -701,7 +687,6 @@ def _persist_finalized_draft(
         customer_candidates=(),
         product_options=(),
         draft_items=(),
-        parsed_order=None,
     )
     return AgentOutcome(state=updated, reply=_draft_quote_reply(order, customer, priced))
 
@@ -733,7 +718,7 @@ def _create_customer_for_draft(
         except InvalidClientDataError as exc:
             session.rollback()
             return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
-    return _persist_finalized_draft(session, customer, base, rag_client)
+    return persist_finalized_draft(session, customer, base, rag_client)
 
 
 def _remove_target_matches(needle: str, name: str | None, sku: str) -> bool:
@@ -855,158 +840,7 @@ def _run_finalize_turn(
                 )
             customer = resolution.candidate
         assert customer is not None
-        return _persist_finalized_draft(session, customer, base, rag_client)
-
-
-def _run_sourcing_turn(
-    message: InboundMessage,
-    state: ConversationState | None,
-    decision: RoutingDecision,
-    deps: SourcingDeps,
-) -> AgentOutcome:
-    """Handle a parsed order turn: resolve the customer and run the matching case flow.
-
-    The customer is resolved by NAME (never by sender phone): one match
-    auto-selects, two or more show a numbered disambiguation menu (the pick
-    arrives on a later turn), zero offers in-chat creation. ``nuevo cliente
-    <nombre> <teléfono>`` is intercepted before any order handling.
-    """
-    parsed = state.parsed_order if state is not None else None
-    base = state if state is not None else ConversationState(sender_id=message.sender_id)
-    text = (message.text or "").strip()
-
-    # In-chat client creation intercept: runs before order parsing so the
-    # command never falls into the "specify products" branch.
-    create = parse_create_client_command(text)
-    if create is not None:
-        return _handle_create_client(deps, base, *create)
-
-    if parsed is None or not parsed.items:
-        reply = (
-            "¿Qué pedido cargamos? Decime el nombre del cliente, "
-            "el artículo y la cantidad, por ejemplo 'para Don Juan, 10 clavos'."
-        )
-        return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
-
-    with deps.session_factory() as session:
-        if base.customer_disambiguation_pending:
-            # The owner picks from the numbered menu; the order waits in the
-            # state (parsed_order was kept for this turn).
-            candidate = parse_customer_pick(text, base.customer_candidates)
-            if candidate is None:
-                return AgentOutcome(
-                    state=base, reply=format_customer_menu(base.customer_candidates)
-                )
-            customer = session.get(Cliente, candidate.customer_id)
-            assert customer is not None
-            pending_cleared = base.with_updates(
-                customer_disambiguation_pending=False, customer_candidates=()
-            )
-        else:
-            name = parsed.customer_name
-            if not name:
-                reply = (
-                    "¿Para qué cliente es el pedido? Decime el nombre "
-                    "(o 'nuevo cliente <nombre> <teléfono>' si es nuevo) y los productos."
-                )
-                return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
-            resolution = resolve_customer_name(session, name)
-            if resolution.kind is CustomerResolutionKind.AMBIGUOUS:
-                reply = format_customer_menu(resolution.candidates)
-                updated = base.with_updates(
-                    customer_disambiguation_pending=True,
-                    customer_candidates=resolution.candidates,
-                    parsed_order=parsed,  # kept for the pick turn
-                )
-                return AgentOutcome(state=updated, reply=reply)
-            if resolution.kind is CustomerResolutionKind.NOT_FOUND:
-                reply = (
-                    f"No encontré ningún cliente llamado «{name}». "
-                    "Si es nuevo, mandá: 'nuevo cliente <nombre> <teléfono>'."
-                )
-                return AgentOutcome(state=base.with_updates(parsed_order=None), reply=reply)
-            customer = resolution.candidate
-            assert customer is not None
-            pending_cleared = base.with_updates(
-                customer_disambiguation_pending=False, customer_candidates=()
-            )
-
-        resolved = _resolve_items(session, parsed.items)
-        sourcing = classify_case(resolved, lambda sku: available_stock(session, sku), deps.searcher)
-        # AD4: at most one DRAFT per customer — refuse a second open order
-        # before writing anything (the partial unique index is the backstop).
-        existing = _existing_draft(session, customer.customer_id)
-        if existing is not None:
-            return AgentOutcome(
-                state=pending_cleared.with_updates(parsed_order=None),
-                reply=(
-                    f"{customer.nombre_comercial} ya tiene un pedido abierto "
-                    f"(pedido #{existing.order_id}); no creé otro. "
-                    "Continuá con ese pedido y después confirmalo."
-                ),
-            )
-        try:
-            if sourcing.case is SourcingCase.A:
-                order, quote = persist_case_a_order(
-                    session, customer, resolved, delivery_date=parsed.delivery_date
-                )
-                reply = format_case_a_reply(
-                    order, quote, parsed.delivery_date, customer.nombre_comercial
-                )
-                updated = pending_cleared.with_updates(
-                    customer_id=customer.customer_id,
-                    order_id=order.order_id,
-                    items=tuple(resolved),
-                    awaiting_decision=True,
-                    parsed_order=None,
-                )
-            elif sourcing.case is SourcingCase.B:
-                from src.sourcing.case_b import persist_case_b_order
-
-                order = persist_case_b_order(
-                    session, customer, delivery_date=parsed.delivery_date, missing=sourcing.missing
-                )
-                needs = tuple(
-                    SourcingNeedItem(sku=m.sku, missing_quantity=m.missing_quantity)
-                    for m in sourcing.missing
-                )
-                candidates = tuple(c for m in sourcing.missing for c in m.candidates)
-                reply = format_case_b_reply(order, sourcing.missing)
-                updated = pending_cleared.with_updates(
-                    customer_id=customer.customer_id,
-                    order_id=order.order_id,
-                    items=tuple(resolved),
-                    parsed_order=None,
-                    sourcing_selection_pending=True,
-                    sourcing_needs=needs,
-                    sourcing_candidates=candidates,
-                )
-            else:
-                from src.sourcing.case_c import cancel_for_no_supplier, persist_case_c_order
-
-                order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
-                cancel_for_no_supplier(session, order, actor="owner")
-                reply = format_case_c_reply(order, sourcing.missing, customer.nombre_comercial)
-                updated = pending_cleared.with_updates(
-                    customer_id=customer.customer_id,
-                    order_id=order.order_id,
-                    items=tuple(resolved),
-                    parsed_order=None,
-                )
-        except IntegrityError:
-            # The single-draft race: another session persisted the DRAFT first.
-            session.rollback()
-            return AgentOutcome(
-                state=pending_cleared.with_updates(parsed_order=None),
-                reply=(
-                    f"{customer.nombre_comercial} ya tiene un pedido abierto; "
-                    "no creé otro. Continuá con el pedido existente."
-                ),
-            )
-        # The sourcing turn owns its transaction: persist the flow's writes so
-        # they survive the session close (the pipeline runs fire-and-forget).
-        session.commit()
-        return AgentOutcome(state=updated, reply=reply)
+        return persist_finalized_draft(session, customer, base, rag_client)
 
 
 def build_handler(
@@ -1032,13 +866,9 @@ def build_handler(
     phrase ("agregalo", "sumá 5 de eso", "el 2", or a bare quantity answer
     such as "quiero 2") short-circuits the LLM and appends the referenced
     entry to ``draft_items`` even before an order exists. A finalize phrase
-    then resolves the customer and persists the draft.
-
-    When ``sourcing`` is wired and the orchestrator's parse step flagged the
-    turn (``decision.parsed``), the handler runs the sourcing workflow instead
-    of the LLM chat: the parsed order is classified into Case A/B/C and the
-    matching flow persists the order, reserves stock, lists suppliers or
-    cancels — per the order-sourcing spec.
+    then resolves the customer and persists the draft. ``sourcing`` provides
+    the persistence boundaries (session factory + RAG client fallback) the
+    finalize step shares with the guided flow.
     """
 
     def handler(
@@ -1060,8 +890,6 @@ def build_handler(
             or parse_create_client_command(text) is not None
         ):
             return _run_finalize_turn(message, base, sourcing)
-        if decision.parsed and sourcing is not None:
-            return _run_sourcing_turn(message, state, decision, sourcing)
         if not text:
             reply = fallback_reply
             new_history = (*history, ChatMessage("assistant", reply))

@@ -68,13 +68,19 @@ from src.db.models import (
     OrderEstado,
     OrderItem,
     ReservationEstado,
+    SourcingNeed,
     StockAdjustment,
     StockReservation,
     Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
 )
 from src.db.session import SessionLocal
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
+from src.purchasing.accumulate import accumulate_need
+from src.sourcing.persistence import upsert_sourcing_need
 from src.supplier.ocr import DocumentExtraction, ExtractedItem
 
 # ---------------------------------------------------------------- app structure
@@ -85,8 +91,8 @@ def _tabs_block(demo) -> object:
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
 
 
-def test_build_app_creates_seven_tabs_with_expected_labels():
-    """Building the app creates seven tabs with the expected labels."""
+def test_build_app_creates_tabs_with_expected_labels():
+    """Building the app creates tabs with the expected labels."""
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
     assert labels == [
@@ -97,6 +103,8 @@ def test_build_app_creates_seven_tabs_with_expected_labels():
         "Ingestion",
         "Suppliers",
         "Customer Orders",
+        "Settings",
+        "Sessions",
     ]
 
 
@@ -179,7 +187,8 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, stock_adjustments, "
+                "TRUNCATE supplier_purchase_order_items, supplier_purchase_orders, "
+                "sourcing_needs, order_items, orders, stock_reservations, stock_adjustments, "
                 "inventory, catalogo, suppliers, clientes, lista_precios, "
                 "supplier_sku_mappings, exchange_rates, app_settings RESTART IDENTITY CASCADE"
             )
@@ -424,10 +433,10 @@ def test_recompute_pending_conversion_clears_flag_and_fills_totals(shop_ctx):
 
     assert recompute_pending_conversion(db_session) == 1
     assert order.conversion_pending is False
-    assert order.subtotal == Decimal("24000.00")
-    assert order.total == Decimal("24000.00")
+    assert order.subtotal == Decimal("20000.00")
+    assert order.total == Decimal("20000.00")
     item = db_session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
-    assert item.base_price == Decimal("12000.00")
+    assert item.base_price == Decimal("10000.00")
 
 
 def test_default_margin_round_trips(client_ctx):
@@ -586,13 +595,14 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
     assert "recomputed 1 pending order(s)" in first_message
     assert "recomputed 0 pending order(s)" in second_message
     assert first_rates[-1][0] == "USD"
-    assert first_rates[-1][2] == datetime(2024, 1, 1, tzinfo=UTC)
-    assert second_rates[-1][2] == datetime(2024, 6, 1, tzinfo=UTC)
+    # Grid renders updated_at in Buenos Aires local time (UTC-3 display contract)
+    assert first_rates[-1][2] == "2023-12-31 21:00:00"
+    assert second_rates[-1][2] == "2024-05-31 21:00:00"
     with SessionLocal() as session:
         reloaded = session.get(Order, order.order_id)
         assert reloaded.conversion_pending is False
-        assert reloaded.subtotal == Decimal("24000.00")
-        assert reloaded.total == Decimal("24000.00")
+        assert reloaded.subtotal == Decimal("20000.00")  # 2 × 10 USD × 1000, no margin
+        assert reloaded.total == Decimal("20000.00")
 
 
 # ------------------------------------------------ fulfillment actions (Phase 6)
@@ -681,6 +691,27 @@ def test_cancel_action_releases_reservations_with_backoffice_actor(shop_ctx):
             select(StockReservation).where(StockReservation.order_id == order.order_id)
         )
         assert reservation.estado is ReservationEstado.RELEASED
+
+
+def test_cancel_action_releases_auto_sourced_needs_and_cancels_the_empty_po(shop_ctx):
+    """Cancelar desde backoffice libera la necesidad auto-sourced y cancela el PO vacío."""
+    db_session = shop_ctx["session"]
+    order = _committed_order(db_session, estado=OrderEstado.CONFIRMED)
+    need = upsert_sourcing_need(db_session, order.order_id, "CLV-001", 3)
+    po = accumulate_need(db_session, need, 1)
+    db_session.commit()
+
+    with SessionLocal() as session:
+        message = cancel_order_action(session, order.order_id)
+
+    assert "cancelado" in message
+    with SessionLocal() as session:
+        assert session.get(Order, order.order_id).estado is OrderEstado.CANCELED
+        reloaded = session.get(SupplierPurchaseOrder, po.po_id)
+        assert reloaded.estado is SupplierPurchaseOrderState.CANCELLED
+        assert session.scalars(select(SupplierPurchaseOrderItem)).all() == []
+        reloaded_need = session.get(SourcingNeed, need.need_id)
+        assert reloaded_need.po_item_id is None  # detached: no phantom PO quantities
 
 
 def test_cancel_action_restores_deducted_stock_with_audit(shop_ctx):

@@ -1,17 +1,15 @@
 """Sourcing router tests (task 3.5).
 
 Routing additions for the sourcing workflow: a reply while the owner is
-selecting suppliers goes to the SOURCING confirm flow, and the orchestrator's
-parse step extracts structured order fields before a fresh text reaches the
-Customer agent (routing a parsed turn to it with ``parsed=True``).
+selecting suppliers goes to the SOURCING confirm flow, and pending decisions
+keep their precedence rules (awaiting-decision replies go to Dispatch first).
 """
 
 from __future__ import annotations
 
-from src.agents.intake import SimpleOrderParser
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route_message
-from src.orchestrator.session import ConversationState, ConversationStore
+from src.orchestrator.router import AgentName, route_message
+from src.orchestrator.session import ConversationState
 
 
 def _message(
@@ -73,78 +71,7 @@ def test_draft_carrying_state_routes_to_customer_before_sales_or_disambiguation(
     assert decision.context_loaded is True
 
 
-def test_parse_step_extracts_order_before_customer_agent():
-    """El paso de parseo extrae la orden antes de llegar al Customer agent."""
-    store = ConversationStore()
-    seen: dict[str, object] = {}
-
-    def customer_handler(message, state, decision):
-        seen["state"] = state
-        seen["decision"] = decision
-        return AgentOutcome(state=state.with_updates(), reply="ok")
-
-    orchestrator = Orchestrator(
-        store, agents={AgentName.CUSTOMER: customer_handler}, parser=SimpleOrderParser()
-    )
-    result = orchestrator.handle_inbound(_message(text="quiero 10 clavos para el viernes"))
-
-    assert result.decision.agent is AgentName.CUSTOMER
-    assert result.decision.parsed is True
-    state = seen["state"]
-    assert state is not None
-    assert state.parsed_order is not None
-    assert len(state.parsed_order.items) == 1
-    assert state.parsed_order.items[0].description == "clavos"
-    assert state.parsed_order.delivery_date is not None
-
-
-def test_parse_step_skips_non_order_messages():
-    """Un saludo no se parsea: se mantiene el chat conversacional."""
-    store = ConversationStore()
-    seen: dict[str, object] = {}
-
-    def customer_handler(message, state, decision):
-        seen["state"] = state
-        seen["decision"] = decision
-        return AgentOutcome(state=ConversationState(sender_id=message.sender_id), reply="hola")
-
-    orchestrator = Orchestrator(
-        store, agents={AgentName.CUSTOMER: customer_handler}, parser=SimpleOrderParser()
-    )
-    result = orchestrator.handle_inbound(_message(text="hola que tal"))
-
-    assert result.decision.parsed is False
-    assert seen["state"] is None  # no parsed context was attached
-
-
-def test_parse_step_off_when_no_parser_wired():
-    """Sin parser no hay paso de parseo (routing legacy intacto)."""
-    store = ConversationStore()
-    seen: dict[str, object] = {}
-
-    def customer_handler(message, state, decision):
-        seen["decision"] = decision
-        return AgentOutcome(state=ConversationState(sender_id=message.sender_id))
-
-    orchestrator = Orchestrator(store, agents={AgentName.CUSTOMER: customer_handler})
-    result = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
-    assert result.decision.parsed is False
-    assert seen["decision"].agent is AgentName.CUSTOMER
-
-
-def test_parse_step_does_not_override_in_progress_orders():
-    """Un pedido en curso (estado cargado) no se re-parsea."""
-    store = ConversationStore()
-    store.put(_state(order_id=7, items=(), sourcing_selection_pending=False))
-    seen: dict[str, object] = {}
-
-    def disambiguation_handler(message, state, decision):
-        seen["decision"] = decision
-        return AgentOutcome(state=state.with_updates())
-
-    orchestrator = Orchestrator(
-        store, agents={AgentName.DISAMBIGUATION: disambiguation_handler}, parser=SimpleOrderParser()
-    )
-    result = orchestrator.handle_inbound(_message(text="el otro clavito"))
-    assert result.decision.agent is AgentName.DISAMBIGUATION
-    assert result.decision.parsed is False
+def test_fresh_text_routes_to_customer_without_a_parse_step():
+    """Texto fresco va al Customer agent: no hay paso de parseo."""
+    decision = route_message(_message(text="quiero 10 clavos"), None)
+    assert decision.agent is AgentName.CUSTOMER

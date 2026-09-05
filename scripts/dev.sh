@@ -8,6 +8,8 @@
 #   4. Backoffice UI (Gradio, 127.0.0.1:7860)
 #   5. Telegram loop (scripts/telegram_loop.py): ngrok tunnel + setWebhook +
 #      the intake API (src.api.webhook:app) on 127.0.0.1:8000
+#   6. RAG catalog API (services/rag-api): FastAPI on 127.0.0.1:8001
+#      (own venv, bootstrapped on first run)
 #
 # The Telegram loop serves the same FastAPI app as `make run`, so the plain
 # API is not started separately (both own port 8000).
@@ -27,6 +29,9 @@ PY=".venv/bin/python"
 LOG_DIR="logs"
 TELEGRAM_PORT="${TELEGRAM_PORT:-8000}"
 BACKOFFICE_PORT="${BACKOFFICE_PORT:-7860}"
+RAG_PORT="${RAG_PORT:-8001}"
+RAG_DIR="services/rag-api"
+RAG_PY="$RAG_DIR/.venv/bin/python"
 DB_CONTAINER="super-warehouse-db"
 DOCKER_TIMEOUT=120
 DB_TIMEOUT=90
@@ -38,7 +43,7 @@ warn() { printf '\033[1;33m[dev]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[dev]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 is_alive() { kill -0 "$1" 2>/dev/null; }
@@ -83,6 +88,22 @@ ensure_env_file() {
   [[ -f .env ]] || die ".env is missing — copy .env.example to .env and set the required vars."
   grep -q '^POSTGRES_PASSWORD=.\+' .env \
     || die "POSTGRES_PASSWORD is not set in .env (docker compose requires it)."
+}
+
+# The RAG catalog API is a subtree import with its own heavy dependency set
+# (torch/transformers), so it gets its own venv under services/rag-api instead
+# of mixing into the root .venv. Non-fatal on failure: do_up skips the service
+# with a warning so the rest of the environment still comes up.
+ensure_rag_venv() {
+  if [[ -x "$RAG_PY" ]] && "$RAG_PY" -c 'import app' >/dev/null 2>&1; then
+    info "RAG venv OK ($("$RAG_PY" --version 2>&1))"
+    return 0
+  fi
+  info "Creating $RAG_DIR/.venv and installing RAG dependencies (one-time, heavy)"
+  python3 -m venv "$RAG_DIR/.venv" \
+    && "$RAG_PY" -m pip install --upgrade pip \
+    && "$RAG_PY" -m pip install -e "$RAG_DIR" \
+    && ok "RAG venv ready"
 }
 
 wait_for_db() {
@@ -169,6 +190,15 @@ do_up() {
     wait_for_http "http://127.0.0.1:$BACKOFFICE_PORT/" backoffice 60
   fi
 
+  if [[ -n "$(port_pid "$RAG_PORT")" ]]; then
+    warn "Port $RAG_PORT is already in use — skipping RAG catalog API"
+  elif ensure_rag_venv; then
+    start_service rag "$RAG_PY" "$RAG_DIR/cli.py" serve --port "$RAG_PORT"
+    wait_for_http "http://127.0.0.1:$RAG_PORT/api/v1/health" rag 90
+  else
+    warn "RAG venv could not be prepared — skipping RAG catalog API (see log above)"
+  fi
+
   if [[ -n "$(port_pid "$TELEGRAM_PORT")" ]]; then
     warn "Port $TELEGRAM_PORT is already in use — skipping telegram loop"
   else
@@ -192,6 +222,11 @@ do_up() {
     echo "  Telegram loop  : http://127.0.0.1:$TELEGRAM_PORT (ngrok webhook active)"
   else
     warn "  Telegram loop  : NOT responding (see $LOG_DIR/telegram.log)"
+  fi
+  if curl -fsS -o /dev/null "http://127.0.0.1:$RAG_PORT/api/v1/health" 2>/dev/null; then
+    echo "  RAG catalog API: http://127.0.0.1:$RAG_PORT (services/rag-api)"
+  else
+    warn "  RAG catalog API: NOT responding (see $LOG_DIR/rag.log)"
   fi
   echo "  Logs           : $LOG_DIR/*.log"
   echo "  Stop           : scripts/dev.sh down"
@@ -256,6 +291,11 @@ do_status() {
     echo "  Backoffice ($BACKOFFICE_PORT) : ok"
   else
     echo "  Backoffice ($BACKOFFICE_PORT) : not responding"
+  fi
+  if curl -fsS -o /dev/null "http://127.0.0.1:$RAG_PORT/api/v1/health" 2>/dev/null; then
+    echo "  RAG catalog API ($RAG_PORT) : ok"
+  else
+    echo "  RAG catalog API ($RAG_PORT) : not responding"
   fi
 }
 

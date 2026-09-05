@@ -79,6 +79,7 @@ class LocalSearcher(Protocol):
 
     def search(self, query: str) -> tuple[SearchCandidate, ...]:
         """Return catalog candidates for ``query``, best first."""
+        ...
 
 
 class ProductSearcher(Protocol):
@@ -86,6 +87,7 @@ class ProductSearcher(Protocol):
 
     def search(self, query: str) -> ProductSearchResult:
         """Resolve ``query`` and return a source-discriminated result."""
+        ...
 
 
 class PrecedenceProductSearcher:

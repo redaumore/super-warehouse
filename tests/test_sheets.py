@@ -7,6 +7,7 @@ path quarantines the row instead of raising into the order flow.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from src.config import Settings
@@ -90,3 +91,16 @@ def test_sheets_synced_reflects_only_successful_appends():
     writer.append_order_row(1)
     assert writer.sheets_synced(1) is True
     assert writer.sheets_synced(2) is False
+
+
+def test_append_row_renders_registered_at_in_buenos_aires_time():
+    """The human-visible sheet timestamp renders Buenos Aires local time (UTC-3)."""
+    sheet = _sheet_mock()
+    gc = MagicMock()
+    gc.open_by_key.return_value.worksheet.return_value = sheet
+    writer = _writer(gc=gc)
+    registered_at = datetime(2026, 1, 1, 0, 30, 0, tzinfo=UTC)
+    writer.append_order_row(5, registered_at=registered_at)
+    row = sheet.append_row.call_args.args[0]
+    assert row[4].startswith("2025-12-31T21:30:00")
+    assert row[4].endswith("-03:00")

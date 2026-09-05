@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.agents.commands import RESET_GREETING, RESET_SESSION, is_session_reset
+from src.agents.commands import GUIDED_ASK_CLIENT, RESET_SESSION, is_session_reset
 from src.agents.product_search import ProductEntry, ProductSource
 from src.channels.base import InboundMessage
 from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route_message
@@ -83,6 +83,14 @@ def test_owner_rejection_routes_to_dispatch():
     state = _state(order_id=7, awaiting_decision=True)
     decision = route_message(_message(text="no, rechazá"), state)
     assert decision.agent is AgentName.DISPATCH
+
+
+def test_guided_flow_step_routes_to_guided_agent():
+    """Un paso del flujo guiado se enruta al agente GUIDED."""
+    state = _state(guided_step="ask_product")
+    decision = route_message(_message(text="amoladora"), state)
+    assert decision.agent is AgentName.GUIDED
+    assert decision.context_loaded is True
 
 
 def test_remove_product_command_routes_to_customer_with_order_context():
@@ -257,8 +265,8 @@ def test_orchestrator_surfaces_agent_reply():
 # ------------------------------------------------------------ session reset
 
 
-def test_session_reset_drops_previous_state_and_greets():
-    """El gatillo "hola bob" descarta el estado previo y responde el saludo fijo."""
+def test_session_reset_drops_previous_state_and_starts_guided_flow():
+    """El gatillo "hola bob" descarta el estado previo y arranca el flujo guiado."""
     store = ConversationStore()
     store.put(_state(sender_id="+5491155551234", order_id=7, awaiting_decision=True))
     orchestrator = Orchestrator(store)
@@ -266,19 +274,21 @@ def test_session_reset_drops_previous_state_and_greets():
     result = orchestrator.handle_inbound(_message(text="Hola Bob!"))
 
     assert result.decision.agent is AgentName.CUSTOMER
-    assert result.reply == RESET_GREETING
+    assert result.reply == GUIDED_ASK_CLIENT
     fresh = store.get("+5491155551234")
     assert fresh is not None  # a fresh conversation is seeded in place
     assert fresh.order_id is None  # the previous state is gone
     assert fresh.awaiting_decision is False
+    assert fresh.guided_step == "ask_client"  # the scripted flow takes command
 
 
 def test_session_reset_clears_pending_decision_and_draft_for_next_turn():
-    """El reset borra awaiting_decision y draft: el próximo texto va a Customer.
+    """El reset borra awaiting_decision y draft: el próximo texto va al flujo guiado.
 
     Without the reset, the old flags would route the next reply to Dispatch
-    (pending decision) or the product-query draft. Exercised through two
-    ``handle_inbound`` turns.
+    (pending decision) or the product-query draft. After the reset the
+    scripted flow owns the conversation, so the next text reaches the GUIDED
+    agent (not DISPATCH) with the fresh guided state.
     """
     draft = ((ProductEntry(sku="CLV-001", name="Clavo 1 pulgada", source=ProductSource.LOCAL), 3),)
     store = ConversationStore()
@@ -290,17 +300,18 @@ def test_session_reset_clears_pending_decision_and_draft_for_next_turn():
             draft_items=draft,
         )
     )
-    customer_handler, customer_calls = _capturing_handler(_state(sender_id="+5491155551234"))
-    orchestrator = Orchestrator(store, agents={AgentName.CUSTOMER: customer_handler})
+    guided_handler, guided_calls = _capturing_handler(_state(sender_id="+5491155551234"))
+    orchestrator = Orchestrator(store, agents={AgentName.GUIDED: guided_handler})
 
     reset = orchestrator.handle_inbound(_message(text=RESET_SESSION))
     assert reset.decision.agent is AgentName.CUSTOMER
-    assert reset.reply == RESET_GREETING
+    assert reset.reply == GUIDED_ASK_CLIENT
 
     next_turn = orchestrator.handle_inbound(_message(text="quiero 10 clavos"))
 
-    assert next_turn.decision.agent is AgentName.CUSTOMER  # not DISPATCH
-    assert len(customer_calls) == 1
+    assert next_turn.decision.agent is AgentName.GUIDED  # not DISPATCH
+    assert len(guided_calls) == 1
+    assert guided_calls[0][1].guided_step == "ask_client"
     assert store.get("+5491155551234").order_id is None
 
 
@@ -316,7 +327,7 @@ def test_session_reset_variants_match(trigger):
     result = orchestrator.handle_inbound(_message(text=trigger))
 
     assert result.decision.agent is AgentName.CUSTOMER
-    assert result.reply == RESET_GREETING
+    assert result.reply == GUIDED_ASK_CLIENT
 
 
 @pytest.mark.parametrize(

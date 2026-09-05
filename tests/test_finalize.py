@@ -167,6 +167,35 @@ def test_finalize_local_draft_uses_cost_margin_and_clears_draft(shop):
     assert shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
 
 
+def test_quote_reply_shows_line_subtotal_not_unit_price(shop):
+    """La cotización muestra el subtotal de la línea, no el precio unitario."""
+    state = ConversationState(
+        sender_id="owner",
+        draft_items=(
+            (
+                _entry(
+                    "RAG-1",
+                    "RAG item",
+                    source=ProductSource.RAG,
+                    price=Decimal("2448.00"),
+                    currency="ARS",
+                    codigo_proveedor="SUP",
+                ),
+                2,
+            ),
+        ),
+    )
+
+    outcome = _handler(shop)(_message("cerrá el pedido para Customer One"), state, _decision())
+
+    assert outcome.state is not None
+    # 2 × 2448.00 → the reply shows the LINE subtotal on its own line, the
+    # total clearly at the end (multi-line quote).
+    assert "2 × RAG item — 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    assert "Total: 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    assert "\n" in outcome.reply  # type: ignore[operator]
+
+
 def test_finalize_rag_without_rate_saves_pending_snapshot(shop):
     """A non-ARS RAG draft is saved with its original price and pending totals."""
     state = ConversationState(
@@ -349,12 +378,12 @@ def test_finalize_rag_without_price_falls_back_to_endpoint_lookup(shop):
     rag_client.price_lookup.assert_called_once_with("AT-5044", "AMX")
     order = shop.scalar(select(Order))
     assert order is not None
-    assert order.subtotal == Decimal("162.60")  # 135.5 × 1.20 default margin
-    assert order.total == Decimal("162.60")
+    assert order.subtotal == Decimal("135.50")  # RAG lines carry no margin: 135.5 as-is
+    assert order.total == Decimal("135.50")
     item = shop.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
     assert item.sku == "AT-5044"
     assert item.source == "RAG"
-    assert item.base_price == Decimal("162.60")
+    assert item.base_price == Decimal("135.50")
     assert item.precio_original == Decimal("135.5000")
     assert (
         shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
@@ -400,8 +429,8 @@ def test_remove_command_deletes_persisted_draft_line(shop):
     assert order.estado is OrderEstado.DRAFT  # empty Draft stays DRAFT
 
 
-def test_default_margin_edit_prices_subsequent_chat_finalize(shop):
-    """set_default_margin(27.50) prices a NEW chat finalize for an unmapped supplier."""
+def test_default_margin_edit_never_touches_chat_rag_pricing(shop):
+    """set_default_margin(27.50) must NOT re-price a chat RAG line (no margin)."""
     assert set_default_margin(shop, Decimal("27.50")) == Decimal("27.50")
     shop.commit()
     state = ConversationState(
@@ -427,7 +456,7 @@ def test_default_margin_edit_prices_subsequent_chat_finalize(shop):
     assert outcome.state.draft_items == ()
     order = shop.scalar(select(Order))
     assert order is not None
-    assert order.subtotal == Decimal("127.50")  # 100 × (1 + 27.50%)
-    assert order.total == Decimal("127.50")
+    assert order.subtotal == Decimal("100.00")  # RAG lines carry no margin: 100.00 as-is
+    assert order.total == Decimal("100.00")
     item = shop.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
-    assert item.base_price == Decimal("127.50")
+    assert item.base_price == Decimal("100.00")

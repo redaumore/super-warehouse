@@ -31,8 +31,8 @@ def test_local_lines_use_cost_and_applied_margin_not_list_price():
     assert order.total == Decimal("243.00")
 
 
-def test_rag_supplier_margin_and_default_margin_are_source_aware():
-    """Mapped RAG suppliers use their margin and unmapped suppliers use default."""
+def test_rag_lines_never_apply_supplier_or_default_margin():
+    """RAG lines price at the converted offer: no supplier margin, no default."""
     order = compute_order(
         [
             PricingLine(
@@ -45,7 +45,7 @@ def test_rag_supplier_margin_and_default_margin_are_source_aware():
                 supplier="Supplier",
             ),
             PricingLine(
-                sku="RAG-DEFAULT",
+                sku="RAG-UNMAPPED",
                 cantidad=1,
                 source="RAG",
                 price=Decimal("100.00"),
@@ -57,7 +57,10 @@ def test_rag_supplier_margin_and_default_margin_are_source_aware():
         default_margin=Decimal("0.20"),
     )
 
-    assert [line.base_ars for line in order.lines] == [Decimal("125.00"), Decimal("120.00")]
+    # The owner decision: the offer price is the base AND the sale reference;
+    # margins only apply to LOCAL lines.
+    assert [line.base_ars for line in order.lines] == [Decimal("100.00"), Decimal("100.00")]
+    assert [line.final_ars for line in order.lines] == [Decimal("100.00"), Decimal("100.00")]
 
 
 def test_missing_non_ars_rate_raises():
@@ -77,8 +80,8 @@ def test_missing_non_ars_rate_raises():
         )
 
 
-def test_non_ars_conversion_happens_before_margin_and_totals():
-    """USD offer prices convert to ARS before supplier margin and totals."""
+def test_non_ars_conversion_applies_before_discounts_and_totals():
+    """USD offer prices convert to ARS as the base; only discounts apply after."""
     order = compute_order(
         [
             PricingLine(
@@ -95,7 +98,15 @@ def test_non_ars_conversion_happens_before_margin_and_totals():
         list_discount=Decimal("0.10"),
     )
 
-    assert order.lines[0].base_ars == Decimal("12500.00")
-    assert order.lines[0].final_ars == Decimal("11250.00")
-    assert order.subtotal == Decimal("37500.00")
-    assert order.total == Decimal("33750.00")
+    assert order.lines[0].base_ars == Decimal("10000.00")
+    assert order.lines[0].final_ars == Decimal("9000.00")
+    assert order.subtotal == Decimal("30000.00")
+    assert order.total == Decimal("27000.00")
+
+
+def test_line_subtotal_extends_unit_price_by_quantity():
+    """The shared helper quantizes unit × quantity HALF_UP to the cent."""
+    from src.pricing.order_pricing import line_subtotal
+
+    assert line_subtotal(Decimal("2448.00"), 2) == Decimal("4896.00")
+    assert line_subtotal(Decimal("2937.605"), 1) == Decimal("2937.61")

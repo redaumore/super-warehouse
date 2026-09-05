@@ -8,11 +8,13 @@ Implements the agent-orchestration routing contract:
   resuming the order that is awaiting the decision (human-in-the-loop wait);
 - a reply on a Case B order that is awaiting the owner's supplier selection
   goes to the SOURCING confirm flow;
+- a conversation seeded by the session reset follows the scripted
+  order-creation flow (GUIDED) — client → products → quantity → confirm —
+  until the draft is finalized and handed to Dispatch;
 - an in-progress order with resolved items goes back to Sales (adjustments,
   confirmations); one still resolving items goes to Disambiguation;
 - a fresh message with no context starts the pipeline at the Customer agent —
-  after a parse step that extracts structured order fields when a parser is
-  wired (the parse step is the intake seam; disabling it keeps legacy routing).
+  the scripted GUIDED flow (session reset) is the only order-creation path.
 
 ``Orchestrator`` wires routing to the store: it loads the sender's context
 (rehydrating from the DB when the in-memory entry expired), routes, hands the
@@ -27,10 +29,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from src.agents.commands import RESET_GREETING, is_session_reset
-from src.agents.intake import OrderParser
+from src.agents.commands import GUIDED_ASK_CLIENT, is_session_reset
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
+from src.observability.session_logger import generate_session_id, get_current_session_id
 from src.orchestrator.session import ConversationState, ConversationStore
 
 
@@ -44,6 +46,7 @@ class AgentName(str, enum.Enum):
     SALES = "sales"
     DISPATCH = "dispatch"
     SOURCING = "sourcing"
+    GUIDED = "guided"
 
 
 @dataclass(frozen=True)
@@ -53,7 +56,6 @@ class RoutingDecision:
     agent: AgentName
     media_kind: str | None = None  # "voice" | "image" for the perception agent
     context_loaded: bool = False
-    parsed: bool = False  # True when the parse step extracted an order from the text
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,7 @@ class AgentHandler(Protocol):
         decision: RoutingDecision,
     ) -> AgentOutcome | None:
         """Process ``message`` and return the updated state and optional reply."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,7 @@ class TurnResult:
 
     decision: RoutingDecision
     reply: str | None = None
+    state: ConversationState | None = None
 
 
 def route_message(message: InboundMessage, state: ConversationState | None) -> RoutingDecision:
@@ -102,6 +106,11 @@ def route_message(message: InboundMessage, state: ConversationState | None) -> R
         # The remove-product command belongs to the Customer agent whenever an
         # order/draft context exists (in-memory draft or rehydrated DRAFT).
         return RoutingDecision(agent=AgentName.CUSTOMER, context_loaded=state is not None)
+    if state is not None and state.guided_step is not None:
+        # The scripted order-creation flow owns every text turn between the
+        # session reset and the draft finalization: the system asks, the
+        # owner answers, and no free-form agent runs in between.
+        return RoutingDecision(agent=AgentName.GUIDED, context_loaded=True)
     if state is not None and state.awaiting_decision:
         # The owner conversation owns every reply while a decision is pending:
         # Dispatch parses approve/reject and asks for clarification otherwise.
@@ -128,12 +137,9 @@ class Orchestrator:
         self,
         store: ConversationStore,
         agents: dict[AgentName, Callable[..., AgentOutcome | None]] | None = None,
-        *,
-        parser: OrderParser | None = None,
     ) -> None:
         self.store = store
         self.agents: dict[AgentName, Callable[..., AgentOutcome | None]] = agents or {}
-        self.parser = parser
 
     def register(self, agent: AgentName, handler: Callable[..., AgentOutcome | None]) -> None:
         """Bind an agent handler to its name."""
@@ -144,44 +150,56 @@ class Orchestrator:
 
         Context is loaded (rehydrated from the DB when expired) before routing
         and persisted after the handler, so a multi-step order never loses its
-        identity between agents. When a parser is wired and the message would
-        start a fresh Customer conversation, the parse step runs first: the
-        extracted order rides the state so the Customer agent can classify it
-        into Case A/B/C instead of answering as plain chat. The agent's
-        optional reply rides the turn result back to the pipeline.
+        identity between agents. The agent's optional reply rides the turn
+        result back to the pipeline.
 
         The session-reset trigger ("hola bob", case-insensitive, whole
         message, optional trailing punctuation) is checked first: it drops
         the sender's in-memory conversation state — drafts, displayed
         products, pending menus and awaiting decisions — seeds a fresh
-        conversation, and answers with the fixed greeting. It works from ANY
+        conversation with the guided flow's first step (``guided_step=
+        "ask_client"``), and answers with the scripted first question
+        ("¿Para qué cliente querés armar un pedido?"). It works from ANY
         state and never touches persisted DB orders. Media messages (voice,
         image) never trigger the reset.
         """
         if message.media_type is None and is_session_reset((message.text or "").strip()):
             self.store.drop(message.sender_id)
-            fresh_state = ConversationState(sender_id=message.sender_id)
+            sid = get_current_session_id() or generate_session_id(message.sender_id)
+            fresh_state = ConversationState(
+                sender_id=message.sender_id, session_id=sid, guided_step="ask_client"
+            )
             self.store.put(fresh_state)
             return TurnResult(
                 decision=RoutingDecision(agent=AgentName.CUSTOMER),
-                reply=RESET_GREETING,
+                reply=GUIDED_ASK_CLIENT,
+                state=fresh_state,
             )
         state = self.store.get(message.sender_id)
+        if state is not None and state.session_id is None:
+            sid = get_current_session_id() or generate_session_id(message.sender_id)
+            state = state.with_updates(session_id=sid)
+            self.store.put(state)
         decision = route_message(message, state)
-        if (
-            self.parser is not None
-            and decision.agent is AgentName.CUSTOMER
-            and not decision.context_loaded
-            and message.media_type is None
-        ):
-            parsed = self.parser.parse((message.text or "").strip())
-            if parsed is not None:
-                state = ConversationState(sender_id=message.sender_id, parsed_order=parsed)
-                decision = RoutingDecision(agent=AgentName.CUSTOMER, parsed=True)
         handler = self.agents.get(decision.agent)
         outcome = None
         if handler is not None:
             outcome = handler(message, state, decision)
+        final_state = state
         if outcome is not None and outcome.state is not None:
-            self.store.put(outcome.state)
-        return TurnResult(decision=decision, reply=outcome.reply if outcome else None)
+            final_state = outcome.state
+            if final_state.session_id is None:
+                sid = (
+                    state.session_id
+                    if state and state.session_id
+                    else (get_current_session_id() or generate_session_id(message.sender_id))
+                )
+                final_state = final_state.with_updates(session_id=sid)
+            self.store.put(final_state)
+        elif final_state is not None:
+            self.store.put(final_state)
+        return TurnResult(
+            decision=decision,
+            reply=outcome.reply if outcome else None,
+            state=final_state,
+        )

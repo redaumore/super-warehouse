@@ -12,11 +12,16 @@ Per the purchase-order-lifecycle spec:
 row (DB source of truth) and, when the owner re-selects a different supplier
 before execution, removes the previously accumulated quantity from the old OPEN
 PO so no SKU is double-ordered.
+
+Because POs are SHARED across customer orders (one OPEN PO per supplier),
+cancelling a customer order never cancels a whole PO:
+``release_order_needs`` detaches only that order's quantities from the OPEN
+POs it touched and cancels a PO shell only when no items are left in it.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db.models import (
@@ -25,6 +30,8 @@ from src.db.models import (
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
+from src.purchasing.state import cancel_po
+from src.sourcing.persistence import sourcing_needs_for_order
 from src.supplier.guards import ensure_active_supplier
 
 
@@ -130,3 +137,42 @@ def _detach_from_previous_po(session: Session, need: SourcingNeed) -> None:
     if item.quantity <= 0:
         session.delete(item)
     need.po_item_id = None
+    # Persist the link clear BEFORE the item row is deleted: without an ORM
+    # relationship() the unit of work does not order the need's UPDATE before
+    # the item's DELETE, and the FK would fire on the delete.
+    session.flush()
+
+
+def release_order_needs(session: Session, order_id: int) -> list[SupplierPurchaseOrder]:
+    """Detach every SourcingNeed of an order from its OPEN PO and cancel empty POs.
+
+    Only OPEN POs are touched (executed POs keep their link). A PO whose items
+    are all removed is cancelled via ``cancel_po``; a PO still holding other
+    orders' items stays OPEN. Returns the POs that were cancelled.
+    """
+    needs = sourcing_needs_for_order(session, order_id)
+    if not needs:
+        return []
+    # Collect the touched PO ids BEFORE detaching (the items may be deleted).
+    po_ids: set[int] = set()
+    for need in needs:
+        if need.po_item_id is not None:
+            item = session.get(SupplierPurchaseOrderItem, need.po_item_id)
+            if item is not None:
+                po_ids.add(item.po_id)
+        _detach_from_previous_po(session, need)
+    session.flush()
+    cancelled: list[SupplierPurchaseOrder] = []
+    for po_id in sorted(po_ids):
+        po = session.get(SupplierPurchaseOrder, po_id)
+        if po is None or po.estado is not SupplierPurchaseOrderState.OPEN:
+            continue
+        remaining = session.scalar(
+            select(func.count())
+            .select_from(SupplierPurchaseOrderItem)
+            .where(SupplierPurchaseOrderItem.po_id == po_id)
+        )
+        if remaining:
+            continue  # other orders' items still live in this shared PO
+        cancelled.append(cancel_po(session, po))
+    return cancelled

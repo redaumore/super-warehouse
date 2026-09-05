@@ -61,6 +61,7 @@ class Transcriber(Protocol):
 
     def transcribe(self, audio_path: str) -> TranscriptionResult:
         """Transcribe the audio file at ``audio_path``."""
+        ...
 
 
 class VisionAnalyzer(Protocol):
@@ -68,6 +69,7 @@ class VisionAnalyzer(Protocol):
 
     def analyze(self, image_url: str, prompt: str) -> VisionResult:
         """Analyze the image at ``image_url`` guided by ``prompt``."""
+        ...
 
 
 DEFAULT_VISION_PROMPT = (

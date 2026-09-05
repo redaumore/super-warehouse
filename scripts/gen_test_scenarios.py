@@ -56,6 +56,8 @@ DOMAINS: dict[str, str] = {
     "test_features": "Feature flags por fase",
     "test_e2e_order": "E2E: pedido completo",
     "test_e2e_ingestion": "E2E: ingesta de documentos",
+    "test_session_logger": "Observabilidad y logs por sesión",
+    "test_pipeline_session_trace": "Trazabilidad de sesión en el pipeline",
 }
 
 

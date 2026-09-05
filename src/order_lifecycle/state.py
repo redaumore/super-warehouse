@@ -28,7 +28,10 @@ Side effects:
   not here.
 - ``cancel_order`` releases ACTIVE reservations from Draft/Confirmed and
   restores the deducted stock (with a ``StockAdjustment`` row, reason
-  ``order_cancelled`` and the actor) from Picking/Ready for delivery.
+  ``order_cancelled`` and the actor) from Picking/Ready for delivery. Every
+  cancel path also releases the order's auto-sourced ``SourcingNeed``
+  quantities from the suppliers' OPEN POs (shared POs keep the other orders'
+  items; a PO left empty is cancelled; executed POs are never touched).
 - ``modify_order`` (Confirmed → Draft) restores the deducted stock and
   releases the CONVERTED reservations so a re-confirm starts from a fresh
   TTL (design AD6).
@@ -41,6 +44,7 @@ makes the expiry durable by marking reservations EXPIRED.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -211,16 +215,34 @@ def _restore_converted_stock(
     return restored
 
 
+@dataclass(frozen=True)
+class CancelResult:
+    """Outcome of ``cancel_order``: the cancelled order plus its PO release.
+
+    ``cancelled_po_ids`` lists the supplier purchase orders that were CANCELLED
+    because this order's released quantities left them empty (a shared PO that
+    still holds other orders' items stays OPEN and never appears here).
+    """
+
+    order: Order
+    cancelled_po_ids: tuple[int, ...] = ()
+
+
 def cancel_order(
     session: Session, order: Order, *, actor: str, now: datetime | None = None
-) -> Order:
+) -> CancelResult:
     """Cancel a Draft/Confirmed/Picking/Ready-for-delivery order.
 
     Draft and Confirmed release ACTIVE reservations immediately (the reserved
     stock becomes available again); Picking and Ready for delivery restore the
     already-deducted stock and record a ``StockAdjustment`` row per SKU with
-    reason ``order_cancelled`` and the acting entity. Every path ends in
-    CANCELED — the order row is never deleted (audit trail).
+    reason ``order_cancelled`` and the acting entity. EVERY cancel path also
+    releases the order's auto-sourced ``SourcingNeed`` quantities from the
+    suppliers' OPEN purchase orders: a shared PO keeps the other orders' items
+    and a PO left with no items is cancelled (its id rides the returned
+    ``CancelResult`` for the caller's audit trail); executed POs (SENT or
+    later) keep their need links untouched. Every path ends in CANCELED — the
+    order row is never deleted (audit trail).
     """
     if order.estado not in (
         OrderEstado.DRAFT,
@@ -237,7 +259,14 @@ def cancel_order(
     order.rejected_at = now or datetime.now(UTC)
     order.needs_requote = False
     session.flush()
-    return order
+    # Imported at the call site on purpose: the state-machine module must not
+    # pull the purchasing layer into its import graph (verified acyclic today,
+    # kept lazy so it can never become a cycle).
+    from src.purchasing.accumulate import release_order_needs
+
+    cancelled_pos = release_order_needs(session, order.order_id)
+    session.flush()
+    return CancelResult(order=order, cancelled_po_ids=tuple(po.po_id for po in cancelled_pos))
 
 
 def modify_order(session: Session, order: Order, *, now: datetime | None = None) -> Order:

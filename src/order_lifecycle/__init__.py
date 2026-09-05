@@ -1,6 +1,7 @@
 """Order lifecycle: six-state machine and reservation release rules."""
 
 from src.order_lifecycle.state import (
+    CancelResult,
     InvalidTransitionError,
     RequiresRequoteError,
     add_draft_item,
@@ -16,6 +17,7 @@ from src.order_lifecycle.state import (
 )
 
 __all__ = [
+    "CancelResult",
     "InvalidTransitionError",
     "RequiresRequoteError",
     "add_draft_item",

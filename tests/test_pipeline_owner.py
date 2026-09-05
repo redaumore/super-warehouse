@@ -1,10 +1,11 @@
 """Pipeline E2E tests for the owner pivot (task 5.3).
 
 Drives ``handle_inbound`` end-to-end with a fake channel and a real
-orchestrator: the owner's message passes the gate, is parsed, the customer is
-resolved by name, the Case A quote lands in the owner's chat, and the approval
-reply registers the Sheets row. A non-owner sender is rejected at the edge with
-a polite reply and never routes — no order is created.
+orchestrator: the owner's message passes the gate, the GUIDED scripted flow
+creates the order (the only order-creation path — the legacy free-form parsed
+intake was removed), the quote lands in the owner's chat, and the approval
+reply registers the Sheets row. A non-owner sender is rejected at the edge
+with a polite reply and never routes — no order is created.
 """
 
 from __future__ import annotations
@@ -19,9 +20,8 @@ from sqlalchemy.exc import OperationalError
 
 from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
-from src.agents.intake import SimpleOrderParser
 from src.agents.inventory import seed_inventory
-from src.agents.product_search import ProductSearchResult, ProductSource
+from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
 from src.channels.base import InboundMessage
 from src.config import Settings, get_settings
 from src.db.models import (
@@ -56,10 +56,10 @@ class FakeChannel:
 
 
 class FakeResponder:
-    """Never reached in the sourcing flow; raises if the LLM chat path runs."""
+    """The guided flow must stay deterministic; raises if the LLM path runs."""
 
     def respond(self, messages):
-        raise AssertionError("the sourcing flow must not call the LLM responder")
+        raise AssertionError("the guided flow must not call the LLM responder")
 
 
 class FakeSheets:
@@ -76,10 +76,19 @@ class FakeSheets:
 
 
 class FakeProductSearcher:
-    """Product-query seam stand-in: sourcing turns never call it, NONE otherwise."""
+    """Product-query seam for the guided product step: one LOCAL catalog hit."""
 
     def search(self, query: str) -> ProductSearchResult:
-        return ProductSearchResult(source=ProductSource.NONE)
+        return ProductSearchResult(
+            source=ProductSource.LOCAL,
+            entries=(
+                ProductEntry(
+                    sku="CLV-PRS-2",
+                    name="Clavos Paris 2 Pulgadas (50mm)",
+                    source=ProductSource.LOCAL,
+                ),
+            ),
+        )
 
 
 def _postgres_up() -> bool:
@@ -168,16 +177,15 @@ def _orchestrator(session, sheets):
     return build_orchestrator(
         responder=FakeResponder(),
         # The product-query seam is injected (not the production RAG chain) so
-        # the owner-flow tests stay deterministic; sourcing turns never use it.
+        # the owner-flow tests stay deterministic.
         searcher=FakeProductSearcher(),
         sourcing=deps,
-        parser=SimpleOrderParser(),
         dispatch=build_dispatch_handler(lambda: session, sheets),
     )
 
 
-async def test_owner_turn_flows_to_case_a_quote_and_approval(shop):
-    """El turno del dueño: gate → parse → resolver → cotizar en chat → aprobar → Sheets."""
+async def test_owner_guided_order_flows_to_quote_and_approval(shop):
+    """El turno del dueño: gate → guiado → cotizar en chat → aprobar → Sheets."""
     session = shop["session"]
     sheets = FakeSheets()
     channel = FakeChannel()
@@ -186,23 +194,31 @@ async def test_owner_turn_flows_to_case_a_quote_and_approval(shop):
 
     with _pipeline_patches(channel, orchestrator, settings):
         await handle_inbound(
-            InboundMessage(
-                channel="whatsapp",
-                sender_id=OWNER_WHATSAPP,
-                text=f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas",
-            )
+            InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="hola bob")
+        )
+        await handle_inbound(
+            InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text=CUSTOMER_NAME)
+        )
+        await handle_inbound(
+            InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="clavos")
+        )
+        await handle_inbound(
+            InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="10")
+        )
+        await handle_inbound(
+            InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="listo")
         )
 
     # The quote is the owner's in-chat reply (no separate push).
-    assert len(channel.sent) == 1
-    sender, reply = channel.sent[0]
+    assert len(channel.sent) == 5
+    sender, reply = channel.sent[-1]
     assert sender == OWNER_WHATSAPP
-    assert "Pedido #1 de Ferretería Don Juan" in reply
+    assert "Pedido #1 para Ferretería Don Juan" in reply
     assert "aprobá" in reply
 
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
     assert order is not None
-    assert order.estado is OrderEstado.DRAFT  # persisted at the first add
+    assert order.estado is OrderEstado.DRAFT  # persisted at the finalize step
 
     # The owner's confirm reply routes to the wired DISPATCH and registers.
     with _pipeline_patches(channel, orchestrator, settings):
@@ -210,12 +226,14 @@ async def test_owner_turn_flows_to_case_a_quote_and_approval(shop):
             InboundMessage(channel="whatsapp", sender_id=OWNER_WHATSAPP, text="aprobá")
         )
 
-    assert len(channel.sent) == 2
-    assert "confirmado" in channel.sent[1][1]
+    assert len(channel.sent) == 6
+    assert "confirmado" in channel.sent[-1][1]
     assert sheets.rows == [(order.order_id, "10 × CLV-PRS-2")]
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-PRS-2"))
+    assert on_hand is not None
     assert on_hand.quantity_on_hand == 40
     order = session.scalar(select(Order).order_by(Order.order_id.desc()))
+    assert order is not None
     assert order.estado is OrderEstado.CONFIRMED
 
 
@@ -247,20 +265,17 @@ async def test_telegram_owner_gate_accepts_configured_chat_id(shop):
     settings = _settings()
 
     with _pipeline_patches(channel, orchestrator, settings):
-        await handle_inbound(
-            InboundMessage(
-                channel="telegram",
-                sender_id=OWNER_TELEGRAM,
-                text=f"para {CUSTOMER_NAME} quiero 10 clavos de 2 pulgadas",
+        for text in ("hola bob", CUSTOMER_NAME, "clavos", "10", "listo"):
+            await handle_inbound(
+                InboundMessage(channel="telegram", sender_id=OWNER_TELEGRAM, text=text)
             )
-        )
         await handle_inbound(
             InboundMessage(channel="telegram", sender_id="987654321", text="quiero 10 clavos")
         )
 
     # The owner's order flowed; the impostor was rejected before routing.
     assert channel.sent[0][0] == OWNER_TELEGRAM
-    assert "Pedido #1 de Ferretería Don Juan" in channel.sent[0][1]
-    assert channel.sent[1] == ("987654321", rejection_reply())
+    assert "Pedido #1 para Ferretería Don Juan" in channel.sent[4][1]
+    assert channel.sent[5] == ("987654321", rejection_reply())
     orders = session.scalars(select(Order)).all()
     assert len(orders) == 1  # only the owner's order exists

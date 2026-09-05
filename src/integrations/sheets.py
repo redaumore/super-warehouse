@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import enum
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import gspread
 from gspread.utils import ValueInputOption
 
 from src.config import Settings, get_settings
+from src.tz import now_buenos_aires, to_buenos_aires
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,10 @@ class SheetsWriter:
         registered_at: datetime | None = None,
     ) -> SheetsWriteStatus:
         """Append one order row; on any failure quarantine it (never raise)."""
-        timestamp = (registered_at or datetime.now(UTC)).isoformat()
+        # The spreadsheet is a human-facing surface: render the timestamp in
+        # Buenos Aires local time (registered_at is stored/assumed UTC).
+        art_dt = to_buenos_aires(registered_at) if registered_at else now_buenos_aires()
+        timestamp = art_dt.isoformat()
         row: list[str] = [
             str(order_id),
             customer_name or "",

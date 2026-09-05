@@ -20,6 +20,13 @@ REJECT = "rechazá"
 RESET_SESSION = "hola bob"
 RESET_GREETING = "¡Hola! Arrancamos de cero: decime el cliente, los productos y las cantidades."
 
+# Scripted (guided) order-creation flow: after a session reset the SYSTEM
+# takes command with a fixed question sequence. The owner answers one question
+# per message; the guided agent owns every turn until the draft is finalized.
+GUIDED_ASK_CLIENT = "¿Para qué cliente querés armar un pedido?"
+GUIDED_ASK_PRODUCT = "¿Qué producto querés agregar al pedido?"
+GUIDED_ASK_MORE = "¿Querés agregar otro producto?"
+
 _SESSION_RESET_RE = re.compile(r"^\s*hola\s+bob\s*[.!]*\s*$", re.IGNORECASE)
 
 

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from src.db.models import Cliente, Order, OrderEstado, OrderItem, SourcingState
 from src.integrations.rag import normalize_rag_sku
+from src.observability.session_logger import log_session_event
 from src.pricing.order_pricing import PricedLine, PricedOrder
 
 
@@ -75,4 +76,14 @@ def persist_draft_order(
             )
         )
     session.flush()
+    log_session_event(
+        "orders",
+        "persist_draft_order",
+        {
+            "order_id": order.order_id,
+            "customer_id": customer.customer_id,
+            "lines_count": len(priced.lines),
+            "total_ars": str(priced.total),
+        },
+    )
     return order

@@ -29,12 +29,18 @@ from src.db.models import (
     OrderEstado,
     OrderItem,
     ReservationEstado,
+    SourcingNeed,
     StockReservation,
     Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
 )
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.router import AgentOutcome
 from src.orchestrator.session import ConversationState
+from src.purchasing.accumulate import accumulate_need
+from src.sourcing.persistence import upsert_sourcing_need
 
 OWNER_SENDER = "+5491100000000"
 
@@ -205,6 +211,27 @@ def test_reject_cancels_order_and_releases_reservations(shop):
     assert available_stock(session, "CLV-001") == 10
 
 
+def test_reject_releases_auto_sourced_needs_and_cancels_the_empty_po(shop):
+    """Rechazar un Confirmado con necesidad auto-sourced cancela el PO vaciado."""
+    session = shop["session"]
+    order = shop["orders"][0]
+    order.estado = OrderEstado.CONFIRMED  # reject path runs from Confirmed too
+    session.flush()
+    need = upsert_sourcing_need(session, order.order_id, "CLV-001", 3)
+    po = accumulate_need(session, need, 1)
+    handler = build_dispatch_handler(lambda: session, FakeSheets())
+
+    outcome = handler(_message("no, rechazá"), _state(lambda: session, order.order_id), None)
+
+    assert "cancelado" in outcome.reply  # type: ignore[operator]
+    assert order.estado is OrderEstado.CANCELED
+    reloaded = session.get(SupplierPurchaseOrder, po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.CANCELLED
+    assert session.scalars(select(SupplierPurchaseOrderItem)).all() == []
+    reloaded_need = session.get(SourcingNeed, need.need_id)
+    assert reloaded_need.po_item_id is None  # detached: no phantom PO quantities
+
+
 def test_unknown_decision_asks_again_without_touching_order(shop):
     """Una respuesta que no es confirmar/cancelar re-pregunta sin tocar el pedido."""
     session = shop["session"]
@@ -267,3 +294,30 @@ def test_sheets_quarantine_is_tolerated_and_order_stays_confirmed(shop):
     assert _on_hand(session, "CLV-001") == 8  # deducted despite the quarantine
     assert outcome.state is not None
     assert outcome.state.awaiting_decision is False  # the decision is closed
+
+
+def test_dispatch_handler_logs_session_events(shop, tmp_path, monkeypatch):
+    """El handler de dispatch y la ceremonia de approval emiten eventos de sesión estructurados."""
+    from src.observability.session_logger import read_session_events, set_current_session_id
+
+    monkeypatch.setattr("src.observability.session_logger.DEFAULT_SESSIONS_DIR", tmp_path)
+    sid = "ses_dispatch_test"
+    set_current_session_id(sid)
+    try:
+        session = shop["session"]
+        order = shop["orders"][0]
+        order_id = order.order_id
+        reserve_stock(session, "CLV-001", customer_id=1, cantidad=2, order_id=order_id)
+        session.commit()
+
+        handler = build_dispatch_handler(lambda: session, FakeSheets())
+        handler(_message("aprobá"), _state(lambda: session, order_id), None)
+
+        events = read_session_events(sid, log_dir=tmp_path)
+        actions = [e["action"] for e in events]
+        assert "decision_parsed" in actions
+        assert "order_classified" in actions
+        assert "order_confirmed_case_a" in actions
+        assert "decision_approved" in actions
+    finally:
+        set_current_session_id(None)

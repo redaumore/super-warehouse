@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 333, agrupados en 28 dominios.
+**Total de escenarios:** 365, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,11 +12,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 11
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 25
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 24
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
-- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
+- [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
 - [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
@@ -29,13 +29,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 23
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
-- [Registro en Google Sheets](#registro-en-google-sheets) — 5
+- [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 36
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 37
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
+- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
+- [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
 ## Motor de precios
 
@@ -119,7 +121,20 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La cuarentena de Sheets NO revierte: el pedido queda Confirmado y se informa. _(`test_sheets_quarantine_is_tolerated_and_order_stays_confirmed`)_
 - Confirmar un pedido con precios pendientes de conversión se bloquea. _(`test_confirm_pending_conversion_order_is_blocked`)_
 - Classify at confirm: stock que cayó sin supplier cancela el pedido (Case C). _(`test_confirm_discovering_case_c_cancels_the_order`)_
+- Case C con códigos de proveedor sin mapear avisa al dueño y queda logueado. _(`test_confirm_case_c_with_unmapped_codes_notifies_the_owner`)_
+- Sin códigos sin mapear, la respuesta Case C queda sin la nota adicional. _(`test_confirm_case_c_without_unmapped_codes_keeps_plain_reply`)_
 - Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B). _(`test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt`)_
+- RAG-only: sin prompt de selección; needs con supplier y una OC por supplier. _(`test_confirm_rag_only_order_autosources_without_prompt`)_
+- Mixto: LOCAL en stock + RAG → Case A completo con descuento, Sheets y OC. _(`test_confirm_mixed_local_stock_and_rag_completes_with_po`)_
+- Mixto Case B: el prompt lista SOLO el LOCAL faltante; el RAG ya está auto-sourced. _(`test_confirm_mixed_local_short_with_candidates_prompts_only_local`)_
+- RAG sin supplier resoluble + candidates → entra al prompt como los LOCAL. _(`test_confirm_unresolved_rag_falls_back_to_selection_prompt`)_
+- RAG sin supplier ni candidates → Case C: cancelación + nota de ingesta. _(`test_confirm_unresolved_rag_without_candidates_cancels`)_
+- Dos suppliers ACTIVO con el mismo business_name → la línea queda sin resolver. _(`test_confirm_ambiguous_rag_business_name_is_unresolved`)_
+- Un código de proveedor INACTIVO no resuelve la línea RAG (nunca auto-source). _(`test_confirm_inactive_supplier_code_match_is_unresolved`)_
+- Sin código, un business_name único ACTIVO resuelve la línea RAG. _(`test_confirm_rag_line_resolves_by_unique_business_name`)_
+- Case C tras auto-sourcing: los OCs vacíos se cancelan y el pedido lo informa. _(`test_confirm_case_c_after_autosourcing_cancels_the_empty_pos`)_
+- OC compartida: la cancelación de un pedido NO toca lo del otro pedido. _(`test_confirm_case_c_releases_only_this_order_from_a_shared_po`)_
+- Necesidad ligada a una OC SENT: release no toca link ni cantidades. _(`test_release_order_needs_leaves_an_executed_po_untouched`)_
 
 ## Orquestador y enrutamiento
 
@@ -128,6 +143,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un texto nuevo de cliente se enruta a Customer. _(`test_fresh_text_routes_to_customer`)_
 - La aprobación del dueño se enruta a Despacho reanudando el pedido. _(`test_owner_approval_routes_to_dispatch_resuming_order`)_
 - El rechazo del dueño se enruta a Despacho. _(`test_owner_rejection_routes_to_dispatch`)_
+- Un paso del flujo guiado se enruta al agente GUIDED. _(`test_guided_flow_step_routes_to_guided_agent`)_
 - El comando 'sacá X' se enruta a Customer aunque haya un pedido en curso. _(`test_remove_product_command_routes_to_customer_with_order_context`)_
 - Una respuesta ambigua mientras se espera sigue en la conversación del dueño. _(`test_non_decision_reply_while_awaiting_goes_to_dispatch_menu`)_
 - Un pedido en curso con ítems se enruta a Ventas. _(`test_in_progress_order_with_items_routes_to_sales`)_
@@ -142,8 +158,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
 - La respuesta que produce un agente viaja en el resultado del turno. _(`test_orchestrator_surfaces_agent_reply`)_
-- El gatillo "hola bob" descarta el estado previo y responde el saludo fijo. _(`test_session_reset_drops_previous_state_and_greets`)_
-- El reset borra awaiting_decision y draft: el próximo texto va a Customer. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
+- El gatillo "hola bob" descarta el estado previo y arranca el flujo guiado. _(`test_session_reset_drops_previous_state_and_starts_guided_flow`)_
+- El reset borra awaiting_decision y draft: el próximo texto va al flujo guiado. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
 - Mayúsculas y puntuación final no impiden el reset. _(`test_session_reset_variants_match`)_
   - Hola Bob!
 - Una oración que contiene las palabras no resetea: sigue el flujo normal. _(`test_sentence_containing_trigger_words_does_not_reset`)_
@@ -229,6 +245,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Una reserva vigente no bloquea la confirmación. _(`test_fresh_reservation_can_be_confirmed`)_
 - Cancelar un Draft libera las reservas: el stock vuelve a estar disponible. _(`test_cancel_draft_releases_reservations_and_stock_is_available`)_
 - Cancelar desde Picking restaura el stock descontado y audita el ajuste. _(`test_late_cancel_restores_deducted_stock_with_audit`)_
+- Cancelar un Confirmado con necesidades auto-sourced cancela el PO vaciado. _(`test_cancel_confirmed_order_cancels_the_open_po_it_emptied`)_
+- OC compartida: el PO sigue OPEN con la cantidad del otro pedido. _(`test_cancel_leaves_a_shared_open_po_with_the_other_orders_items`)_
+- PO ya enviado (SENT): la cancelación no lo toca ni desvincula la necesidad. _(`test_cancel_keeps_an_executed_po_and_its_need_link`)_
+- Cancelar sin necesidades: sin POs tocados y sin ids en el resultado. _(`test_plain_cancel_without_needs_releases_nothing`)_
 - Modify restaura el stock descontado y libera las reservas convertidas. _(`test_modify_restores_deducted_stock_without_double_count`)_
 - add/remove mutan OrderItem rows; el Draft vacío sigue Draft. _(`test_add_remove_draft_item_on_persisted_draft`)_
 
@@ -447,6 +467,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Si la cuarentena también falla, la fila queda registrada en memoria. _(`test_append_failure_with_unreachable_quarantine_keeps_memory_log`)_
 - Sin credenciales configuradas, la fila se cuarentena y no se lanza nada. _(`test_missing_credentials_quarantines_instead_of_raising`)_
 - El registro sincronizado refleja solo los appends exitosos. _(`test_sheets_synced_reflects_only_successful_appends`)_
+- The human-visible sheet timestamp renders Buenos Aires local time (UTC-3). _(`test_append_row_renders_registered_at_in_buenos_aires_time`)_
 
 ## Códigos de barras
 
@@ -478,7 +499,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
-- Building the app creates seven tabs with the expected labels. _(`test_build_app_creates_seven_tabs_with_expected_labels`)_
+- Building the app creates tabs with the expected labels. _(`test_build_app_creates_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
@@ -517,6 +538,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La acción start picking transiciona y hace commit (patrón po.py). _(`test_start_picking_action_commits_transition`)_
 - Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega. _(`test_fulfillment_chain_commits_to_closed_with_delivery_date`)_
 - Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice. _(`test_cancel_action_releases_reservations_with_backoffice_actor`)_
+- Cancelar desde backoffice libera la necesidad auto-sourced y cancela el PO vacío. _(`test_cancel_action_releases_auto_sourced_needs_and_cancels_the_empty_po`)_
 - Cancelar desde Picking restaura stock y audita con actor backoffice. _(`test_cancel_action_restores_deducted_stock_with_audit`)_
 - El monitor muestra los seis estados del pedido. _(`test_monitor_shows_all_six_states`)_
 - El tab Customer Orders expone las cuatro acciones de cumplimiento. _(`test_app_customer_orders_tab_has_fulfillment_buttons`)_
@@ -544,3 +566,21 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Correcciones del dueño en la grilla reemplazan la extracción cruda. _(`test_e2e_owner_corrections_override_raw_extraction`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
 - confirm_items rechaza un supplier INACTIVO sin escribir inventario. _(`test_confirm_items_refuses_inactive_supplier_and_writes_nothing`)_
+
+## Observabilidad y logs por sesión
+
+- Genera identificadores de sesión únicos y formateados. _(`test_generate_session_id`)_
+- Propaga el session_id a través de contextvars en el contexto síncrono. _(`test_contextvar_propagation`)_
+- Aísla el session_id entre diferentes corutinas asincrónicas concurrentes. _(`test_contextvar_async_isolation`)_
+- Registra eventos estructurados en el archivo de log individual de la sesión. _(`test_log_session_event_and_read`)_
+- El backoffice puede listar archivos de sesión y renderizar eventos tabulares. _(`test_backoffice_sessions_helpers`)_
+- Verifica que el archivo de log contenga cabecera y bloques legibles para debugging. _(`test_human_readable_log_format`)_
+- Verifica que los eventos de dispatch y approval se formateen con diagnóstico legible. _(`test_human_readable_dispatch_and_approval_logs`)_
+- The human header shows Buenos Aires local time; the JSON payload stays UTC ISO. _(`test_format_event_for_human_renders_art_header_and_keeps_utc_json`)_
+- Unparseable timestamps are rendered as-is instead of raising. _(`test_format_event_for_human_falls_back_to_raw_timestamp_on_parse_error`)_
+- The 'Created:' header carries Buenos Aires local wall-clock time. _(`test_log_file_created_header_renders_buenos_aires_local_time`)_
+- The backoffice grid shows the event time in Buenos Aires local time. _(`test_session_events_grid_renders_art_time_column`)_
+
+## Trazabilidad de sesión en el pipeline
+
+- El pipeline inicia sesión con 'Hola Bob', preserva la sesión y registra eventos de RAG. _(`test_session_trace_lifecycle_and_rag_events`)_

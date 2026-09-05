@@ -8,7 +8,7 @@ polite rejection and is never routed — no order is created, quoted or approved
 for them.
 
 When no owner key is configured for a channel the gate stays OPEN: that is the
-documented rollback path that keeps the legacy customer intake working.
+local-development path (useful for tests); production always pins both keys.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ def is_owner_sender(sender_id: str, channel: str, settings: Settings) -> bool:
     Telegram senders are chat ids: compared as strings after trimming.
     WhatsApp senders are phone numbers: both sides are normalized to canonical
     E.164 before comparing, so any formatting of the same number matches.
-    When no owner key is configured for the channel the gate is open (legacy
-    intake); an unknown channel is never treated as the owner.
+    When no owner key is configured for the channel the gate is open (local
+    development); an unknown channel is never treated as the owner.
     """
     if channel == "telegram":
         configured = _owner_chat_id(settings)

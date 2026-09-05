@@ -812,6 +812,203 @@ class StructuredOutputBuilder:
 
 
 # ============================================================================
+# 6-BIS. FALLBACK SOBRE EVIDENCIA DE RECUPERACIÓN (GUARD vs. RETRIEVAL)
+# ============================================================================
+
+# Narrativa neutral para el fallback: el LLM se negó, pero la recuperación
+# híbrida (BM25 + vector) encontró productos relevantes por encima del umbral.
+RETRIEVAL_FALLBACK_NARRATIVE = "Resultados del catálogo para tu búsqueda."
+
+
+def _candidate_field(item: Any, name: str, default: Any = None) -> Any:
+    """Lee un atributo de un candidato aceptando tanto dicts como dataclasses (RankedCandidate)."""
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
+def _should_fallback_to_retrieval(
+    retrieval_scores: Sequence[Optional[float]],
+    threshold: float
+) -> bool:
+    """
+    Decide si un rechazo del LLM debe ser reemplazado por evidencia de recuperación.
+
+    REGLA (guard vs. retrieval): el guard del LLM (mensaje canónico de ausencia o
+    `consulta_respondida=false` en salida estructurada) actúa como filtro de ruido y
+    consultas fuera de dominio, pero JAMÁS invalida evidencia real de recuperación:
+    si la recuperación híbrida (BM25 + vector) produjo al menos un hit con score
+    estrictamente superior al umbral de relevancia configurado, el pipeline debe
+    devolver esos hits como respuesta exitosa y no un rechazo. El rechazo solo se
+    mantiene cuando no existe ningún hit por encima del umbral (o no hay hits).
+
+    Función pura (sin LLM, sin DB) para ser testeable de forma determinista.
+    Umbral estricto (`>`): un hit exactamente EN el umbral se considera "en/por
+    debajo" para el fallback (ver prueba de umbral), aunque la Fase 5 lo admita
+    en el prompt con `>=`.
+    """
+    for score in retrieval_scores:
+        if score is None:
+            continue
+        try:
+            if float(score) > float(threshold):
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _candidates_to_context_chunks(candidates: Sequence[Any]) -> List[InputContextChunk]:
+    """
+    Convierte candidatos finales de la Fase 5 (RankedCandidate o dicts de Fase 4)
+    en InputContextChunks para reconstruir productos desde evidencia de retrieval.
+    """
+    chunks: List[InputContextChunk] = []
+    for idx, item in enumerate(candidates, start=1):
+        meta = _candidate_field(item, "metadata", None)
+        if not isinstance(meta, dict):
+            meta = {}
+
+        score_raw = _candidate_field(item, "normalized_score")
+        if score_raw is None:
+            score_raw = _candidate_field(item, "score", 0.0)
+        try:
+            relevance_score = float(score_raw) if score_raw is not None else 0.0
+        except (TypeError, ValueError):
+            relevance_score = 0.0
+
+        pos_raw = _candidate_field(item, "prompt_position")
+        prompt_pos = int(pos_raw) if pos_raw is not None else idx
+
+        pagina_val: Optional[int] = None
+        raw_pagina = _candidate_field(item, "pagina")
+        if raw_pagina is None:
+            raw_pagina = _candidate_field(item, "pagina_origen")
+        if raw_pagina is None:
+            raw_pagina = meta.get("pagina") or meta.get("pagina_origen")
+        if raw_pagina is not None:
+            try:
+                pagina_val = int(raw_pagina)
+            except (TypeError, ValueError):
+                pagina_val = None
+
+        raw_precio = _candidate_field(item, "precio")
+        if raw_precio is None:
+            raw_precio = meta.get("precio")
+        precio_val: Optional[float] = None
+        if raw_precio is not None:
+            try:
+                precio_val = float(raw_precio)
+            except (TypeError, ValueError):
+                precio_val = None
+
+        raw_cod_orig = _candidate_field(item, "codigo_orig") or meta.get("codigo_orig")
+        raw_cod_prov = _candidate_field(item, "codigo_proveedor") or meta.get("codigo_proveedor")
+        raw_nom_prov = (
+            _candidate_field(item, "nombre_proveedor") or
+            meta.get("nombre_proveedor") or
+            meta.get("proveedor")
+        )
+
+        c = InputContextChunk(
+            fragment_id=idx,
+            node_id=str(_candidate_field(item, "node_id", f"node_{idx}")),
+            codigo_producto=_candidate_field(item, "codigo_producto") or meta.get("codigo"),
+            codigo_orig=raw_cod_orig,
+            marca=_candidate_field(item, "marca") or meta.get("marca"),
+            nombre_proveedor=raw_nom_prov,
+            codigo_proveedor=raw_cod_prov,
+            categoria_padre=meta.get("categoria_padre"),
+            categoria=_candidate_field(item, "categoria") or meta.get("categoria"),
+            subcategoria=_candidate_field(item, "subcategoria") or meta.get("subcategoria"),
+            precio=precio_val,
+            moneda=_candidate_field(item, "moneda") or meta.get("moneda"),
+            unidad_venta=_candidate_field(item, "unidad_venta") or meta.get("unidad_venta"),
+            empaque=_candidate_field(item, "empaque") or meta.get("empaque"),
+            archivo_origen=_candidate_field(item, "archivo_origen") or meta.get("archivo_origen"),
+            pagina=pagina_val,
+            content=str(_candidate_field(item, "text_content", "") or ""),
+            relevance_score=relevance_score,
+            prompt_position=prompt_pos,
+            metadata=meta
+        )
+        chunks.append(c)
+    return chunks
+
+
+def build_retrieval_fallback_result(
+    query: str,
+    candidates: Sequence[Any],
+    threshold: float,
+    structured_json_mode: bool = False,
+    model_name: str = "gpt-4o",
+) -> GenerationResult:
+    """
+    Construye una respuesta SUCCESS a partir de hits de recuperación cuando el LLM
+    emitió un rechazo pero el retrieval produjo evidencia relevante (> umbral).
+
+    REGLA: el guard del LLM filtra ruido, pero nunca anula evidencia real del
+    retrieval. La respuesta mantiene el mismo esquema (`GenerationResult` /
+    `QueryResponse`): narrativa neutral + `productos[]` reconstruidos
+    determinísticamente desde los chunks finalesistas de la Fase 5
+    (orden y top_n existentes, sin inventar datos).
+    """
+    chunks = _candidates_to_context_chunks(candidates)
+
+    # Verificación de grounding: la narrativa no contiene afirmaciones factuales
+    # del LLM (los datos provienen directamente de filas de retrieval verificadas),
+    # por lo que no hay citas fabricadas ni alucinaciones que auditar.
+    verification = CitationVerificationResult(
+        citations_found=[],
+        referenced_fragment_ids=[],
+        valid_fragment_ids=sorted(c.fragment_id for c in chunks),
+        invalid_fragment_ids=[],
+        is_fully_grounded=True,
+        citation_ratio=0.0,
+        total_sentences=0,
+        cited_sentences=0
+    )
+
+    structured_json: Optional[Dict[str, Any]] = None
+    if structured_json_mode:
+        structured_json = StructuredOutputBuilder.parse_or_build(
+            raw_response=RETRIEVAL_FALLBACK_NARRATIVE,
+            query=query,
+            chunks=chunks,
+            is_refusal=False
+        )
+
+    rag_triplet: Dict[str, Any] = {
+        "query": query,
+        "context": [c.to_dict() for c in chunks],
+        "response": RETRIEVAL_FALLBACK_NARRATIVE,
+        "is_refusal": False,
+        "citations": [],
+        "is_grounded": True,
+        "fallback_source": "retrieval"
+    }
+
+    logger.info(
+        f"[Fallback Retrieval] Rechazo del LLM ignorado: {len(chunks)} hits de retrieval "
+        f"con score > {threshold} para la consulta '{query}'. Se devuelve SUCCESS."
+    )
+
+    return GenerationResult(
+        query=query,
+        response_text=RETRIEVAL_FALLBACK_NARRATIVE,
+        is_refusal=False,
+        status="SUCCESS",
+        verification=verification,
+        structured_json=structured_json,
+        total_context_tokens_approx=0,
+        latency_ms=0.0,
+        model_name=model_name,
+        temperature=0.0,
+        rag_triplet=rag_triplet
+    )
+
+
+# ============================================================================
 # 6. ORQUESTADOR PRINCIPAL DE LA FASE 6
 # ============================================================================
 
@@ -1137,11 +1334,29 @@ def run_rag_pipeline(
         query_aware=True
     )
 
-    return generator.generate_response(
+    gen_result = generator.generate_response(
         query=query,
         fase_5_candidates=candidates,
         structured_json_mode=structured_json
     )
+
+    # Guard vs. retrieval: si el LLM rechazó (Directiva de Ausencia o
+    # consulta_respondida=false) pero la recuperación híbrida produjo hits
+    # por encima del umbral configurado, devolvemos esos hits como SUCCESS.
+    # El guard filtra ruido, pero nunca invalida evidencia real del retrieval.
+    if gen_result.is_refusal and _should_fallback_to_retrieval(
+        retrieval_scores=[c.normalized_score for c in candidates],
+        threshold=threshold
+    ):
+        gen_result = build_retrieval_fallback_result(
+            query=query,
+            candidates=candidates,
+            threshold=threshold,
+            structured_json_mode=structured_json,
+            model_name=generator.model_name
+        )
+
+    return gen_result
 
 
 # ============================================================================

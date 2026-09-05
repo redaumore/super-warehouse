@@ -47,6 +47,7 @@ class SupplierCatalogSearcher(Protocol):
         description: str | None = None,
     ) -> tuple[SupplierCandidate, ...]:
         """Return candidate suppliers for the missing item, best first."""
+        ...
 
 
 def _fold(text: str) -> str:
