@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 343, agrupados en 30 dominios.
+**Total de escenarios:** 351, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,7 +12,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 13
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 21
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 25
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
@@ -124,6 +124,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Case C con códigos de proveedor sin mapear avisa al dueño y queda logueado. _(`test_confirm_case_c_with_unmapped_codes_notifies_the_owner`)_
 - Sin códigos sin mapear, la respuesta Case C queda sin la nota adicional. _(`test_confirm_case_c_without_unmapped_codes_keeps_plain_reply`)_
 - Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B). _(`test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt`)_
+- RAG-only: sin prompt de selección; needs con supplier y una OC por supplier. _(`test_confirm_rag_only_order_autosources_without_prompt`)_
+- Mixto: LOCAL en stock + RAG → Case A completo con descuento, Sheets y OC. _(`test_confirm_mixed_local_stock_and_rag_completes_with_po`)_
+- Mixto Case B: el prompt lista SOLO el LOCAL faltante; el RAG ya está auto-sourced. _(`test_confirm_mixed_local_short_with_candidates_prompts_only_local`)_
+- RAG sin supplier resoluble + candidates → entra al prompt como los LOCAL. _(`test_confirm_unresolved_rag_falls_back_to_selection_prompt`)_
+- RAG sin supplier ni candidates → Case C: cancelación + nota de ingesta. _(`test_confirm_unresolved_rag_without_candidates_cancels`)_
+- Dos suppliers ACTIVO con el mismo business_name → la línea queda sin resolver. _(`test_confirm_ambiguous_rag_business_name_is_unresolved`)_
+- Un código de proveedor INACTIVO no resuelve la línea RAG (nunca auto-source). _(`test_confirm_inactive_supplier_code_match_is_unresolved`)_
+- Sin código, un business_name único ACTIVO resuelve la línea RAG. _(`test_confirm_rag_line_resolves_by_unique_business_name`)_
 
 ## Orquestador y enrutamiento
 

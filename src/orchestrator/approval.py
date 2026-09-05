@@ -3,7 +3,10 @@
 Composes the lifecycle confirm transition with the registration side effects
 that complete an order (design data flow):
 
-    classify A/B/C from latest availability
+    RAG lines auto-source (supplier by definition: need + OPEN PO, no
+      availability check, no selection prompt)
+      → classify A/B/C from latest availability (LOCAL lines + unresolved
+        RAG leftovers only)
       → Case C: cancel_order + sourcing CANCELLED (no registration)
       → Case B: persist SourcingNeed rows, hand the selection prompt back
       → Case A: confirm (TTL guard) → reserve→convert→deduct → append Sheets row
@@ -36,6 +39,8 @@ from src.db.models import (
     ReservationEstado,
     SourcingState,
     StockReservation,
+    Supplier,
+    SupplierStatus,
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.observability.session_logger import log_session_event
@@ -189,12 +194,26 @@ def _availability_for_order(session: Session, order: Order, sku: str) -> int:
 
 
 def _classify_from_latest_availability(
-    session: Session, order: Order, searcher: SupplierCatalogSearcher | None
+    session: Session,
+    order: Order,
+    searcher: SupplierCatalogSearcher | None,
+    unresolved_rag: tuple[ResolvedItem, ...] = (),
 ) -> tuple[SourcingCase, tuple[MissingItem, ...]]:
-    """Classify the order from the LATEST availability (spec: at confirm)."""
-    items = tuple(
-        ResolvedItem(sku=item.sku, cantidad=item.cantidad, description=item.name)
-        for item in order.items
+    """Classify the order from the LATEST availability (spec: at confirm).
+
+    Only LOCAL lines (plus unresolved RAG leftovers) are stock-classified: a
+    RAG line is supplier-sourced by definition — stock checks and supplier
+    selection NEVER apply to it (owner rule). Unresolved RAG items (no supplier
+    master match) fall back to the same classify so they surface as missing
+    with candidates (Case B) or without (Case C).
+    """
+    items = (
+        tuple(
+            ResolvedItem(sku=item.sku, cantidad=item.cantidad, description=item.name)
+            for item in order.items
+            if (item.source or "LOCAL").upper() == "LOCAL"
+        )
+        + unresolved_rag
     )
     decision = classify_case(
         items,
@@ -204,17 +223,103 @@ def _classify_from_latest_availability(
     return decision.case, decision.missing
 
 
-def _confirmation_text(order: Order, total: Decimal, sheets_status: SheetsWriteStatus) -> str:
+def _resolve_rag_supplier(session: Session, value: str | None) -> Supplier | None:
+    """Resolve an OrderItem's supplier string to ONE ACTIVO supplier row.
+
+    Exact first: the string is expected to be the 3-char ``codigo_proveedor``
+    (what ``_draft_pricing_lines`` stores). Fallback: a unique case-insensitive
+    ``business_name`` match. Zero matches or an ambiguous name leave the line
+    unresolved (the owner decides via the selection prompt) — never guessed.
+    """
+    if not value or not value.strip():
+        return None
+    needle = value.strip().upper()
+    supplier = session.scalar(
+        select(Supplier).where(
+            Supplier.code == needle,
+            Supplier.status == SupplierStatus.ACTIVO,
+        )
+    )
+    if supplier is not None:
+        return supplier
+    named = list(
+        session.scalars(
+            select(Supplier).where(
+                func.lower(Supplier.business_name) == value.strip().lower(),
+                Supplier.status == SupplierStatus.ACTIVO,
+            )
+        ).all()
+    )
+    return named[0] if len(named) == 1 else None
+
+
+@dataclass(frozen=True)
+class RagAutoSource:
+    """One auto-sourced RAG line, for the session log and the confirmation reply."""
+
+    sku: str
+    supplier_name: str
+
+
+def _autosource_rag_lines(
+    session: Session, order: Order
+) -> tuple[tuple[RagAutoSource, ...], tuple[ResolvedItem, ...]]:
+    """Auto-source the order's RAG lines (owner rule); return the leftovers.
+
+    RAG lines carry their supplier from the RAG catalog snapshot, so they are
+    NEVER availability-checked and NEVER prompt a supplier selection: each
+    line's ``supplier`` string is resolved to an ACTIVO supplier row and the
+    line goes straight into its sourcing need and the supplier's OPEN purchase
+    order (missing quantity is the full ``cantidad`` — RAG lines never
+    reserve). Unresolved lines are returned as ``ResolvedItem`` s so they
+    classify together with the LOCAL gaps.
+    """
+    from src.purchasing.accumulate import accumulate_need
+    from src.sourcing.persistence import upsert_sourcing_need
+
+    quantities: dict[str, int] = {}
+    suppliers: dict[str, str | None] = {}
+    names: dict[str, str | None] = {}
+    for item in order.items:
+        if (item.source or "LOCAL").upper() == "LOCAL":
+            continue
+        quantities[item.sku] = quantities.get(item.sku, 0) + item.cantidad
+        suppliers.setdefault(item.sku, item.supplier)
+        names.setdefault(item.sku, item.name)
+
+    autosourced: list[RagAutoSource] = []
+    unresolved: list[ResolvedItem] = []
+    for sku, cantidad in quantities.items():
+        supplier = _resolve_rag_supplier(session, suppliers[sku])
+        if supplier is None:
+            unresolved.append(ResolvedItem(sku=sku, cantidad=cantidad, description=names[sku]))
+            continue
+        need = upsert_sourcing_need(session, order.order_id, sku, cantidad)
+        accumulate_need(session, need, supplier.id)
+        autosourced.append(RagAutoSource(sku=sku, supplier_name=supplier.business_name))
+    return tuple(autosourced), tuple(unresolved)
+
+
+def _confirmation_text(
+    order: Order,
+    total: Decimal,
+    sheets_status: SheetsWriteStatus,
+    po_suppliers: tuple[str, ...] = (),
+) -> str:
     if sheets_status is SheetsWriteStatus.QUARANTINED:
-        return (
+        text = (
             f"Pedido #{order.order_id} confirmado — total {total:.2f} ARS. "
             "Stock descontado. NO se pudo registrar en Google Sheets: la fila "
             "quedó en cuarentena. Revisá la configuración."
         )
-    return (
-        f"Pedido #{order.order_id} confirmado — total {total:.2f} ARS. "
-        "Stock descontado. Registrado en Google Sheets."
-    )
+    else:
+        text = (
+            f"Pedido #{order.order_id} confirmado — total {total:.2f} ARS. "
+            "Stock descontado. Registrado en Google Sheets."
+        )
+    if po_suppliers:
+        text += f" Orden de compra abierta a: {', '.join(po_suppliers)}."
+    return text
 
 
 def confirm_and_register(
@@ -241,6 +346,14 @@ def confirm_and_register(
     - Case A (full stock): reservations reconciled → CONVERTED, stock
       deducted, and the Sheets row appended. A Sheets quarantine is TOLERATED:
       the order stays CONFIRMED and the failure is surfaced in the result.
+
+    Owner rule (RAG auto-sourcing): a RAG line is supplier-sourced by
+    definition — it is NEVER availability-checked and NEVER prompts a supplier
+    selection. Each RAG line's ``supplier`` string is resolved against the
+    supplier master (exact 3-char code, then unique ACTIVO business_name); a
+    resolved line goes straight into its sourcing need and the supplier's OPEN
+    purchase order. Only LOCAL lines (plus unresolved RAG leftovers) are
+    classified by availability.
     """
     if order.conversion_pending:
         log_session_event(
@@ -251,7 +364,19 @@ def confirm_and_register(
         )
         raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
     confirm_order(session, order, now=now)
-    case, missing = _classify_from_latest_availability(session, order, searcher)
+    autosourced, unresolved_rag = _autosource_rag_lines(session, order)
+    if autosourced:
+        log_session_event(
+            "orders",
+            "order_rag_autosourced",
+            {
+                "order_id": order.order_id,
+                "lines": [
+                    {"sku": line.sku, "supplier": line.supplier_name} for line in autosourced
+                ],
+            },
+        )
+    case, missing = _classify_from_latest_availability(session, order, searcher, unresolved_rag)
 
     log_session_event(
         "orders",
@@ -355,6 +480,11 @@ def confirm_and_register(
         items_summary=build_items_summary(order),
     )
     _deduct_stock(session, converted)
+    # Auto-sourced RAG lines accumulated OPEN POs: the order is complete but
+    # its sourcing is IN_PREPARATION until those POs are executed.
+    po_suppliers = tuple(dict.fromkeys(line.supplier_name for line in autosourced))
+    if po_suppliers:
+        order.sourcing_state = SourcingState.IN_PREPARATION
     session.flush()
     log_session_event(
         "orders",
@@ -364,6 +494,7 @@ def confirm_and_register(
             "total_ars": str(total),
             "converted_reservations": len(converted),
             "sheets_status": sheets_status.value,
+            "open_po_suppliers": list(po_suppliers),
         },
     )
     return ConfirmResult(
@@ -371,5 +502,5 @@ def confirm_and_register(
         converted=len(converted),
         sheets_status=sheets_status,
         total=total,
-        confirmation_text=_confirmation_text(order, total, sheets_status),
+        confirmation_text=_confirmation_text(order, total, sheets_status, po_suppliers),
     )

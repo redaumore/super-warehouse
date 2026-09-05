@@ -457,3 +457,290 @@ def test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt(
     )
     assert need is not None
     assert need.missing_quantity == 4
+
+
+# ------------------------------------------------- RAG auto-sourcing at confirm
+
+
+def _rag_item(order_id: int, sku: str, cantidad: int, supplier: str, price: str) -> OrderItem:
+    return OrderItem(
+        order_id=order_id,
+        sku=sku,
+        cantidad=cantidad,
+        base_price=Decimal(price),
+        final_price=Decimal(price),
+        adjustment=Decimal(0),
+        name=f"{sku} item",
+        source="RAG",
+        supplier=supplier,
+    )
+
+
+@pytest.fixture
+def rag_ctx(db_session):
+    """Seed two ACTIVO suppliers (AMX/PFZ), a customer, and a RAG-only DRAFT order."""
+    db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
+    db_session.add(
+        Cliente(
+            customer_id=1,
+            nombre_comercial="Ferretería Don Juan",
+            telefono_norm="+5491155551234",
+            lista_precios_id=1,
+            descuento_particular_pct=Decimal(0),
+        )
+    )
+    db_session.add(
+        Supplier(id=2, code="AMX", business_name="AMX Products", default_margin_pct=Decimal(0))
+    )
+    db_session.add(
+        Supplier(id=3, code="PFZ", business_name="PZ Force", default_margin_pct=Decimal(0))
+    )
+    db_session.flush()
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(_rag_item(order.order_id, "AMX-GRA-1416", 5, "AMX", "100.00"))
+    db_session.add(_rag_item(order.order_id, "PFZ-KIT-27", 3, "PFZ", "200.00"))
+    db_session.flush()
+    return {"session": db_session, "order": order}
+
+
+def _all_pos(session) -> list:
+    from src.db.models import SupplierPurchaseOrder
+
+    return list(session.scalars(select(SupplierPurchaseOrder)).all())
+
+
+def _need_for(session, order_id: int, sku: str):
+    from src.db.models import SourcingNeed
+
+    return session.scalar(
+        select(SourcingNeed).where(SourcingNeed.order_id == order_id, SourcingNeed.sku == sku)
+    )
+
+
+def test_confirm_rag_only_order_autosources_without_prompt(rag_ctx):
+    """RAG-only: sin prompt de selección; needs con supplier y una OC por supplier."""
+    session, order = rag_ctx["session"], rag_ctx["order"]
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is False
+    assert result.missing == ()  # NO supplier-selection prompt
+    assert result.order.estado is OrderEstado.CONFIRMED
+    assert result.order.sourcing_state.value == "IN_PREPARATION"
+    assert "Orden de compra abierta a: AMX Products, PZ Force." in result.confirmation_text
+    from src.db.models import SupplierPurchaseOrderItem, SupplierPurchaseOrderState
+
+    pos = _all_pos(session)
+    assert {po.supplier_id for po in pos} == {2, 3}
+    assert all(po.estado is SupplierPurchaseOrderState.OPEN for po in pos)
+    items = session.scalars(select(SupplierPurchaseOrderItem)).all()
+    by_supplier = {}
+    for po in pos:
+        by_supplier[po.po_id] = po.supplier_id
+    assert {(by_supplier[i.po_id], i.sku, i.quantity) for i in items} == {
+        (2, "AMX-GRA-1416", 5),
+        (3, "PFZ-KIT-27", 3),
+    }
+    need_amx = _need_for(session, order.order_id, "AMX-GRA-1416")
+    need_pfz = _need_for(session, order.order_id, "PFZ-KIT-27")
+    assert need_amx.supplier_id == 2
+    assert need_amx.missing_quantity == 5
+    assert need_pfz.supplier_id == 3
+    assert need_pfz.missing_quantity == 3
+    # The auto-sourced lines ride the session log, never blended into "missing".
+    events = [
+        e for e in read_session_events("unassigned") if e["action"] == "order_rag_autosourced"
+    ]
+    assert len(events) == 1
+    assert events[0]["details"]["lines"] == [
+        {"sku": "AMX-GRA-1416", "supplier": "AMX Products"},
+        {"sku": "PFZ-KIT-27", "supplier": "PZ Force"},
+    ]
+
+
+def test_confirm_mixed_local_stock_and_rag_completes_with_po(order_ctx):
+    """Mixto: LOCAL en stock + RAG → Case A completo con descuento, Sheets y OC."""
+    session, order = order_ctx["session"], order_ctx["order"]
+    session.add(
+        Supplier(id=2, code="AMX", business_name="AMX Products", default_margin_pct=Decimal(0))
+    )
+    session.add(_rag_item(order.order_id, "AMX-GRA-1416", 2, "AMX", "100.00"))
+    session.flush()
+    sheets = FakeSheets()
+
+    result = confirm_and_register(session, order, sheets=sheets)
+
+    assert result.cancelled_case is False
+    assert result.missing == ()
+    assert result.order.estado is OrderEstado.CONFIRMED
+    assert result.converted == 1
+    assert _on_hand(session, "CLV-001") == 0  # LOCAL line deducted
+    assert len(sheets.rows) == 1  # Sheets row appended
+    assert "AMX-GRA-1416" in sheets.rows[0][1]
+    assert "Stock descontado" in result.confirmation_text
+    assert "Orden de compra abierta a: AMX Products." in result.confirmation_text
+    assert result.order.sourcing_state.value == "IN_PREPARATION"
+    pos = _all_pos(session)
+    assert [po.supplier_id for po in pos] == [2]
+    from src.db.models import SupplierPurchaseOrderItem
+
+    (po_item,) = session.scalars(select(SupplierPurchaseOrderItem)).all()
+    assert (po_item.sku, po_item.quantity) == ("AMX-GRA-1416", 2)
+    need = _need_for(session, order.order_id, "AMX-GRA-1416")
+    assert need.supplier_id == 2
+
+
+def test_confirm_mixed_local_short_with_candidates_prompts_only_local(order_ctx):
+    """Mixto Case B: el prompt lista SOLO el LOCAL faltante; el RAG ya está auto-sourced."""
+    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+
+    session, order = order_ctx["session"], order_ctx["order"]
+    session.add(
+        Supplier(id=2, code="AMX", business_name="AMX Products", default_margin_pct=Decimal(0))
+    )
+    session.add(_rag_item(order.order_id, "AMX-GRA-1416", 2, "AMX", "100.00"))
+    item = session.scalar(
+        select(OrderItem).where(OrderItem.order_id == order.order_id, OrderItem.sku == "CLV-001")
+    )
+    item.cantidad = 12
+    on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    on_hand.quantity_on_hand = 8
+    session.flush()
+    searcher = FakeSupplierCatalogSearcher(
+        (
+            SupplierCandidate(
+                supplier_id=1,
+                business_name="Supplier X",
+                sku="CLV-001",
+                description="Clavos Paris 2 Pulgadas",
+                available_quantity=50,
+            ),
+        )
+    )
+
+    result = confirm_and_register(session, order, sheets=FakeSheets(), searcher=searcher)
+
+    assert result.cancelled_case is False
+    assert result.order.estado is OrderEstado.CONFIRMED
+    assert [m.sku for m in result.missing] == ["CLV-001"]  # RAG line NOT in the prompt
+    assert "CLV-001" in result.confirmation_text
+    assert "AMX-GRA-1416" not in result.confirmation_text
+    assert result.order.sourcing_state.value == "PENDING_ASSEMBLY"  # stays as today
+    need_amx = _need_for(session, order.order_id, "AMX-GRA-1416")
+    assert need_amx.supplier_id == 2  # auto-sourced despite the Case B outcome
+    assert [po.supplier_id for po in _all_pos(session)] == [2]
+    need_local = _need_for(session, order.order_id, "CLV-001")
+    assert need_local.supplier_id is None  # pending the owner's selection
+
+
+def test_confirm_unresolved_rag_falls_back_to_selection_prompt(rag_ctx):
+    """RAG sin supplier resoluble + candidates → entra al prompt como los LOCAL."""
+    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    unresolved = session.scalar(
+        select(OrderItem).where(OrderItem.order_id == order.order_id, OrderItem.sku == "PFZ-KIT-27")
+    )
+    unresolved.supplier = "ZZZ"
+    session.flush()
+    searcher = FakeSupplierCatalogSearcher(
+        (
+            SupplierCandidate(
+                supplier_id=3,
+                business_name="PZ Force",
+                sku="PFZ-KIT-27",
+                description="Kit extractor",
+                available_quantity=None,
+            ),
+        )
+    )
+
+    result = confirm_and_register(session, order, sheets=FakeSheets(), searcher=searcher)
+
+    assert result.cancelled_case is False
+    assert [m.sku for m in result.missing] == ["PFZ-KIT-27"]
+    assert "PFZ-KIT-27" in result.confirmation_text
+    need_amx = _need_for(session, order.order_id, "AMX-GRA-1416")
+    assert need_amx.supplier_id == 2  # the resolvable line still auto-sourced
+    assert {po.supplier_id for po in _all_pos(session)} == {2}
+
+
+def test_confirm_unresolved_rag_without_candidates_cancels(rag_ctx):
+    """RAG sin supplier ni candidates → Case C: cancelación + nota de ingesta."""
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    for item in session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)):
+        item.supplier = "ZZZ"
+    session.flush()
+
+    result = confirm_and_register(session, order, sheets=FakeSheets(), searcher=_UnmappedSearcher())
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    assert "no están disponibles" in result.confirmation_text
+    assert "códigos: SM" in result.confirmation_text  # existing note machinery reused
+    assert _all_pos(session) == []
+
+
+def test_confirm_ambiguous_rag_business_name_is_unresolved(rag_ctx):
+    """Dos suppliers ACTIVO con el mismo business_name → la línea queda sin resolver."""
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    session.add(
+        Supplier(id=4, code="MAY", business_name="Mayorista SA", default_margin_pct=Decimal(0))
+    )
+    session.add(
+        Supplier(id=5, code="MS2", business_name="Mayorista SA", default_margin_pct=Decimal(0))
+    )
+    ambiguous = session.scalar(
+        select(OrderItem).where(
+            OrderItem.order_id == order.order_id, OrderItem.sku == "AMX-GRA-1416"
+        )
+    )
+    ambiguous.supplier = "Mayorista SA"
+    session.flush()
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is True  # unresolved + no searcher candidates → Case C
+    assert result.order.estado is OrderEstado.CANCELED
+    assert {po.supplier_id for po in _all_pos(session)} == {3}  # only the resolvable line
+    assert _need_for(session, order.order_id, "AMX-GRA-1416") is None
+
+
+def test_confirm_inactive_supplier_code_match_is_unresolved(rag_ctx):
+    """Un código de proveedor INACTIVO no resuelve la línea RAG (nunca auto-source)."""
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    from src.db.models import SupplierStatus
+
+    amx = session.scalar(select(Supplier).where(Supplier.code == "AMX"))
+    amx.status = SupplierStatus.INACTIVO
+    for item in session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)):
+        item.supplier = "AMX"
+    session.flush()
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    assert _all_pos(session) == []
+
+
+def test_confirm_rag_line_resolves_by_unique_business_name(rag_ctx):
+    """Sin código, un business_name único ACTIVO resuelve la línea RAG."""
+    session, order = rag_ctx["session"], rag_ctx["order"]
+    first = session.scalar(
+        select(OrderItem).where(
+            OrderItem.order_id == order.order_id, OrderItem.sku == "AMX-GRA-1416"
+        )
+    )
+    first.supplier = "AMX Products"
+    session.flush()
+
+    result = confirm_and_register(session, order, sheets=FakeSheets())
+
+    assert result.cancelled_case is False
+    assert result.missing == ()
+    need = _need_for(session, order.order_id, "AMX-GRA-1416")
+    assert need.supplier_id == 2
+    assert {po.supplier_id for po in _all_pos(session)} == {2, 3}

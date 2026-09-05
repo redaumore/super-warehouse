@@ -580,7 +580,11 @@ def _draft_pricing_lines(
                 name=entry.name,
                 price=price,
                 currency=currency,
-                supplier=entry.provider or code,
+                # Prefer the 3-char codigo_proveedor: the backoffice treats
+                # OrderItem.supplier AS the codigo_proveedor code, and the
+                # confirm ceremony resolves it against the supplier master.
+                # The provider display name is only the no-code fallback.
+                supplier=code or entry.provider,
                 codigo_proveedor=code,
             )
         )
