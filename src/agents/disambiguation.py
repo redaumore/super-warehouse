@@ -71,14 +71,28 @@ def normalize_text(text: str) -> str:
 
 
 def _fuzzy_score(query: str, candidate: str) -> float:
-    """Token-sort similarity in [0, 1].
+    """Token-sort similarity in [0, 1], blended for short multi-token queries.
 
     `token_sort_ratio` compares every token of both strings (word order
     ignored), so it rewards real overlap and penalizes extra tokens in the
     candidate — a near-subset match like "clavos de 2 pulgadas" against
     "Clavos Espiralados 2 Pulgadas" scores well below the auto-map threshold.
+
+    Calibration gate: a one-token query keeps `token_sort_ratio` only; a 2–3
+    token query blends `token_set_ratio` and `partial_ratio` via max so a short
+    query fully contained in a longer official name (e.g. "clavos paris" vs
+    "Clavos Paris 2 Pulgadas (50mm)") clears the floor. Longer queries are
+    unchanged. Global floors are never touched here.
     """
-    return fuzz.token_sort_ratio(normalize_text(query), normalize_text(candidate)) / 100.0
+    normalized_query = normalize_text(query)
+    normalized_candidate = normalize_text(candidate)
+    if 2 <= len(query.split()) <= 3:
+        return max(
+            fuzz.token_sort_ratio(normalized_query, normalized_candidate),
+            fuzz.token_set_ratio(normalized_query, normalized_candidate),
+            fuzz.partial_ratio(normalized_query, normalized_candidate),
+        ) / 100.0
+    return fuzz.token_sort_ratio(normalized_query, normalized_candidate) / 100.0
 
 
 def search_catalog(
