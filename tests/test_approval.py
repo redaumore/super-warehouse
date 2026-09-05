@@ -38,6 +38,7 @@ from src.db.models import (
     Supplier,
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
+from src.observability.session_logger import read_session_events
 from src.orchestrator.approval import (
     PendingConversionError,
     build_items_summary,
@@ -343,6 +344,74 @@ def test_confirm_discovering_case_c_cancels_the_order(order_ctx):
     assert "no están disponibles" in result.confirmation_text
     assert result.converted == 0
     assert result.sheets_status is SheetsWriteStatus.SKIPPED
+
+
+class _UnmappedSearcher:
+    """Duck-typed searcher whose RAG hits were dropped for unknown providers."""
+
+    last_unmapped_codes = ("SM",)
+
+    def search(self, *, sku: str | None = None, description: str | None = None):
+        return ()
+
+
+def test_confirm_case_c_with_unmapped_codes_notifies_the_owner(order_ctx):
+    """Case C con códigos de proveedor sin mapear avisa al dueño y queda logueado."""
+    item = order_ctx["session"].scalar(
+        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
+    )
+    item.cantidad = 12
+    order_ctx["session"].flush()
+    on_hand = order_ctx["session"].scalar(
+        select(Inventory).where(Inventory.sku_id == order_ctx["sku"])
+    )
+    on_hand.quantity_on_hand = 8
+    order_ctx["session"].flush()
+
+    result = confirm_and_register(
+        order_ctx["session"],
+        order_ctx["order"],
+        sheets=FakeSheets(),
+        searcher=_UnmappedSearcher(),
+    )
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    # The owner-facing note names the unmapped provider codes explicitly.
+    assert "no están disponibles" in result.confirmation_text
+    assert "códigos: SM" in result.confirmation_text
+    assert "ingesta de listas" in result.confirmation_text
+    # The warning rides the session log for observability.
+    events = read_session_events("unassigned")
+    unmapped_events = [e for e in events if e["action"] == "case_c_unmapped_suppliers"]
+    assert len(unmapped_events) == 1
+    assert unmapped_events[0]["level"] == "WARNING"
+    assert unmapped_events[0]["service"] == "orders"
+    assert unmapped_events[0]["details"]["unmapped_codes"] == ["SM"]
+    assert unmapped_events[0]["details"]["order_id"] == result.order.order_id
+
+
+def test_confirm_case_c_without_unmapped_codes_keeps_plain_reply(order_ctx):
+    """Sin códigos sin mapear, la respuesta Case C queda sin la nota adicional."""
+    item = order_ctx["session"].scalar(
+        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
+    )
+    item.cantidad = 12
+    order_ctx["session"].flush()
+    on_hand = order_ctx["session"].scalar(
+        select(Inventory).where(Inventory.sku_id == order_ctx["sku"])
+    )
+    on_hand.quantity_on_hand = 8
+    order_ctx["session"].flush()
+
+    result = confirm_and_register(
+        order_ctx["session"], order_ctx["order"], sheets=FakeSheets()
+    )  # no searcher → no unmapped codes
+
+    assert result.cancelled_case is True
+    assert "códigos:" not in result.confirmation_text
+    assert not [e for e in read_session_events("unassigned")
+                if e["action"] == "case_c_unmapped_suppliers"]
 
 
 def test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt(order_ctx):

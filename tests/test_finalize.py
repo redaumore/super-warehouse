@@ -167,6 +167,33 @@ def test_finalize_local_draft_uses_cost_margin_and_clears_draft(shop):
     assert shop.scalar(select(StockReservation).where(StockReservation.order_id == order.order_id))
 
 
+def test_quote_reply_shows_line_subtotal_not_unit_price(shop):
+    """La cotización muestra el subtotal de la línea, no el precio unitario."""
+    state = ConversationState(
+        sender_id="owner",
+        draft_items=(
+            (
+                _entry(
+                    "RAG-1",
+                    "RAG item",
+                    source=ProductSource.RAG,
+                    price=Decimal("2448.00"),
+                    currency="ARS",
+                    codigo_proveedor="SUP",
+                ),
+                2,
+            ),
+        ),
+    )
+
+    outcome = _handler(shop)(_message("cerrá el pedido para Customer One"), state, _decision())
+
+    assert outcome.state is not None
+    # 2 × 2448.00 → the reply shows the LINE subtotal, not the unit price.
+    assert "2 × RAG item: 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    assert "total 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+
+
 def test_finalize_rag_without_rate_saves_pending_snapshot(shop):
     """A non-ARS RAG draft is saved with its original price and pending totals."""
     state = ConversationState(

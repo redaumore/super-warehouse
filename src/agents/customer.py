@@ -94,6 +94,7 @@ from src.pricing.order_pricing import (
     PricingLine,
     RateSource,
     compute_order,
+    line_subtotal,
     pending_order,
 )
 from src.sourcing.case_a import persist_case_a_order
@@ -391,6 +392,25 @@ def format_case_c_reply(
     return f"Pedido #{order.order_id}{who} cancelado: {names} no están disponibles por el momento."
 
 
+def unmapped_supplier_note(searcher: object | None) -> str:
+    """Owner-facing note for a Case C caused by RAG hits with unmapped providers.
+
+    Reads the searcher's ``last_unmapped_codes`` diagnostic (duck-typed so any
+    searcher exposing it works). Returns an empty string when the searcher does
+    not report dropped codes — then the generic unavailable reply stands alone.
+    The codes ARE the actionable part: the supplier master is missing entries
+    the ingesta should have matched (auto-creating suppliers is not allowed).
+    """
+    codes = tuple(dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ()))
+    if not codes:
+        return ""
+    return (
+        "\n\nAtención: el catálogo de proveedores tiene productos cuyo proveedor "
+        f"(códigos: {', '.join(codes)}) no está cargado en la maestra. "
+        "Revisá la ingesta de listas antes de reintentar."
+    )
+
+
 def _resolve_items(
     session: Session, parsed_items: Sequence[ParsedItem]
 ) -> tuple[ResolvedItem, ...]:
@@ -606,7 +626,8 @@ def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> 
             "Cargá el tipo de cambio que falta en Customer Orders y aprobalo."
         )
     lines = " ".join(
-        f"{line.cantidad} × {line.name or line.sku}: {line.final_ars:.2f} ARS"
+        f"{line.cantidad} × {line.name or line.sku}: "
+        f"{line_subtotal(line.final_ars, line.cantidad):.2f} ARS"
         for line in priced.lines
     )
     return (
@@ -986,7 +1007,9 @@ def _run_sourcing_turn(
 
                 order = persist_case_c_order(session, customer, delivery_date=parsed.delivery_date)
                 cancel_for_no_supplier(session, order, actor="owner")
-                reply = format_case_c_reply(order, sourcing.missing, customer.nombre_comercial)
+                reply = format_case_c_reply(
+                    order, sourcing.missing, customer.nombre_comercial
+                ) + unmapped_supplier_note(deps.searcher)
                 updated = pending_cleared.with_updates(
                     customer_id=customer.customer_id,
                     order_id=order.order_id,

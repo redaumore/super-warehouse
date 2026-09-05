@@ -44,6 +44,7 @@ from src.order_lifecycle.state import (
     cancel_order,
     confirm_order,
 )
+from src.pricing.order_pricing import line_subtotal
 from src.sourcing.classify import MissingItem, SourcingCase, classify_case
 from src.supplier.searcher import SupplierCatalogSearcher
 
@@ -78,7 +79,7 @@ class ConfirmResult:
 def order_total(order: Order) -> Decimal:
     """Sum of every line's final price × quantity, HALF_UP to the cent."""
     return sum(
-        (item.final_price * item.cantidad for item in order.items),
+        (line_subtotal(item.final_price, item.cantidad) for item in order.items),
         Decimal(0),
     ).quantize(_CENT, rounding=ROUND_HALF_UP)
 
@@ -274,11 +275,21 @@ def confirm_and_register(
     )
 
     if case is SourcingCase.C:
-        from src.agents.customer import format_case_c_reply
+        from src.agents.customer import format_case_c_reply, unmapped_supplier_note
 
         cancel_order(session, order, actor=actor, now=now)
         order.sourcing_state = SourcingState.CANCELLED
         session.flush()
+        unmapped = tuple(
+            dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ())
+        )
+        if unmapped:
+            log_session_event(
+                "orders",
+                "case_c_unmapped_suppliers",
+                {"order_id": order.order_id, "unmapped_codes": list(unmapped)},
+                level="WARNING",
+            )
         log_session_event(
             "orders",
             "order_cancelled_case_c",
@@ -295,7 +306,9 @@ def confirm_and_register(
             converted=0,
             sheets_status=SheetsWriteStatus.SKIPPED,
             total=order_total(order),
-            confirmation_text=format_case_c_reply(order, missing),
+            confirmation_text=(
+                format_case_c_reply(order, missing) + unmapped_supplier_note(searcher)
+            ),
             cancelled_case=True,
             missing=missing,
         )
