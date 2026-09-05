@@ -66,7 +66,7 @@ from src.orchestrator.router import (
 )
 from src.orchestrator.session import ConversationState, ConversationStore, rehydrate_conversation
 from src.sourcing.case_b import build_sourcing_handler
-from src.supplier.searcher import FakeSupplierCatalogSearcher
+from src.supplier.rag_searcher import RagSupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -85,11 +85,12 @@ def _stub_agent(
 def _sourcing_deps() -> SourcingDeps | None:
     """Wire the sourcing boundaries, or ``None`` when the flow is disabled.
 
-    The supplier searcher is the in-memory fake (empty candidate list) until
-    the external RAG exists: every missing item then classifies as Case C —
-    the safe degraded behavior — and the owner swaps in a real searcher later.
-    The flow is enabled by configuring an owner sender key (either channel);
-    with both keys empty the legacy intake keeps working.
+    The supplier searcher is RAG-backed: missing items query the external
+    supplier-catalog RAG and map hits to real suppliers, classifying as Case B
+    when a mapped provider exists. Case C only happens when the RAG is
+    unreachable or the provider is unknown/inactive — the safe degraded
+    behavior. The flow is enabled by configuring an owner sender key (either
+    channel); with both keys empty the legacy intake keeps working.
     """
     settings = get_settings()
     if not (settings.owner_telegram_chat_id or settings.owner_whatsapp_phone):
@@ -97,7 +98,7 @@ def _sourcing_deps() -> SourcingDeps | None:
     rag_client = RagProductClient()
     return SourcingDeps(
         session_factory=SessionLocal,
-        searcher=FakeSupplierCatalogSearcher(),
+        searcher=RagSupplierCatalogSearcher(session_factory=SessionLocal, rag_client=rag_client),
         rag_client=rag_client,
     )
 

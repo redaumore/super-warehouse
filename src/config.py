@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # NOTE: the service runs on 8001 while some docs still say 8000 — 8001 is
     # the real default so a fresh deploy talks to the live service.
     rag_base_url: str = "http://localhost:8001"
-    rag_timeout_seconds: float = 10.0
+    rag_timeout_seconds: float = 15.0
     rag_top_n: int = 3
     rag_threshold: float = 0.45
     rag_table_name: str = "catalogo_productos_rag"
