@@ -11,7 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from alembic.config import Config as AlembicConfig
-from sqlalchemy import inspect, text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Table, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from alembic import command
@@ -148,7 +149,9 @@ def test_supplier_model_has_master_data_columns():
 
 def test_supplier_code_and_cuit_indexes():
     """code tiene índice único; cuit único parcial cuando no es NULL."""
-    indexes = {index.name: index for index in Supplier.__table__.indexes}
+    table = Supplier.__table__
+    assert isinstance(table, Table)
+    indexes = {str(index.name): index for index in table.indexes}
     assert "uq_suppliers_code" in indexes
     assert indexes["uq_suppliers_code"].unique is True
     assert "uq_suppliers_cuit" in indexes
@@ -161,7 +164,7 @@ def test_catalogo_has_vector_1536_embedding():
     `catalogo.embedding` is declared as a pgvector vector(1536).
     """
     col = Catalogo.__table__.c["embedding"]
-    assert col.type.__class__.__name__ == "VECTOR"
+    assert isinstance(col.type, Vector)
     assert col.type.dim == 1536
 
 
@@ -196,7 +199,9 @@ def test_order_has_one_draft_per_customer_partial_index():
     The Order model declares the partial unique index (one Draft per customer,
     AD4) that migration f2b2570aed04 creates.
     """
-    indexes = {index.name: index for index in Order.__table__.indexes}
+    table = Order.__table__
+    assert isinstance(table, Table)
+    indexes = {str(index.name): index for index in table.indexes}
     assert "uq_orders_one_draft_per_customer" in indexes
     assert indexes["uq_orders_one_draft_per_customer"].unique is True
 

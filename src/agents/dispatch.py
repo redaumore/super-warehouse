@@ -42,6 +42,7 @@ from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import Order, OrderItem
 from src.integrations.sheets import SheetsWriter
+from src.observability.session_logger import log_session_event
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ConversationState, SourcingNeedItem
@@ -240,6 +241,12 @@ def build_dispatch_handler(
             return AgentOutcome(state=state, reply="¿Sobre qué pedido querés decidir?")
         parsed = parse_decision(message.text or "")
         if parsed.action is DecisionAction.UNKNOWN:
+            log_session_event(
+                "dispatch",
+                "decision_unknown",
+                {"text": message.text},
+                level="INFO",
+            )
             return AgentOutcome(
                 state=state,
                 reply="Respondé 'aprobá' o 'rechazá' (podés agregar descuentos: '5% extra en clavos').",
@@ -247,13 +254,34 @@ def build_dispatch_handler(
         ref = parse_order_reference(message.text or "")
         order_id = ref if ref is not None else state.order_id
         if order_id is None:
+            log_session_event(
+                "dispatch",
+                "order_reference_missing",
+                {"text": message.text},
+                level="WARNING",
+            )
             return AgentOutcome(
                 state=state,
                 reply="No sé qué pedido es: respondé con el número, ej. 'aprobá el pedido #3'.",
             )
+        log_session_event(
+            "dispatch",
+            "decision_parsed",
+            {
+                "order_id": order_id,
+                "action": parsed.action.value,
+                "adjustments_count": len(parsed.adjustments),
+            },
+        )
         with session_factory() as session:
             order = session.get(Order, order_id)
             if order is None:
+                log_session_event(
+                    "dispatch",
+                    "order_not_found",
+                    {"order_id": order_id},
+                    level="WARNING",
+                )
                 return AgentOutcome(state=state, reply=f"No encuentro el pedido #{order_id}.")
             try:
                 if parsed.action is DecisionAction.APPROVE:
@@ -266,23 +294,59 @@ def build_dispatch_handler(
                         actor="owner",
                     )
                     reply = result.confirmation_text
+                    log_session_event(
+                        "dispatch",
+                        "decision_approved",
+                        {
+                            "order_id": order.order_id,
+                            "cancelled_case": result.cancelled_case,
+                            "missing_count": len(result.missing),
+                            "sheets_status": result.sheets_status.value,
+                        },
+                    )
                 else:
                     apply_decision(session, order, parsed)
                     reply = (
                         f"Pedido #{order.order_id} cancelado; "
                         "las reservas fueron liberadas y el stock restaurado."
                     )
+                    log_session_event(
+                        "dispatch",
+                        "decision_rejected",
+                        {
+                            "order_id": order.order_id,
+                            "actor": "owner",
+                        },
+                    )
                 session.commit()
             except RequiresRequoteError:
                 session.rollback()
+                log_session_event(
+                    "dispatch",
+                    "decision_requote_required",
+                    {"order_id": order_id},
+                    level="WARNING",
+                )
                 reply = (
                     f"El pedido #{order_id} tiene reservas vencidas: recotizalo antes de confirmar."
                 )
             except (UnknownAdjustmentTargetError, InvalidTransitionError) as exc:
                 session.rollback()
+                log_session_event(
+                    "dispatch",
+                    "decision_failed",
+                    {"order_id": order_id, "error": str(exc)},
+                    level="ERROR",
+                )
                 reply = f"No pude aplicar la decisión: {exc}"
             except PendingConversionError:
                 session.rollback()
+                log_session_event(
+                    "dispatch",
+                    "decision_pending_conversion",
+                    {"order_id": order_id},
+                    level="WARNING",
+                )
                 reply = (
                     f"El pedido #{order_id} tiene precios pendientes de conversión; "
                     "cargá el tipo de cambio en Customer Orders y volvé a confirmar."

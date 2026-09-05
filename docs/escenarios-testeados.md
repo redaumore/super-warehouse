@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 340, agrupados en 30 dominios.
+**Total de escenarios:** 341, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,7 +36,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
-- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 6
+- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 7
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
 ## Motor de precios
@@ -555,6 +555,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Registra eventos estructurados en el archivo de log individual de la sesión. _(`test_log_session_event_and_read`)_
 - El backoffice puede listar archivos de sesión y renderizar eventos tabulares. _(`test_backoffice_sessions_helpers`)_
 - Verifica que el archivo de log contenga cabecera y bloques legibles para debugging. _(`test_human_readable_log_format`)_
+- Verifica que los eventos de dispatch y approval se formateen con diagnóstico legible. _(`test_human_readable_dispatch_and_approval_logs`)_
 
 ## Trazabilidad de sesión en el pipeline
 

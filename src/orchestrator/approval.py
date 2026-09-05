@@ -38,6 +38,7 @@ from src.db.models import (
     StockReservation,
 )
 from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
+from src.observability.session_logger import log_session_event
 from src.orchestrator.session import ResolvedItem
 from src.order_lifecycle.state import (
     cancel_order,
@@ -241,9 +242,36 @@ def confirm_and_register(
       the order stays CONFIRMED and the failure is surfaced in the result.
     """
     if order.conversion_pending:
+        log_session_event(
+            "orders",
+            "approval_blocked_conversion_pending",
+            {"order_id": order.order_id},
+            level="WARNING",
+        )
         raise PendingConversionError(f"order {order.order_id} is pending currency conversion")
     confirm_order(session, order, now=now)
     case, missing = _classify_from_latest_availability(session, order, searcher)
+
+    log_session_event(
+        "orders",
+        "order_classified",
+        {
+            "order_id": order.order_id,
+            "case": case.value,
+            "items_count": len(order.items),
+            "missing_count": len(missing),
+            "missing_items": [
+                {
+                    "sku": m.sku,
+                    "description": m.description,
+                    "requested": m.requested,
+                    "missing_quantity": m.missing_quantity,
+                    "candidates_count": len(m.candidates),
+                }
+                for m in missing
+            ],
+        },
+    )
 
     if case is SourcingCase.C:
         from src.agents.customer import format_case_c_reply
@@ -251,6 +279,17 @@ def confirm_and_register(
         cancel_order(session, order, actor=actor, now=now)
         order.sourcing_state = SourcingState.CANCELLED
         session.flush()
+        log_session_event(
+            "orders",
+            "order_cancelled_case_c",
+            {
+                "order_id": order.order_id,
+                "actor": actor,
+                "reason": "missing_stock_no_suppliers",
+                "missing_skus": [m.sku for m in missing],
+            },
+            level="WARNING",
+        )
         return ConfirmResult(
             order=order,
             converted=0,
@@ -270,6 +309,21 @@ def confirm_and_register(
 
         reply = format_case_b_reply(order, missing)
         session.flush()
+        log_session_event(
+            "orders",
+            "order_sourcing_pending_case_b",
+            {
+                "order_id": order.order_id,
+                "missing_items": [
+                    {
+                        "sku": m.sku,
+                        "missing_quantity": m.missing_quantity,
+                        "candidates": [c.business_name for c in m.candidates],
+                    }
+                    for m in missing
+                ],
+            },
+        )
         return ConfirmResult(
             order=order,
             converted=0,
@@ -291,6 +345,16 @@ def confirm_and_register(
     )
     _deduct_stock(session, converted)
     session.flush()
+    log_session_event(
+        "orders",
+        "order_confirmed_case_a",
+        {
+            "order_id": order.order_id,
+            "total_ars": str(total),
+            "converted_reservations": len(converted),
+            "sheets_status": sheets_status.value,
+        },
+    )
     return ConfirmResult(
         order=order,
         converted=len(converted),

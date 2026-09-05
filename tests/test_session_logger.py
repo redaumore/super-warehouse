@@ -119,3 +119,68 @@ def test_human_readable_log_format(tmp_path: Path) -> None:
     assert "[TELEGRAM -> inbound_message]" in content
     assert 'Message: "amoladora recta"' in content
     assert "# JSON: " in content
+
+
+def test_human_readable_dispatch_and_approval_logs(tmp_path: Path) -> None:
+    """Verifica que los eventos de dispatch y approval se formateen con diagnóstico legible."""
+    sid = "ses_approval_123"
+    log_session_event(
+        "dispatch",
+        "decision_parsed",
+        {"order_id": 8, "action": "APPROVE", "adjustments_count": 0},
+        session_id=sid,
+        log_dir=tmp_path,
+    )
+    log_session_event(
+        "orders",
+        "order_classified",
+        {
+            "order_id": 8,
+            "case": "C",
+            "missing_count": 1,
+            "missing_items": [
+                {
+                    "sku": "AT-7033",
+                    "missing_quantity": 3,
+                    "candidates_count": 0,
+                }
+            ],
+        },
+        session_id=sid,
+        log_dir=tmp_path,
+    )
+    log_session_event(
+        "orders",
+        "order_cancelled_case_c",
+        {
+            "order_id": 8,
+            "actor": "owner",
+            "reason": "missing_stock_no_suppliers",
+            "missing_skus": ["AT-7033"],
+        },
+        session_id=sid,
+        log_dir=tmp_path,
+        level="WARNING",
+    )
+    log_session_event(
+        "dispatch",
+        "decision_approved",
+        {
+            "order_id": 8,
+            "cancelled_case": True,
+            "missing_count": 1,
+            "sheets_status": "SKIPPED",
+        },
+        session_id=sid,
+        log_dir=tmp_path,
+    )
+
+    log_file = tmp_path / f"{sid}.log"
+    content = log_file.read_text(encoding="utf-8")
+    assert "Dispatch Decision: APPROVE for Order #8" in content
+    assert "Order #8 Classification: Case C" in content
+    assert "- SKU AT-7033: missing 3 (candidates: 0)" in content
+    assert "Order #8 Cancelled (Case C): missing_stock_no_suppliers" in content
+    assert "Unavailable SKUs: AT-7033" in content
+    assert "Dispatch Approved: Order #8 (Cancelled Case C: True | Sheets: SKIPPED)" in content
+

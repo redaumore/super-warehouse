@@ -29,7 +29,7 @@ from src.agents.dispatch import (
     parse_order_reference,
 )
 from src.agents.inventory import available_stock, reserve_stock, seed_inventory
-from src.agents.sales import ItemInput, quote_order
+from src.agents.sales import ItemInput, Quote, quote_order
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
@@ -44,7 +44,7 @@ from src.db.models import (
 )
 
 
-def _quote() -> object:
+def _quote() -> Quote:
     return quote_order(
         (
             ItemInput(

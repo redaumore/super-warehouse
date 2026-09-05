@@ -136,6 +136,56 @@ def format_event_for_human(event: dict[str, Any]) -> str:
         reason = details.get("reason")
         lines.append(f"  Rejection:       Channel={channel} | Sender={sender} | Reason={reason}")
 
+    elif action == "order_classified":
+        order_id = details.get("order_id")
+        case = details.get("case")
+        missing_count = details.get("missing_count", 0)
+        lines.append(f"  Order #{order_id} Classification: Case {case}")
+        if missing_count:
+            lines.append(f"  Missing Items:   {missing_count} item(s)")
+            for item in details.get("missing_items", []):
+                sku = item.get("sku")
+                missing_qty = item.get("missing_quantity")
+                cand_cnt = item.get("candidates_count", 0)
+                lines.append(f"    - SKU {sku}: missing {missing_qty} (candidates: {cand_cnt})")
+
+    elif action == "order_cancelled_case_c":
+        order_id = details.get("order_id")
+        reason = details.get("reason")
+        skus = ", ".join(details.get("missing_skus", []))
+        lines.append(f"  Order #{order_id} Cancelled (Case C): {reason}")
+        if skus:
+            lines.append(f"  Unavailable SKUs: {skus}")
+
+    elif action == "order_sourcing_pending_case_b":
+        order_id = details.get("order_id")
+        items = details.get("missing_items", [])
+        lines.append(f"  Order #{order_id} Sourcing Needed (Case B): {len(items)} missing item(s)")
+
+    elif action == "order_confirmed_case_a":
+        order_id = details.get("order_id")
+        total = details.get("total_ars")
+        sheets = details.get("sheets_status")
+        conv = details.get("converted_reservations", 0)
+        lines.append(f"  Order #{order_id} Confirmed (Case A) — Total: {total} ARS | Converted: {conv} | Sheets: {sheets}")
+
+    elif action == "decision_parsed":
+        order_id = details.get("order_id")
+        act = details.get("action")
+        adj = details.get("adjustments_count", 0)
+        lines.append(f"  Dispatch Decision: {act} for Order #{order_id} (Adjustments: {adj})")
+
+    elif action == "decision_approved":
+        order_id = details.get("order_id")
+        cancelled = details.get("cancelled_case", False)
+        sheets = details.get("sheets_status")
+        lines.append(f"  Dispatch Approved: Order #{order_id} (Cancelled Case C: {cancelled} | Sheets: {sheets})")
+
+    elif action == "decision_rejected":
+        order_id = details.get("order_id")
+        actor = details.get("actor", "owner")
+        lines.append(f"  Dispatch Rejected: Order #{order_id} by {actor}")
+
     else:
         for k, v in details.items():
             lines.append(f"  {k}: {v}")
