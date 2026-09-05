@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 398, agrupados en 33 dominios.
+**Total de escenarios:** 402, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -24,7 +24,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
 - [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
 - [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 12
-- [Autenticación de adopción (HMAC y allowlist de owners)](#autenticación-de-adopción-hmac-y-allowlist-de-owners) — 6
+- [Autenticación de adopción (HMAC y allowlist de owners)](#autenticación-de-adopción-hmac-y-allowlist-de-owners) — 10
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
@@ -418,7 +418,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un HMAC incorrecto se rechaza con 401 (comparación constante). _(`test_firma_invalida_rechazada_401`)_
 - Un owner no permitido con HMAC válido se rechaza con 403 y no persiste nada. _(`test_owner_fuera_de_allowlist_rechazado_403`)_
 - Sin X-Owner-Id el gate cierra con 403 (no hay identidad que auditar). _(`test_owner_header_ausente_rechazado_403`)_
-- Allowlist vacía en env = fail-closed 403 aunque el HMAC sea válido. _(`test_allowlist_vacia_falla_cerrado_403`)_
+- Allowlist vacía en settings = fail-closed 403 aunque el HMAC sea válido. _(`test_allowlist_vacia_falla_cerrado_403`)_
+- Durante la rotación el secreto viejo sigue firmando válido (zero-downtime). _(`test_secreto_viejo_aceptado_durante_rotacion`)_
+- Un body que no parsea a AdoptRequest con HMAC válido se rechaza con 422. _(`test_body_invalido_rechazado_422`)_
+  - {not json
+- Con fase 4 deshabilitada el handler real corta en el límite (503). _(`test_fase4_deshabilitada_rechaza_503`)_
+- La fábrica de embedder consume adoption_embed_timeout/retries de Settings. _(`test_embedder_factory_aplica_timeout_y_retries_de_settings`)_
 
 ## Vencimiento de reservas (scheduler)
 

@@ -44,16 +44,24 @@ class _ClientHolder:
     clear error surfaces only when a real call is attempted.
     """
 
-    def __init__(self, client: OpenAI | None, api_key: str) -> None:
+    def __init__(self, client: OpenAI | None, api_key: str, timeout: float | None = None, retries: int | None = None) -> None:
         self._client = client
         self._api_key = api_key
+        self._timeout = timeout
+        self._retries = retries
 
     @property
     def client(self) -> OpenAI:
         if self._client is None:
             if not self._api_key:
                 raise OpenAINotConfiguredError("openai api key not configured (set OPENAI_API_KEY)")
-            self._client = OpenAI(api_key=self._api_key)
+            # None means "SDK default": the stub types timeout as optional and
+            # max_retries as int (SDK default is 2), so map None to 2.
+            self._client = OpenAI(
+                api_key=self._api_key,
+                timeout=self._timeout,
+                max_retries=self._retries if self._retries is not None else 2,
+            )
         return self._client
 
 
@@ -175,7 +183,12 @@ class OpenAIResponder(CustomerResponder):
 
 
 class OpenAIEmbedder:
-    """Embedding client: maps texts to fixed-dimension vectors."""
+    """Embedding client: maps texts to fixed-dimension vectors.
+
+    ``timeout`` (seconds) and ``retries`` tune the underlying SDK client; both
+    default to None so existing callers keep the SDK defaults unchanged. The
+    adoption endpoint passes its ``adoption_embed_*`` settings here.
+    """
 
     def __init__(
         self,
@@ -184,11 +197,15 @@ class OpenAIEmbedder:
         model: str | None = None,
         dimensions: int | None = None,
         settings: Settings | None = None,
+        timeout: float | None = None,
+        retries: int | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self._holder = _ClientHolder(client, self.settings.openai_api_key)
+        self._holder = _ClientHolder(client, self.settings.openai_api_key, timeout, retries)
         self.model = model or self.settings.openai_embedding_model
         self.dimensions = dimensions or self.settings.openai_embedding_dims
+        self.timeout = timeout
+        self.retries = retries
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         """Embed every text, preserving input order."""

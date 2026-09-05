@@ -1,28 +1,33 @@
-"""Pruebas del gate de autenticación del endpoint de adopción (tasks 2.6–2.7).
+"""Pruebas del gate y del wiring del endpoint de adopción (tasks 2.6–3.2).
 
 Cubren el contrato de ``src.api.adoption`` sin tocar la base de datos: HMAC
-sobre el body crudo (falta/inválido → 401), allowlist de ``X-Owner-Id``
-(fuera de lista → 403), allowlist vacía fail-closed (403) y el happy path
-donde un owner permitido llega al handler con su ``OwnerContext``.
+sobre el body crudo (falta/inválido → 401, rotación con secreto viejo), 
+allowlist de ``X-Owner-Id`` (fuera de lista → 403, vacía fail-closed), parseo
+de ``AdoptRequest`` (body inválido → 422), feature flag fase 4 (→ 503) y la
+fábrica de embedder que consume los settings de adopción.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.adoption import app
+from src.api.adoption import _default_embedder, app, settings
 
 SECRET = "test-secret"
+OLD_SECRET = "old-test-secret"
 
 
 @pytest.fixture(autouse=True)
-def _auth_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("ADOPTION_OWNER_SECRET", SECRET)
-    monkeypatch.setenv("ADOPTION_OWNER_IDS", "owner-1,owner-2")
+def _auth_settings(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "adoption_owner_secret", SECRET)
+    monkeypatch.setattr(settings, "adoption_owner_secret_old", "")
+    monkeypatch.setattr(settings, "adoption_owner_ids", "owner-1,owner-2")
+    monkeypatch.setattr(settings, "fase4_enabled", True)
 
 
 @pytest.fixture
@@ -30,8 +35,8 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def _sign(body: bytes) -> str:
-    return hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
+def _sign(body: bytes, secret: str = SECRET) -> str:
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 _VALID_BODY = {
@@ -52,8 +57,6 @@ _VALID_BODY = {
 
 def test_hmac_valido_entrega_handler_con_ownercontext(client, monkeypatch):
     """Un HMAC válido con owner permitido llega al handler con su OwnerContext."""
-    import json
-
     from src.api.adoption import OwnerContext
 
     calls: list[tuple[object, OwnerContext]] = []
@@ -86,8 +89,6 @@ def test_firma_ausente_rechazada_401(client):
 
 def test_firma_invalida_rechazada_401(client):
     """Un HMAC incorrecto se rechaza con 401 (comparación constante)."""
-    import json
-
     body = json.dumps(_VALID_BODY).encode()
     r = client.post(
         "/adoption",
@@ -100,8 +101,6 @@ def test_firma_invalida_rechazada_401(client):
 
 def test_owner_fuera_de_allowlist_rechazado_403(client):
     """Un owner no permitido con HMAC válido se rechaza con 403 y no persiste nada."""
-    import json
-
     body = json.dumps(_VALID_BODY).encode()
     r = client.post(
         "/adoption",
@@ -114,18 +113,14 @@ def test_owner_fuera_de_allowlist_rechazado_403(client):
 
 def test_owner_header_ausente_rechazado_403(client):
     """Sin X-Owner-Id el gate cierra con 403 (no hay identidad que auditar)."""
-    import json
-
     body = json.dumps(_VALID_BODY).encode()
     r = client.post("/adoption", content=body, headers={"x-signature": _sign(body)})
     assert r.status_code == 403
 
 
 def test_allowlist_vacia_falla_cerrado_403(client, monkeypatch):
-    """Allowlist vacía en env = fail-closed 403 aunque el HMAC sea válido."""
-    import json
-
-    monkeypatch.setenv("ADOPTION_OWNER_IDS", "")
+    """Allowlist vacía en settings = fail-closed 403 aunque el HMAC sea válido."""
+    monkeypatch.setattr(settings, "adoption_owner_ids", "")
     body = json.dumps(_VALID_BODY).encode()
     r = client.post(
         "/adoption",
@@ -134,3 +129,64 @@ def test_allowlist_vacia_falla_cerrado_403(client, monkeypatch):
     )
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "owner_not_allowed"
+
+
+def test_secreto_viejo_aceptado_durante_rotacion(client, monkeypatch):
+    """Durante la rotación el secreto viejo sigue firmando válido (zero-downtime)."""
+    monkeypatch.setattr(settings, "adoption_owner_secret_old", OLD_SECRET)
+    calls: list[object] = []
+
+    async def fake_handler(dto, owner_ctx):
+        calls.append(dto)
+
+    monkeypatch.setattr("src.api.adoption.ADOPTION_HANDLER", fake_handler)
+
+    body = json.dumps(_VALID_BODY).encode()
+    r = client.post(
+        "/adoption",
+        content=body,
+        headers={"x-signature": _sign(body, OLD_SECRET), "x-owner-id": "owner-1"},
+    )
+    assert r.status_code == 200
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "{not json",
+        json.dumps({**_VALID_BODY, "stock": "mucho"}),
+        json.dumps({**_VALID_BODY, "node_id": None}),
+    ],
+    ids=["json-invalido", "stock-no-entero", "node-id-null"],
+)
+def test_body_invalido_rechazado_422(client, raw):
+    """Un body que no parsea a AdoptRequest con HMAC válido se rechaza con 422."""
+    body = raw.encode()
+    r = client.post(
+        "/adoption",
+        content=body,
+        headers={"x-signature": _sign(body), "x-owner-id": "owner-1"},
+    )
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "invalid_body"
+
+
+def test_fase4_deshabilitada_rechaza_503(client, monkeypatch):
+    """Con fase 4 deshabilitada el handler real corta en el límite (503)."""
+    monkeypatch.setattr(settings, "fase4_enabled", False)
+    body = json.dumps(_VALID_BODY).encode()
+    r = client.post(
+        "/adoption",
+        content=body,
+        headers={"x-signature": _sign(body), "x-owner-id": "owner-1"},
+    )
+    assert r.status_code == 503
+    assert r.json()["error"]["code"] == "feature_disabled"
+
+
+def test_embedder_factory_aplica_timeout_y_retries_de_settings():
+    """La fábrica de embedder consume adoption_embed_timeout/retries de Settings."""
+    embedder = _default_embedder(settings)
+    assert embedder.timeout == settings.adoption_embed_timeout_seconds
+    assert embedder.retries == settings.adoption_embed_retries
