@@ -270,7 +270,7 @@ def test_multiple_suppliers_with_null_cuit_allowed(db_session):
 
 def test_save_supplier_handler_persists_new_row():
     """Guardar un supplier nuevo desde la UI persiste la fila con su código."""
-    message, _ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
+    message, _, _, _ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
     assert message == "Supplier created (code MSA)"
     with SessionLocal() as session:
         suppliers = session.scalars(select(Supplier)).all()
@@ -279,18 +279,51 @@ def test_save_supplier_handler_persists_new_row():
     assert suppliers[0].status is SupplierStatus.ACTIVO
 
 
-def test_save_supplier_handler_updates_existing_row():
-    """Guardar desde la UI edita el supplier ya existente."""
+def test_save_supplier_handler_clears_form_after_create():
+    """Tras crear sin errores, el handler devuelve el formulario limpio y sin selección."""
+    message, _, form_values, selected_id = _save_supplier(
+        0,
+        "Distribuidora Sur",
+        "DIS",
+        "",
+        "Juancho",
+        "11 5555-1234",
+        "11 6666-7777",
+        "info@dis.com",
+        "Nufiez 123",
+        "RESPONSABLE_INSCRIPTO",
+        10.0,
+        "30 días",
+    )
+    assert message == "Supplier created (code DIS)"
+    assert selected_id == 0
+    assert form_values == ("", "", "", "", "", "", "", "", "", 0.0, "")
+
+
+def test_save_supplier_handler_keeps_form_after_update():
+    """Tras editar sin errores, el formulario conserva los valores enviados y la selección."""
     with SessionLocal() as session:
         supplier = create_supplier(session, business_name="Mayorista SA", code="MSA")
         session.commit()
         supplier_id = supplier.id
-    message, _ = _save_supplier(
+    message, _, form_values, selected_id = _save_supplier(
         supplier_id, "Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, ""
     )
     assert message == "Supplier saved"
+    assert form_values == ("Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, "")
+    assert selected_id == supplier_id
     with SessionLocal() as session:
         assert session.get(Supplier, supplier_id).business_name == "Mayorista SA Renovada"
+
+
+def test_save_supplier_handler_keeps_form_on_error():
+    """Un alta con datos inválidos devuelve el error y deja el formulario como estaba."""
+    message, _, form_values, selected_id = _save_supplier(
+        0, "Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, ""
+    )
+    assert message.startswith("Error:")
+    assert form_values == ("Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, "")
+    assert selected_id == 0
 
 
 def test_supplier_toggle_without_selection_returns_hint():

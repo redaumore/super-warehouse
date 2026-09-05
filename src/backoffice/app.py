@@ -267,6 +267,11 @@ def _supplier_code_suggestion(business_name: str) -> str:
     return suggest_code(business_name)
 
 
+# Form fields (name/code/cuit/contact/phone/whatsapp/email/address/iva/margin/terms)
+# restored after a successful create so the next save starts a new supplier.
+_CLEARED_SUPPLIER_FORM = ("", "", "", "", "", "", "", "", "", 0.0, "")
+
+
 def _save_supplier(
     supplier_id: object,
     business_name: str,
@@ -281,13 +286,34 @@ def _save_supplier(
     margin: float,
     terms: str,
     status_filter: str = "ACTIVO",
-) -> tuple[str, list[list[object]]]:
+) -> tuple[str, list[list[object]], tuple[object, ...], int]:
+    """Save (create or update) a supplier and return the form state to render.
+
+    Returns ``(message, grid, form_values, selected_id)``. A successful create
+    clears the form and resets the selection to 0 so the next save is a new
+    supplier; a successful update or a validation error echoes the submitted
+    values back so the form stays as the user left it.
+    """
+    submitted = (
+        business_name,
+        code,
+        cuit,
+        contact_name,
+        phone,
+        whatsapp,
+        email,
+        address,
+        iva_condition,
+        margin,
+        terms,
+    )
+    current_id = int(str(supplier_id or 0))
     with SessionLocal() as session:
         try:
-            if int(str(supplier_id or 0)):
+            if current_id:
                 update_supplier(
                     session,
-                    int(str(supplier_id)),
+                    current_id,
                     business_name=business_name,
                     code=code,
                     cuit=cuit,
@@ -301,6 +327,7 @@ def _save_supplier(
                     terms=terms,
                 )
                 message = "Supplier saved"
+                form_values, selected_id = submitted, current_id
             else:
                 created = create_supplier(
                     session,
@@ -317,10 +344,16 @@ def _save_supplier(
                     terms=terms,
                 )
                 message = f"Supplier created (code {created.code})"
+                form_values, selected_id = _CLEARED_SUPPLIER_FORM, 0
             session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
-            return f"Error: {exc}", _suppliers_grid("", status_filter)
-    return message, _suppliers_grid("", status_filter)
+            return (
+                f"Error: {exc}",
+                _suppliers_grid("", status_filter),
+                submitted,
+                current_id,
+            )
+    return message, _suppliers_grid("", status_filter), form_values, selected_id
 
 
 def _supplier_toggle(supplier_id: object) -> str:
@@ -699,7 +732,22 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_terms,
                     supplier_status_filter,
                 ],
-                outputs=[supplier_status, suppliers_grid],
+                outputs=[
+                    supplier_status,
+                    suppliers_grid,
+                    supplier_state,
+                    supplier_name,
+                    supplier_code,
+                    supplier_cuit,
+                    supplier_contact,
+                    supplier_phone,
+                    supplier_whatsapp,
+                    supplier_email,
+                    supplier_address,
+                    supplier_iva,
+                    supplier_margin,
+                    supplier_terms,
+                ],
             )
             supplier_toggle.click(
                 _supplier_toggle, inputs=[supplier_state], outputs=supplier_status
