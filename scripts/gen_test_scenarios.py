@@ -44,6 +44,7 @@ DOMAINS: dict[str, str] = {
     "test_search": "Búsqueda en catálogo",
     "test_search_calibration": "Calibración de búsqueda (queries cortas)",
     "test_adoption": "Adopción de productos RAG (use case de backoffice)",
+    "test_adoption_auth": "Autenticación de adopción (HMAC y allowlist de owners)",
     "test_sweeper": "Vencimiento de reservas (scheduler)",
     "test_channels": "Canales de entrada (Telegram/WhatsApp)",
     "test_whatsapp": "Canal WhatsApp Cloud API",

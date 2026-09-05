@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 392, agrupados en 32 dominios.
+**Total de escenarios:** 398, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -24,6 +24,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
 - [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
 - [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 12
+- [Autenticación de adopción (HMAC y allowlist de owners)](#autenticación-de-adopción-hmac-y-allowlist-de-owners) — 6
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
@@ -409,6 +410,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Sin node_id la adopción falla cerrado y no persiste nada. _(`test_provenance_faltante_fail_closed`)_
 - Un codigo_proveedor sin proveedor da error explícito y no persiste nada. _(`test_proveedor_desconocido_error_explicito`)_
 - Un proveedor INACTIVO da error explícito y no persiste nada. _(`test_proveedor_inactivo_error_explicito`)_
+
+## Autenticación de adopción (HMAC y allowlist de owners)
+
+- Un HMAC válido con owner permitido llega al handler con su OwnerContext. _(`test_hmac_valido_entrega_handler_con_ownercontext`)_
+- Un request sin X-Signature se rechaza con 401 y no llega al handler. _(`test_firma_ausente_rechazada_401`)_
+- Un HMAC incorrecto se rechaza con 401 (comparación constante). _(`test_firma_invalida_rechazada_401`)_
+- Un owner no permitido con HMAC válido se rechaza con 403 y no persiste nada. _(`test_owner_fuera_de_allowlist_rechazado_403`)_
+- Sin X-Owner-Id el gate cierra con 403 (no hay identidad que auditar). _(`test_owner_header_ausente_rechazado_403`)_
+- Allowlist vacía en env = fail-closed 403 aunque el HMAC sea válido. _(`test_allowlist_vacia_falla_cerrado_403`)_
 
 ## Vencimiento de reservas (scheduler)
 
