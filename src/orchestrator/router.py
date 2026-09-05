@@ -8,6 +8,9 @@ Implements the agent-orchestration routing contract:
   resuming the order that is awaiting the decision (human-in-the-loop wait);
 - a reply on a Case B order that is awaiting the owner's supplier selection
   goes to the SOURCING confirm flow;
+- a conversation seeded by the session reset follows the scripted
+  order-creation flow (GUIDED) — client → products → quantity → confirm —
+  until the draft is finalized and handed to Dispatch;
 - an in-progress order with resolved items goes back to Sales (adjustments,
   confirmations); one still resolving items goes to Disambiguation;
 - a fresh message with no context starts the pipeline at the Customer agent —
@@ -27,7 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from src.agents.commands import RESET_GREETING, is_session_reset
+from src.agents.commands import GUIDED_ASK_CLIENT, is_session_reset
 from src.agents.intake import OrderParser
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
@@ -45,6 +48,7 @@ class AgentName(str, enum.Enum):
     SALES = "sales"
     DISPATCH = "dispatch"
     SOURCING = "sourcing"
+    GUIDED = "guided"
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,11 @@ def route_message(message: InboundMessage, state: ConversationState | None) -> R
         # The remove-product command belongs to the Customer agent whenever an
         # order/draft context exists (in-memory draft or rehydrated DRAFT).
         return RoutingDecision(agent=AgentName.CUSTOMER, context_loaded=state is not None)
+    if state is not None and state.guided_step is not None:
+        # The scripted order-creation flow owns every text turn between the
+        # session reset and the draft finalization: the system asks, the
+        # owner answers, and no free-form agent runs in between.
+        return RoutingDecision(agent=AgentName.GUIDED, context_loaded=True)
     if state is not None and state.awaiting_decision:
         # The owner conversation owns every reply while a decision is pending:
         # Dispatch parses approve/reject and asks for clarification otherwise.
@@ -157,18 +166,22 @@ class Orchestrator:
         message, optional trailing punctuation) is checked first: it drops
         the sender's in-memory conversation state — drafts, displayed
         products, pending menus and awaiting decisions — seeds a fresh
-        conversation, and answers with the fixed greeting. It works from ANY
+        conversation with the guided flow's first step (``guided_step=
+        "ask_client"``), and answers with the scripted first question
+        ("¿Para qué cliente querés armar un pedido?"). It works from ANY
         state and never touches persisted DB orders. Media messages (voice,
         image) never trigger the reset.
         """
         if message.media_type is None and is_session_reset((message.text or "").strip()):
             self.store.drop(message.sender_id)
             sid = get_current_session_id() or generate_session_id(message.sender_id)
-            fresh_state = ConversationState(sender_id=message.sender_id, session_id=sid)
+            fresh_state = ConversationState(
+                sender_id=message.sender_id, session_id=sid, guided_step="ask_client"
+            )
             self.store.put(fresh_state)
             return TurnResult(
                 decision=RoutingDecision(agent=AgentName.CUSTOMER),
-                reply=RESET_GREETING,
+                reply=GUIDED_ASK_CLIENT,
                 state=fresh_state,
             )
         state = self.store.get(message.sender_id)

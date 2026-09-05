@@ -43,6 +43,7 @@ from src.agents.customer import (
     build_handler,
 )
 from src.agents.dispatch import build_dispatch_handler
+from src.agents.guided import build_guided_handler
 from src.agents.intake import OrderParser, SimpleOrderParser
 from src.agents.product_search import PrecedenceProductSearcher, ProductSearcher
 from src.channels import CHANNELS
@@ -117,11 +118,14 @@ def build_orchestrator(
     Customer is wired to the real OpenAI-backed responder (greeting fallback
     when unconfigured) plus the local-first → RAG-fallback product searcher
     (``PrecedenceProductSearcher`` over ``DbCatalogSearcher`` + the supplier
-    catalog ``RagProductClient``); the other agents stay walking-skeleton stubs.
-    With ``sourcing`` wired, the parse step, the SOURCING confirm agent and the
-    wired DISPATCH approval flow are enabled, and the store rehydrates expired
-    conversations from the database. ``dispatch``/``sheets`` are injectable for
-    tests; production uses ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
+    catalog ``RagProductClient``); the other agents stay walking-skeleton
+    stubs. The GUIDED agent owns the scripted order-creation flow that the
+    session reset starts, sharing the same product searcher and sourcing
+    persistence boundaries as Customer. With ``sourcing`` wired, the parse
+    step, the SOURCING confirm agent and the wired DISPATCH approval flow are
+    enabled, and the store rehydrates expired conversations from the database.
+    ``dispatch``/``sheets`` are injectable for tests; production uses
+    ``build_dispatch_handler(SessionLocal, SheetsWriter())``.
     """
     rehydrator = None
     if sourcing is not None:
@@ -135,20 +139,25 @@ def build_orchestrator(
     orchestrator = Orchestrator(ConversationStore(rehydrator=rehydrator), parser=parser)
     for agent in AgentName:
         orchestrator.register(agent, _stub_agent)
+    product_searcher = (
+        searcher
+        if searcher is not None
+        else PrecedenceProductSearcher(
+            DbCatalogSearcher(),
+            (sourcing.rag_client if sourcing else None) or RagProductClient(),
+        )
+    )
     orchestrator.register(
         AgentName.CUSTOMER,
         build_handler(
             responder or OpenAIResponder(),
-            searcher=(
-                searcher
-                if searcher is not None
-                else PrecedenceProductSearcher(
-                    DbCatalogSearcher(),
-                    (sourcing.rag_client if sourcing else None) or RagProductClient(),
-                )
-            ),
+            searcher=product_searcher,
             sourcing=sourcing,
         ),
+    )
+    orchestrator.register(
+        AgentName.GUIDED,
+        build_guided_handler(sourcing, searcher=product_searcher),
     )
     if sourcing is not None:
         orchestrator.register(AgentName.SOURCING, build_sourcing_handler(SessionLocal))

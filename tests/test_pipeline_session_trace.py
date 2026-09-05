@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.agents.commands import RESET_GREETING
+from src.agents.commands import GUIDED_ASK_CLIENT
 from src.agents.customer import CustomerResponder
 from src.agents.product_search import PrecedenceProductSearcher
 from src.channels.base import InboundMessage
@@ -72,7 +72,7 @@ async def test_session_trace_lifecycle_and_rag_events(
     assert "outbound_reply" in actions1
 
     outbound1 = next(e for e in events1 if e["action"] == "outbound_reply")
-    assert outbound1["details"]["reply"] == RESET_GREETING
+    assert outbound1["details"]["reply"] == GUIDED_ASK_CLIENT
 
     # 2. Mock RAG client to return product when searched
     sample_product = RagProduct(sku="TORN-01", name="Tornillo autoperforante", provider="TEST")

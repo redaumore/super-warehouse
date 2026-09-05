@@ -624,21 +624,26 @@ def _price_draft(
 
 
 def _draft_quote_reply(order: Order, customer: Cliente, priced: PricedOrder) -> str:
-    """Render the owner-facing quote for a newly persisted draft."""
+    """Render the owner-facing quote for a newly persisted draft.
+
+    Multi-line layout (one item per line with its quantity and subtotal, the
+    total at the end) so a multi-item order stays readable in chat.
+    """
     if priced.conversion_pending:
         return (
             f"Pedido #{order.order_id} para {customer.nombre_comercial}: conversión pendiente. "
             "Cargá el tipo de cambio que falta en Customer Orders y aprobalo."
         )
-    lines = " ".join(
-        f"{line.cantidad} × {line.name or line.sku}: "
+    lines = [
+        f"{line.cantidad} × {line.name or line.sku} — "
         f"{line_subtotal(line.final_ars, line.cantidad):.2f} ARS"
         for line in priced.lines
-    )
+    ]
     return (
-        f"Pedido #{order.order_id} para {customer.nombre_comercial} — "
-        f"total {priced.total:.2f} ARS. {lines} "
-        f"Respondé '{APPROVE}' o '{REJECT}'."
+        f"Pedido #{order.order_id} para {customer.nombre_comercial}:\n"
+        + "\n".join(lines)
+        + f"\nTotal: {priced.total:.2f} ARS\n"
+        + f"Respondé '{APPROVE}' o '{REJECT}'."
     )
 
 
@@ -672,7 +677,7 @@ def _reserve_quote_lines(
         )
 
 
-def _persist_finalized_draft(
+def persist_finalized_draft(
     session: Session,
     customer: Cliente,
     base: ConversationState,
@@ -680,12 +685,14 @@ def _persist_finalized_draft(
 ) -> AgentOutcome:
     """Price, persist, and reserve a draft for a resolved customer (quote step).
 
-    The first add that knows the customer persists an ``Order`` with
-    ``estado=DRAFT`` (design AD2). Per AD10 the quote step soft-locks the LOCAL
-    lines with an ACTIVE reservation while the Draft stays DRAFT; RAG lines
-    never reserve. The single-draft rule (spec: at most one DRAFT per customer)
-    is enforced by an app guard plus the ``uq_orders_one_draft_per_customer``
-    partial index as the DB backstop for the add race.
+    The one persistence path shared by the free-form finalize command and the
+    guided (scripted) order-creation flow. The first add that knows the
+    customer persists an ``Order`` with ``estado=DRAFT`` (design AD2). Per
+    AD10 the quote step soft-locks the LOCAL lines with an ACTIVE reservation
+    while the Draft stays DRAFT; RAG lines never reserve. The single-draft
+    rule (spec: at most one DRAFT per customer) is enforced by an app guard
+    plus the ``uq_orders_one_draft_per_customer`` partial index as the DB
+    backstop for the add race.
     """
     try:
         priced = _price_draft(session, customer, base, rag_client)
@@ -759,7 +766,7 @@ def _create_customer_for_draft(
         except InvalidClientDataError as exc:
             session.rollback()
             return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
-    return _persist_finalized_draft(session, customer, base, rag_client)
+    return persist_finalized_draft(session, customer, base, rag_client)
 
 
 def _remove_target_matches(needle: str, name: str | None, sku: str) -> bool:
@@ -881,7 +888,7 @@ def _run_finalize_turn(
                 )
             customer = resolution.candidate
         assert customer is not None
-        return _persist_finalized_draft(session, customer, base, rag_client)
+        return persist_finalized_draft(session, customer, base, rag_client)
 
 
 def _run_sourcing_turn(

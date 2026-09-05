@@ -95,6 +95,15 @@ class ConversationState:
     # short-circuit; draft-only, never persisted to the DB).
     product_options: tuple[ProductEntry, ...] = ()
     draft_items: tuple[tuple[ProductEntry, int], ...] = ()
+    # Guided (scripted) order-creation flow: the question the conversation is
+    # waiting on ("ask_client" | "ask_product" | "ask_quantity" | "ask_more"),
+    # the numbered product options shown for a pick, and the product already
+    # chosen that still needs its quantity. Draft-only bookkeeping: never
+    # rehydrated from the DB (an expired guided flow just restarts with the
+    # session-reset trigger).
+    guided_step: str | None = None
+    guided_product_options: tuple[ProductEntry, ...] = ()
+    guided_product: ProductEntry | None = None
 
     def with_updates(self, **changes: Any) -> ConversationState:
         """Return a copy with the given fields replaced and the clock touched."""

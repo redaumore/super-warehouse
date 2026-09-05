@@ -189,9 +189,11 @@ def test_quote_reply_shows_line_subtotal_not_unit_price(shop):
     outcome = _handler(shop)(_message("cerrá el pedido para Customer One"), state, _decision())
 
     assert outcome.state is not None
-    # 2 × 2448.00 → the reply shows the LINE subtotal, not the unit price.
-    assert "2 × RAG item: 4896.00 ARS" in outcome.reply  # type: ignore[operator]
-    assert "total 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    # 2 × 2448.00 → the reply shows the LINE subtotal on its own line, the
+    # total clearly at the end (multi-line quote).
+    assert "2 × RAG item — 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    assert "Total: 4896.00 ARS" in outcome.reply  # type: ignore[operator]
+    assert "\n" in outcome.reply  # type: ignore[operator]
 
 
 def test_finalize_rag_without_rate_saves_pending_snapshot(shop):

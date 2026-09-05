@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 351, agrupados en 30 dominios.
+**Total de escenarios:** 352, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -13,7 +13,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 21
-- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 25
+- [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 28
@@ -140,6 +140,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un texto nuevo de cliente se enruta a Customer. _(`test_fresh_text_routes_to_customer`)_
 - La aprobación del dueño se enruta a Despacho reanudando el pedido. _(`test_owner_approval_routes_to_dispatch_resuming_order`)_
 - El rechazo del dueño se enruta a Despacho. _(`test_owner_rejection_routes_to_dispatch`)_
+- Un paso del flujo guiado se enruta al agente GUIDED. _(`test_guided_flow_step_routes_to_guided_agent`)_
 - El comando 'sacá X' se enruta a Customer aunque haya un pedido en curso. _(`test_remove_product_command_routes_to_customer_with_order_context`)_
 - Una respuesta ambigua mientras se espera sigue en la conversación del dueño. _(`test_non_decision_reply_while_awaiting_goes_to_dispatch_menu`)_
 - Un pedido en curso con ítems se enruta a Ventas. _(`test_in_progress_order_with_items_routes_to_sales`)_
@@ -154,8 +155,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Tras la espera del dueño, su respuesta reanuda el mismo pedido. _(`test_orchestrator_resumes_order_after_owner_wait`)_
 - Registrar un agente enlaza su handler. _(`test_orchestrator_register_binds_handler`)_
 - La respuesta que produce un agente viaja en el resultado del turno. _(`test_orchestrator_surfaces_agent_reply`)_
-- El gatillo "hola bob" descarta el estado previo y responde el saludo fijo. _(`test_session_reset_drops_previous_state_and_greets`)_
-- El reset borra awaiting_decision y draft: el próximo texto va a Customer. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
+- El gatillo "hola bob" descarta el estado previo y arranca el flujo guiado. _(`test_session_reset_drops_previous_state_and_starts_guided_flow`)_
+- El reset borra awaiting_decision y draft: el próximo texto va al flujo guiado. _(`test_session_reset_clears_pending_decision_and_draft_for_next_turn`)_
 - Mayúsculas y puntuación final no impiden el reset. _(`test_session_reset_variants_match`)_
   - Hola Bob!
 - Una oración que contiene las palabras no resetea: sigue el flujo normal. _(`test_sentence_containing_trigger_words_does_not_reset`)_
