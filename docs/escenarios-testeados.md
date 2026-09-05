@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 360, agrupados en 30 dominios.
+**Total de escenarios:** 365, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -29,14 +29,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
 - [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 23
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
-- [Registro en Google Sheets](#registro-en-google-sheets) — 5
+- [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 37
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
-- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 7
+- [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
 ## Motor de precios
@@ -467,6 +467,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Si la cuarentena también falla, la fila queda registrada en memoria. _(`test_append_failure_with_unreachable_quarantine_keeps_memory_log`)_
 - Sin credenciales configuradas, la fila se cuarentena y no se lanza nada. _(`test_missing_credentials_quarantines_instead_of_raising`)_
 - El registro sincronizado refleja solo los appends exitosos. _(`test_sheets_synced_reflects_only_successful_appends`)_
+- The human-visible sheet timestamp renders Buenos Aires local time (UTC-3). _(`test_append_row_renders_registered_at_in_buenos_aires_time`)_
 
 ## Códigos de barras
 
@@ -575,6 +576,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El backoffice puede listar archivos de sesión y renderizar eventos tabulares. _(`test_backoffice_sessions_helpers`)_
 - Verifica que el archivo de log contenga cabecera y bloques legibles para debugging. _(`test_human_readable_log_format`)_
 - Verifica que los eventos de dispatch y approval se formateen con diagnóstico legible. _(`test_human_readable_dispatch_and_approval_logs`)_
+- The human header shows Buenos Aires local time; the JSON payload stays UTC ISO. _(`test_format_event_for_human_renders_art_header_and_keeps_utc_json`)_
+- Unparseable timestamps are rendered as-is instead of raising. _(`test_format_event_for_human_falls_back_to_raw_timestamp_on_parse_error`)_
+- The 'Created:' header carries Buenos Aires local wall-clock time. _(`test_log_file_created_header_renders_buenos_aires_local_time`)_
+- The backoffice grid shows the event time in Buenos Aires local time. _(`test_session_events_grid_renders_art_time_column`)_
 
 ## Trazabilidad de sesión en el pipeline
 

@@ -10,6 +10,7 @@ which keeps tests and CI safe.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from decimal import Decimal
 from functools import lru_cache
 from typing import cast
@@ -56,6 +57,7 @@ from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIVisionAnalyzer
 from src.integrations.sheets import SheetsWriter
 from src.supplier.validation import suggest_code
+from src.tz import to_buenos_aires
 
 _SHEETS = SheetsWriter()  # append-only; quarantines internally when unconfigured
 
@@ -416,8 +418,16 @@ def _exchange_rates_grid() -> list[list[object]]:
     """Render the exchange-rate table with ARS marked read-only."""
     with SessionLocal() as session:
         rows = list_exchange_rates(session)
+
+    def _render_updated_at(value: object) -> str:
+        """Show updated_at in Buenos Aires local time (stored UTC); None renders empty."""
+        if not isinstance(value, datetime):
+            return ""
+        return to_buenos_aires(value).strftime("%Y-%m-%d %H:%M:%S")
+
     return [
-        [row["currency"], row["rate_to_ars"], row["updated_at"], row["editable"]] for row in rows
+        [row["currency"], row["rate_to_ars"], _render_updated_at(row["updated_at"]), row["editable"]]
+        for row in rows
     ]
 
 
@@ -780,6 +790,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 outputs=order_action_status,
             )
 
+        with gr.Tab("Settings"):
             gr.Markdown("### Exchange rates")
             exchange_rates_grid = gr.Dataframe(
                 headers=["Currency", "Rate to ARS", "Updated", "Editable"],

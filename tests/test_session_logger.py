@@ -183,3 +183,73 @@ def test_human_readable_dispatch_and_approval_logs(tmp_path: Path) -> None:
     assert "Order #8 Cancelled (Case C): missing_stock_no_suppliers" in content
     assert "Unavailable SKUs: AT-7033" in content
     assert "Dispatch Approved: Order #8 (Cancelled Case C: True | Sheets: SKIPPED)" in content
+
+
+def test_format_event_for_human_renders_art_header_and_keeps_utc_json():
+    """The human header shows Buenos Aires local time; the JSON payload stays UTC ISO."""
+    from src.observability.session_logger import format_event_for_human
+
+    event = {
+        "timestamp": "2026-01-01T00:30:00+00:00",
+        "session_id": "ses_tz_test",
+        "level": "INFO",
+        "service": "test",
+        "action": "generic",
+        "details": {"foo": "bar"},
+    }
+    rendered = format_event_for_human(event)
+    assert "[2025-12-31 21:30:00 ART] [INFO] [TEST -> generic]" in rendered
+    # Machine contract: the JSON payload still carries the original UTC ISO string.
+    assert '"timestamp": "2026-01-01T00:30:00+00:00"' in rendered
+
+
+def test_format_event_for_human_falls_back_to_raw_timestamp_on_parse_error():
+    """Unparseable timestamps are rendered as-is instead of raising."""
+    from src.observability.session_logger import format_event_for_human
+
+    event = {
+        "timestamp": "not-a-timestamp-T-but-has-T",
+        "session_id": "ses_tz_test",
+        "level": "INFO",
+        "service": "test",
+        "action": "generic",
+        "details": {},
+    }
+    rendered = format_event_for_human(event)
+    assert "[not-a-timestamp-T-but-has-T]" in rendered
+
+
+def test_log_file_created_header_renders_buenos_aires_local_time(tmp_path: Path) -> None:
+    """The 'Created:' header carries Buenos Aires local wall-clock time."""
+    sid = "ses_created_header"
+    log_session_event("test", "created_header", {}, session_id=sid, log_dir=tmp_path)
+    content = (tmp_path / f"{sid}.log").read_text(encoding="utf-8")
+    created_line = next(line for line in content.splitlines() if line.startswith("Created: "))
+    assert created_line.endswith("-03:00")
+
+
+def test_session_events_grid_renders_art_time_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The backoffice grid shows the event time in Buenos Aires local time."""
+    import json as jsonlib
+
+    from src.backoffice.sessions import session_events_grid
+
+    monkeypatch.setattr("src.observability.session_logger.DEFAULT_SESSIONS_DIR", tmp_path)
+    sid = "ses_grid_art"
+    event = {
+        "timestamp": "2026-01-01T00:30:00+00:00",
+        "session_id": sid,
+        "level": "INFO",
+        "service": "rag",
+        "action": "query",
+        "details": {"q": "clavos"},
+    }
+    with open(tmp_path / f"{sid}.log", "a", encoding="utf-8") as f:
+        f.write(f"# JSON: {jsonlib.dumps(event)}\n")
+
+    grid = session_events_grid(sid)
+    assert len(grid) == 1
+    # 00:30 UTC -> 21:30 of the previous day in Buenos Aires (UTC-3)
+    assert grid[0][0] == "21:30:00"

@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.tz import now_buenos_aires, to_buenos_aires
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_SESSIONS_DIR = Path(os.getenv("SESSION_LOGS_DIR", "logs/sessions"))
@@ -29,7 +31,7 @@ def generate_session_id(sender_id: str | None = None) -> str:
 
     Format: ses_YYYYMMDD_HHMMSS_<sender>_<hex>
     """
-    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    ts = now_buenos_aires().strftime("%Y%m%d_%H%M%S")
     rand = secrets.token_hex(3)
     if sender_id:
         # Sanitize sender_id for filesystem safety
@@ -52,9 +54,12 @@ def format_event_for_human(event: dict[str, Any]) -> str:
     """Format a structured session event into clean, human-readable text for debugging."""
     ts = event.get("timestamp", "")
     if "T" in ts:
-        # Format ISO timestamp to readable date time
-        ts_part = ts.split(".")[0].replace("T", " ")
-        time_str = f"{ts_part} UTC"
+        # Event timestamps are the machine contract (UTC ISO); the human header
+        # renders them in Buenos Aires local time.
+        try:
+            time_str = f"{to_buenos_aires(datetime.fromisoformat(ts)).strftime('%Y-%m-%d %H:%M:%S')} ART"
+        except ValueError:
+            time_str = ts
     else:
         time_str = ts
 
@@ -240,11 +245,16 @@ def log_session_event(
         is_new = not file_path.exists() or file_path.stat().st_size == 0
         with open(file_path, "a", encoding="utf-8") as f:
             if is_new:
+                # The event payload timestamp stays UTC (machine contract); the
+                # human-facing "Created:" header renders Buenos Aires local time.
+                created_display = to_buenos_aires(datetime.now(UTC)).isoformat(
+                    timespec="seconds"
+                ).replace("T", " ")
                 f.write(
                     "================================================================================\n"
                 )
                 f.write(f"SESSION LOG: {sid}\n")
-                f.write(f"Created: {now_iso}\n")
+                f.write(f"Created: {created_display}\n")
                 f.write(
                     "================================================================================\n\n"
                 )

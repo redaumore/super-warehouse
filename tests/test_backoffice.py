@@ -103,6 +103,7 @@ def test_build_app_creates_tabs_with_expected_labels():
         "Ingestion",
         "Suppliers",
         "Customer Orders",
+        "Settings",
         "Sessions",
     ]
 
@@ -594,8 +595,9 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
     assert "recomputed 1 pending order(s)" in first_message
     assert "recomputed 0 pending order(s)" in second_message
     assert first_rates[-1][0] == "USD"
-    assert first_rates[-1][2] == datetime(2024, 1, 1, tzinfo=UTC)
-    assert second_rates[-1][2] == datetime(2024, 6, 1, tzinfo=UTC)
+    # Grid renders updated_at in Buenos Aires local time (UTC-3 display contract)
+    assert first_rates[-1][2] == "2023-12-31 21:00:00"
+    assert second_rates[-1][2] == "2024-05-31 21:00:00"
     with SessionLocal() as session:
         reloaded = session.get(Order, order.order_id)
         assert reloaded.conversion_pending is False

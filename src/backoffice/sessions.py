@@ -6,8 +6,10 @@ Exposes session file listing and structured event loading for the Gradio UI.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from src.observability.session_logger import list_session_files, read_session_events
+from src.tz import to_buenos_aires
 
 
 def list_sessions() -> list[str]:
@@ -24,7 +26,11 @@ def session_events_grid(session_id: str | None) -> list[list[object]]:
     for ev in events:
         ts = ev.get("timestamp", "")
         if "T" in ts:
-            ts = ts.split("T")[1][:8]  # HH:MM:SS
+            # Event timestamps are UTC ISO; the grid shows Buenos Aires local time.
+            try:
+                ts = to_buenos_aires(datetime.fromisoformat(ts)).strftime("%H:%M:%S")
+            except ValueError:
+                pass  # keep the raw string for unparseable timestamps
         rows.append(
             [
                 ts,
