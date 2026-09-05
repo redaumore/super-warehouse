@@ -8,10 +8,14 @@ from ``Settings`` on first use — mirroring the ``OpenAIResponder`` pattern in
 
 The service maps ``structured_json.productos[]`` into typed ``RagProduct``
 results carrying code, name, provider, brand, price, specs and the source
-page/PDF. Failures surface as domain errors (``RagProductError``), never as raw
-transport exceptions: a timeout, a connection error or an HTTP 500 all become
-``RagProductError`` so the caller can answer with an honest unavailability
-notice instead of a wrong "not in stock" claim.
+page/PDF. Each product also resolves its provenance — ``node_id`` and the
+category fields — from the matching ``context_chunks`` entry via
+``fragmento_id``/``fragment_id``, so adoption can persist ``catalogo.origen``
+without ever mutating the sibling service. Failures surface as domain errors
+(``RagProductError``), never as raw transport exceptions: a timeout, a
+connection error or an HTTP 500 all become ``RagProductError`` so the caller
+can answer with an honest unavailability notice instead of a wrong "not in
+stock" claim.
 
 ``is_refusal=true`` (or an empty product list) means "not in current catalogs"
 and maps to an empty result — the RAG ingests only priced, in-stock-at-ingest
@@ -67,6 +71,39 @@ class RagProduct:
     source_file: str | None = None
     page: int | None = None
     codigo_proveedor: str | None = None
+    node_id: str | None = None
+    fragment_id: int | None = None
+    categoria_padre: str | None = None
+    categoria: str | None = None
+    subcategoria: str | None = None
+
+
+def _as_fragment_id(value: Any) -> int | None:
+    """Coerce a ``fragment_id``/``fragmento_id`` payload value to int or None."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _fragment_to_chunk_map(context_chunks: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    """Map ``fragment_id`` → context chunk (provenance source for products).
+
+    The RAG response links each ``productos[]`` row to a retrieval chunk via
+    ``fragmento_id``; the chunk carries ``node_id`` and the category metadata
+    that the product row may omit.
+    """
+    mapping: dict[int, dict[str, Any]] = {}
+    for chunk in context_chunks:
+        if not isinstance(chunk, dict):
+            continue
+        fragment_id = _as_fragment_id(chunk.get("fragment_id"))
+        if fragment_id is not None:
+            mapping[fragment_id] = chunk
+    return mapping
 
 
 @dataclass(frozen=True)
@@ -194,7 +231,12 @@ class RagProductClient:
             return ()
         structured = data.get("structured_json") or {}
         products = structured.get("productos") or []
-        mapped = tuple(self._map_product(product) for product in products if product.get("nombre"))
+        fragment_to_chunk = _fragment_to_chunk_map(data.get("context_chunks") or [])
+        mapped = tuple(
+            self._map_product(product, fragment_to_chunk)
+            for product in products
+            if product.get("nombre")
+        )
         log_session_event(
             "rag",
             "query_success",
@@ -243,14 +285,22 @@ class RagProductClient:
         currency = data.get("moneda")
         return RagPrice(price=raw_price, currency=str(currency).upper() if currency else None)
 
-    def _map_product(self, raw: dict[str, Any]) -> RagProduct:
+    def _map_product(
+        self, raw: dict[str, Any], fragment_to_chunk: dict[int, dict[str, Any]]
+    ) -> RagProduct:
         """Map one ``productos[]`` row into a typed ``RagProduct``.
 
         SKU hygiene (ADR 2): prefer ``codigo_orig``, falling back to the
         ``codigo`` normalized against a duplicated ``{provider}-`` prefix.
+        Provenance: the row's ``fragmento_id`` resolves ``node_id`` and the
+        category fields from the matching ``context_chunks`` entry; the row's
+        own values win when present. An unresolvable fragment leaves
+        ``node_id`` as ``None`` (adoption fails closed on it).
         """
         codigo = raw.get("codigo") or ""
         provider = raw.get("codigo_proveedor") or ""
+        fragment_id = _as_fragment_id(raw.get("fragmento_id"))
+        chunk = fragment_to_chunk.get(fragment_id) if fragment_id is not None else None
         return RagProduct(
             sku=raw.get("codigo_orig") or normalize_rag_sku(codigo, provider),
             name=raw["nombre"],
@@ -263,4 +313,11 @@ class RagProductClient:
             source_file=raw.get("archivo_origen"),
             page=raw.get("pagina"),
             codigo_proveedor=raw.get("codigo_proveedor") or None,
+            node_id=chunk.get("node_id") if chunk else None,
+            fragment_id=fragment_id,
+            categoria_padre=raw.get("categoria_padre") or (
+                chunk.get("categoria_padre") if chunk else None
+            ),
+            categoria=raw.get("categoria") or (chunk.get("categoria") if chunk else None),
+            subcategoria=raw.get("subcategoria") or (chunk.get("subcategoria") if chunk else None),
         )

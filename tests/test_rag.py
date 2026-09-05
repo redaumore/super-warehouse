@@ -132,6 +132,7 @@ def test_rag_client_query_maps_products_and_sends_structured_json():
             source_file="catalogo-2024.pdf",
             page=12,
             codigo_proveedor="AMX",
+            categoria_padre="Fijaciones",
         ),
     )
 
@@ -162,6 +163,74 @@ def test_rag_client_skips_products_without_name():
 
     assert len(products) == 1
     assert products[0].name == "Tarugo Fischer 8mm"
+
+
+def _provenance_response(product: dict, chunks: list[dict]) -> dict:
+    response = _success_response(product)
+    response["context_chunks"] = chunks
+    return response
+
+
+def test_rag_client_resolves_node_id_from_context_chunks():
+    """El node_id del producto se resuelve desde context_chunks vía fragmento_id."""
+    chunk = {
+        "fragment_id": 1,
+        "node_id": "node_prod_AMX-AT-5044",
+        "codigo_producto": "AMX-AT-5044",
+    }
+    client = _client(
+        lambda request: httpx.Response(
+            200, json=_provenance_response(_product(fragmento_id=1), [chunk])
+        )
+    )
+
+    products = client.query("tarugos")
+
+    assert products[0].node_id == "node_prod_AMX-AT-5044"
+    assert products[0].fragment_id == 1
+
+
+def test_rag_client_unresolved_fragment_leaves_node_id_none():
+    """Un fragmento sin chunk asociado deja node_id en None (provenance ausente)."""
+    client = _client(
+        lambda request: httpx.Response(
+            200,
+            json=_provenance_response(
+                _product(fragmento_id=99), [{"fragment_id": 1, "node_id": "node_prod_otro"}]
+            ),
+        )
+    )
+
+    products = client.query("tarugos")
+
+    assert products[0].node_id is None
+    assert products[0].fragment_id == 99
+
+
+def test_rag_client_fills_categories_from_context_chunk():
+    """Las categorías ausentes en la fila se completan desde el chunk del contexto."""
+    chunk = {
+        "fragment_id": 1,
+        "node_id": "node_prod_AMX-AT-5044",
+        "categoria_padre": "Fijaciones",
+        "categoria": "Tarugos",
+        "subcategoria": "Plástico",
+    }
+    client = _client(
+        lambda request: httpx.Response(
+            200,
+            json=_provenance_response(
+                _product(fragmento_id=1, categoria_padre=None, categoria=None, subcategoria=None),
+                [chunk],
+            ),
+        )
+    )
+
+    products = client.query("tarugos")
+
+    assert products[0].categoria_padre == "Fijaciones"
+    assert products[0].categoria == "Tarugos"
+    assert products[0].subcategoria == "Plástico"
 
 
 def test_rag_client_prefers_codigo_orig_over_normalized_codigo():

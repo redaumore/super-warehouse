@@ -42,6 +42,7 @@ DOMAINS: dict[str, str] = {
     "test_perception": "Percepción (voz e imagen)",
     "test_openai": "Integración con OpenAI",
     "test_search": "Búsqueda en catálogo",
+    "test_search_calibration": "Calibración de búsqueda (queries cortas)",
     "test_sweeper": "Vencimiento de reservas (scheduler)",
     "test_channels": "Canales de entrada (Telegram/WhatsApp)",
     "test_whatsapp": "Canal WhatsApp Cloud API",
