@@ -67,9 +67,7 @@ class RagSupplierCatalogSearcher:
         with self.session_factory() as session:
             return self._map(session, products)
 
-    def _map(
-        self, session: Session, products: tuple
-    ) -> tuple[SupplierCandidate, ...]:
+    def _map(self, session: Session, products: tuple) -> tuple[SupplierCandidate, ...]:
         """Resolve each RAG hit against the ``suppliers`` table, deduped."""
         candidates: list[SupplierCandidate] = []
         seen: set[tuple[int, str]] = set()
@@ -80,9 +78,7 @@ class RagSupplierCatalogSearcher:
                 continue
             supplier = session.scalar(select(Supplier).where(Supplier.code == code))
             if supplier is None or supplier.status != SupplierStatus.ACTIVO:
-                logger.warning(
-                    "rag hit dropped: unknown or inactive supplier code=%r", code
-                )
+                logger.warning("rag hit dropped: unknown or inactive supplier code=%r", code)
                 if code not in unmapped:
                     unmapped.append(code)
                 continue

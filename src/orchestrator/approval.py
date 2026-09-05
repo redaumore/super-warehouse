@@ -280,9 +280,7 @@ def confirm_and_register(
         cancel_order(session, order, actor=actor, now=now)
         order.sourcing_state = SourcingState.CANCELLED
         session.flush()
-        unmapped = tuple(
-            dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ())
-        )
+        unmapped = tuple(dict.fromkeys(getattr(searcher, "last_unmapped_codes", ()) or ()))
         if unmapped:
             log_session_event(
                 "orders",

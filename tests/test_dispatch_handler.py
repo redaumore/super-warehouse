@@ -294,4 +294,3 @@ def test_dispatch_handler_logs_session_events(shop, tmp_path, monkeypatch):
         assert "decision_approved" in actions
     finally:
         set_current_session_id(None)
-

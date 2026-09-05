@@ -167,7 +167,9 @@ def format_event_for_human(event: dict[str, Any]) -> str:
         total = details.get("total_ars")
         sheets = details.get("sheets_status")
         conv = details.get("converted_reservations", 0)
-        lines.append(f"  Order #{order_id} Confirmed (Case A) — Total: {total} ARS | Converted: {conv} | Sheets: {sheets}")
+        lines.append(
+            f"  Order #{order_id} Confirmed (Case A) — Total: {total} ARS | Converted: {conv} | Sheets: {sheets}"
+        )
 
     elif action == "decision_parsed":
         order_id = details.get("order_id")
@@ -179,7 +181,9 @@ def format_event_for_human(event: dict[str, Any]) -> str:
         order_id = details.get("order_id")
         cancelled = details.get("cancelled_case", False)
         sheets = details.get("sheets_status")
-        lines.append(f"  Dispatch Approved: Order #{order_id} (Cancelled Case C: {cancelled} | Sheets: {sheets})")
+        lines.append(
+            f"  Dispatch Approved: Order #{order_id} (Cancelled Case C: {cancelled} | Sheets: {sheets})"
+        )
 
     elif action == "decision_rejected":
         order_id = details.get("order_id")

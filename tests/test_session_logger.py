@@ -183,4 +183,3 @@ def test_human_readable_dispatch_and_approval_logs(tmp_path: Path) -> None:
     assert "Order #8 Cancelled (Case C): missing_stock_no_suppliers" in content
     assert "Unavailable SKUs: AT-7033" in content
     assert "Dispatch Approved: Order #8 (Cancelled Case C: True | Sheets: SKIPPED)" in content
-

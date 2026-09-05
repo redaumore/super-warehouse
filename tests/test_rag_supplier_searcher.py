@@ -116,9 +116,7 @@ def test_description_search_maps_rag_hit_to_supplier(session_factory, shop):
 
 def test_inactive_supplier_is_dropped(session_factory, shop):
     """Seam contract: INACTIVO suppliers never surface as candidates."""
-    inactive_hit = RagProduct(
-        sku="OFF-1", name="Tornillo", provider="Off", codigo_proveedor="OFF"
-    )
+    inactive_hit = RagProduct(sku="OFF-1", name="Tornillo", provider="Off", codigo_proveedor="OFF")
     searcher = RagSupplierCatalogSearcher(
         session_factory=session_factory, rag_client=FakeRagClient((inactive_hit,))
     )
@@ -138,15 +136,11 @@ def test_unknown_supplier_code_is_dropped(session_factory, shop):
 
 def test_last_unmapped_codes_starts_empty():
     """The diagnostic attribute exists and starts empty before any search."""
-    searcher = RagSupplierCatalogSearcher(
-        session_factory=Mock(), rag_client=FakeRagClient(())
-    )
+    searcher = RagSupplierCatalogSearcher(session_factory=Mock(), rag_client=FakeRagClient(()))
     assert searcher.last_unmapped_codes == ()
 
 
-def test_last_unmapped_codes_records_unknown_code_and_resets_on_clean_search(
-    session_factory, shop
-):
+def test_last_unmapped_codes_records_unknown_code_and_resets_on_clean_search(session_factory, shop):
     """Dropped unknown codes are exposed and cleared by a later clean search."""
     ghost = RagProduct(
         sku="GHO-1", name="Producto fantasma", provider="Ghost", codigo_proveedor="SM"
@@ -164,9 +158,7 @@ def test_last_unmapped_codes_records_unknown_code_and_resets_on_clean_search(
 
 def test_last_unmapped_codes_counts_inactive_drop(session_factory, shop):
     """An INACTIVO supplier drop surfaces in the diagnostic too."""
-    inactive_hit = RagProduct(
-        sku="OFF-1", name="Tornillo", provider="Off", codigo_proveedor="OFF"
-    )
+    inactive_hit = RagProduct(sku="OFF-1", name="Tornillo", provider="Off", codigo_proveedor="OFF")
     searcher = RagSupplierCatalogSearcher(
         session_factory=session_factory, rag_client=FakeRagClient((inactive_hit,))
     )

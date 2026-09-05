@@ -410,8 +410,9 @@ def test_confirm_case_c_without_unmapped_codes_keeps_plain_reply(order_ctx):
 
     assert result.cancelled_case is True
     assert "códigos:" not in result.confirmation_text
-    assert not [e for e in read_session_events("unassigned")
-                if e["action"] == "case_c_unmapped_suppliers"]
+    assert not [
+        e for e in read_session_events("unassigned") if e["action"] == "case_c_unmapped_suppliers"
+    ]
 
 
 def test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt(order_ctx):
