@@ -18,10 +18,10 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.models import Supplier, SupplierStatus
-from src.integrations.rag import RagProductError
+from src.integrations.rag import RagProduct, RagProductError
 from src.supplier.searcher import SupplierCandidate
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class RagSupplierCatalogSearcher:
     """Search supplier offers via the RAG, mapped to real ``suppliers`` rows."""
 
-    def __init__(self, session_factory: type[Session], rag_client: object) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], rag_client: object) -> None:
         self.session_factory = session_factory
         self.rag_client = rag_client
         # Diagnostic for the last search() call: the RAG provider codes that
@@ -67,7 +67,9 @@ class RagSupplierCatalogSearcher:
         with self.session_factory() as session:
             return self._map(session, products)
 
-    def _map(self, session: Session, products: tuple) -> tuple[SupplierCandidate, ...]:
+    def _map(
+        self, session: Session, products: tuple[RagProduct, ...]
+    ) -> tuple[SupplierCandidate, ...]:
         """Resolve each RAG hit against the ``suppliers`` table, deduped."""
         candidates: list[SupplierCandidate] = []
         seen: set[tuple[int, str]] = set()

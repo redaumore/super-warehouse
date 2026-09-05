@@ -42,6 +42,7 @@ class OrderParser(Protocol):
         ``now`` is the reference date for the delivery-date resolver (tests
         inject it; production defaults to today).
         """
+        ...
 
 
 # --- fuzzy delivery-date resolution -----------------------------------------

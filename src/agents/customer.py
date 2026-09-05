@@ -209,6 +209,7 @@ class CustomerResponder(Protocol):
 
     def respond(self, messages: Sequence[ChatMessage]) -> str:
         """Answer the customer from the full message list (system + history + latest user turn)."""
+        ...
 
 
 class DbCatalogSearcher:

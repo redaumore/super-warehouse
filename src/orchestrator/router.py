@@ -75,6 +75,7 @@ class AgentHandler(Protocol):
         decision: RoutingDecision,
     ) -> AgentOutcome | None:
         """Process ``message`` and return the updated state and optional reply."""
+        ...
 
 
 @dataclass(frozen=True)
