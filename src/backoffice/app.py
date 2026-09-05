@@ -31,6 +31,7 @@ from src.backoffice.customer_orders import (
     list_customer_orders,
     list_exchange_rates,
     order_detail,
+    order_state_diagram,
     recompute_pending_conversion,
     set_default_margin,
     set_exchange_rate,
@@ -407,6 +408,47 @@ def _order_action(
     return run
 
 
+def _order_action_with_diagram(
+    action: Callable[[Session, int], str],
+) -> Callable[[object], tuple[str, str]]:
+    """Wrap a fulfillment action: run it, then refresh the state diagram."""
+
+    def run(order_id: object) -> tuple[str, str]:
+        status = _order_action(action)(order_id)
+        return status, _order_state_diagram(order_id)
+
+    return run
+
+
+def _order_state_diagram(order_id: object) -> str:
+    """Render the state-progress diagram of the selected customer order."""
+    if not order_id:
+        return order_state_diagram("")
+    with SessionLocal() as session:
+        try:
+            row = order_detail(session, int(str(order_id)))
+        except KeyError:
+            return order_state_diagram("")
+    return order_state_diagram(str(row["estado"]))
+
+
+def _order_row_selected(evt: gr.SelectData) -> tuple[object, str, str, list[list[object]]]:
+    """Populate the Customer Orders tab from the clicked row in the orders grid.
+
+    Returns ``(selected_order_id, legal_actions_label, state_diagram, detail_rows)``.
+    Deselecting a row (or an event without a usable row) clears the whole panel.
+    """
+    order_id = None
+    if getattr(evt, "selected", False) and getattr(evt, "row_value", None):
+        order_id = evt.row_value[0]  # "Order" column — positional, labels never matter
+    return (
+        order_id,
+        _legal_actions_label(order_id),
+        _order_state_diagram(order_id),
+        _customer_order_detail_grid(order_id),
+    )
+
+
 def _legal_actions_label(order_id: object) -> str:
     """Show the legal fulfillment actions of the selected order (state-driven)."""
     if not order_id:
@@ -436,12 +478,10 @@ def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
             line["sku"],
             line["name"] or "—",
             line["cantidad"],
-            line["base_price"] or "—",
-            line["final_price"] or "—",
-            line["source"] or "—",
-            line["supplier"] or "—",
-            line["moneda"] or "—",
             line["precio_original"] or "—",
+            line["margin_pct"] or "—",
+            line["base_price"] or "—",
+            line["line_total"] or "—",
         ]
         for line in cast(list[dict[str, object]], detail["lines"])
     ]
@@ -775,38 +815,21 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             customer_orders_refresh = gr.Button("Refresh orders")
             customer_orders_refresh.click(_customer_orders_grid, outputs=customer_orders_grid)
-            with gr.Row():
-                customer_order_id = gr.Number(label="Order ID", precision=0)
-                customer_order_detail_button = gr.Button("Show line detail")
+            selected_order_id = gr.State(None)
+            gr.Markdown("### Order state progress")
+            order_state_html = gr.HTML(value=order_state_diagram(""))
             customer_order_detail_grid = gr.Dataframe(
                 headers=[
                     "SKU",
-                    "Name",
+                    "Product Name",
                     "Quantity",
-                    "Base (ARS)",
-                    "Final (ARS)",
-                    "Source",
-                    "Supplier",
-                    "Currency",
                     "Original price",
+                    "Margin %",
+                    "Base price/unit",
+                    "Total / product",
                 ],
-                datatype=[
-                    "str",
-                    "str",
-                    "number",
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                ],
+                datatype=["str", "str", "number", "str", "str", "str", "str"],
                 label="Order lines",
-            )
-            customer_order_detail_button.click(
-                _customer_order_detail_grid,
-                inputs=customer_order_id,
-                outputs=customer_order_detail_grid,
             )
 
             gr.Markdown("### Fulfillment actions")
@@ -819,28 +842,35 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 action_complete_picking = gr.Button("Complete picking (Picking → Ready)")
                 action_deliver = gr.Button("Deliver (Ready → Closed)")
                 action_cancel = gr.Button("Cancel order", variant="stop")
-            customer_order_id.change(
-                _legal_actions_label, inputs=customer_order_id, outputs=order_action_label
+            customer_orders_grid.select(
+                _order_row_selected,
+                None,
+                [
+                    selected_order_id,
+                    order_action_label,
+                    order_state_html,
+                    customer_order_detail_grid,
+                ],
             )
             action_start_picking.click(
-                _order_action(start_picking_action),
-                inputs=customer_order_id,
-                outputs=order_action_status,
+                _order_action_with_diagram(start_picking_action),
+                inputs=selected_order_id,
+                outputs=[order_action_status, order_state_html],
             )
             action_complete_picking.click(
-                _order_action(complete_picking_action),
-                inputs=customer_order_id,
-                outputs=order_action_status,
+                _order_action_with_diagram(complete_picking_action),
+                inputs=selected_order_id,
+                outputs=[order_action_status, order_state_html],
             )
             action_deliver.click(
-                _order_action(deliver_order_action),
-                inputs=customer_order_id,
-                outputs=order_action_status,
+                _order_action_with_diagram(deliver_order_action),
+                inputs=selected_order_id,
+                outputs=[order_action_status, order_state_html],
             )
             action_cancel.click(
-                _order_action(cancel_order_action),
-                inputs=customer_order_id,
-                outputs=order_action_status,
+                _order_action_with_diagram(cancel_order_action),
+                inputs=selected_order_id,
+                outputs=[order_action_status, order_state_html],
             )
 
         with gr.Tab("Settings"):

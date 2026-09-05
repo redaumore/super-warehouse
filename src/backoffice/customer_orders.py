@@ -42,6 +42,41 @@ def _decimal_text(value: Decimal | None) -> str | None:
     return None if value is None else str(value)
 
 
+def _money_text(value: Decimal | None) -> str | None:
+    """Render a money value as display text quantized to 2 decimals (HALF_UP).
+
+    Purely cosmetic: stored ``Numeric`` values are never mutated, only the
+    text handed to the Order lines grid (e.g. ``100.0000`` → ``"100.00"``).
+    """
+    return None if value is None else str(value.quantize(_CENT, rounding=ROUND_HALF_UP))
+
+
+def _margin_pct_text(base_price: Decimal | None, precio_original: Decimal | None) -> str | None:
+    """Derive the Markup % between the original price and the ARS base price.
+
+    ``((base_price / precio_original) - 1) × 100``, quantized HALF_UP to two
+    decimals. LOCAL lines snapshot the cost as ``precio_original`` and price
+    as ``base = cost × (1 + margin/100)``, so the markup is the applied
+    margin; RAG lines carry no margin (``base = original × rate``) and
+    therefore naturally derive ``0.00``. List/particular discounts live
+    between base and final price and are NOT part of this percentage.
+    Returns ``None`` (rendered "—") when the original price is missing or
+    zero, or when the base price is missing (pending conversion), guarding
+    the division by zero.
+    """
+    if base_price is None or precio_original is None or precio_original == 0:
+        return None
+    markup = (base_price / precio_original - 1) * 100
+    return str(markup.quantize(_CENT, rounding=ROUND_HALF_UP))
+
+
+def _line_total_text(final_price: Decimal | None, cantidad: int) -> str | None:
+    """Render the line total as ``final_price × cantidad`` quantized to 2 decimals."""
+    if final_price is None:
+        return None
+    return str((final_price * cantidad).quantize(_CENT, rounding=ROUND_HALF_UP))
+
+
 def _order_row(order: Order) -> dict[str, object]:
     """Map one order into the Customer Orders grid contract."""
     return {
@@ -71,19 +106,31 @@ def _order_or_raise(session: Session, order_id: int) -> Order:
 
 
 def order_detail(session: Session, order_id: int) -> dict[str, object]:
-    """Return one customer order and its frozen line snapshots."""
+    """Return one customer order and its frozen line snapshots.
+
+    Every money field is display text quantized to 2 decimals (HALF_UP) —
+    stored values are never mutated. ``margin_pct`` is a derived field, not
+    persisted: the markup between ``precio_original`` and the ARS base price
+    per unit (LOCAL lines snapshot the cost and price ``base = cost ×
+    (1 + margin/100)``, so the markup equals the applied margin; RAG lines
+    carry no margin and derive ``0.00``). List/particular discounts live
+    between base and final price and are not part of ``margin_pct``.
+    ``line_total`` is ``final_price × cantidad``, also derived for display.
+    """
     order = _order_or_raise(session, order_id)
     lines = [
         {
             "sku": item.sku,
             "name": item.name,
             "cantidad": item.cantidad,
-            "base_price": _decimal_text(item.base_price),
-            "final_price": _decimal_text(item.final_price),
+            "base_price": _money_text(item.base_price),
+            "final_price": _money_text(item.final_price),
             "source": item.source,
             "supplier": item.supplier,
             "moneda": item.moneda,
-            "precio_original": _decimal_text(item.precio_original),
+            "precio_original": _money_text(item.precio_original),
+            "margin_pct": _margin_pct_text(item.base_price, item.precio_original),
+            "line_total": _line_total_text(item.final_price, item.cantidad),
         }
         for item in order.items
     ]
@@ -236,6 +283,63 @@ _LEGAL_ACTIONS: dict[str, tuple[str, ...]] = {
 def legal_actions(estado: str) -> tuple[str, ...]:
     """The fulfillment actions legal for an order state, in display order."""
     return _LEGAL_ACTIONS.get(str(estado).upper(), ())
+
+
+# --------------------------------------------------- state progress diagram
+
+# Main fulfillment path in display order; CANCELED renders as a separate
+# terminal badge outside this sequence.
+_MAIN_PATH: tuple[tuple[str, str], ...] = (
+    ("DRAFT", "Draft"),
+    ("CONFIRMED", "Confirmed"),
+    ("PICKING", "Picking"),
+    ("READY_FOR_DELIVERY", "Ready for delivery"),
+    ("CLOSED", "Closed"),
+)
+_MAIN_PATH_INDEX: dict[str, int] = {value: i for i, (value, _) in enumerate(_MAIN_PATH)}
+
+_PILL_BASE = "border-radius:9999px;padding:2px 12px;font-size:13px;white-space:nowrap;"
+_PILL_PASSED = _PILL_BASE + "background:#2563eb;color:#ffffff;border:1px solid #2563eb;"
+_PILL_CURRENT = _PILL_PASSED + "font-weight:700;box-shadow:0 0 0 3px #93c5fd;"
+_PILL_FUTURE = _PILL_BASE + "background:#ffffff;color:#6b7280;border:1px solid #d1d5db;"
+_PILL_CANCELED = (
+    _PILL_BASE + "background:#dc2626;color:#ffffff;border:1px solid #dc2626;font-weight:700;"
+)
+_ARROW = '<span style="color:#9ca3af;font-size:13px;margin:0 2px;">→</span>'
+
+
+def order_state_diagram(estado: str) -> str:
+    """Render the six order states as a horizontal progress diagram (HTML).
+
+    There is no order-state history table, so the states the order has passed
+    are inferred from the main-path order: the current state and every state
+    before it on DRAFT → CONFIRMED → PICKING → READY_FOR_DELIVERY → CLOSED are
+    colored, later states stay gray. CANCELED renders as a separate terminal
+    badge outside the path (red when canceled); unknown or empty states render
+    the whole path uncolored with no highlighted badge.
+    """
+    current = str(estado or "").strip().upper()
+    current_index = _MAIN_PATH_INDEX.get(current)
+
+    pills: list[str] = []
+    for index, (value, label) in enumerate(_MAIN_PATH):
+        if current_index is None or index > current_index:
+            style = _PILL_FUTURE
+        elif index == current_index:
+            style = _PILL_CURRENT
+        else:
+            style = _PILL_PASSED
+        pills.append(f'<span data-state="{value}" style="{style}">{label}</span>')
+    canceled_style = _PILL_CANCELED if current == "CANCELED" else _PILL_FUTURE
+    canceled_pill = f'<span data-state="CANCELED" style="{canceled_style}">Canceled</span>'
+    return (
+        '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;'
+        'font-family:system-ui,sans-serif;">'
+        f"{_ARROW.join(pills)}"
+        '<span style="color:#9ca3af;margin:0 6px;">|</span>'
+        f"{canceled_pill}"
+        "</div>"
+    )
 
 
 def start_picking_action(session: Session, order_id: int) -> str:

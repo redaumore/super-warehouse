@@ -9,6 +9,7 @@ it is down.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ from src.backoffice.app import (
     _catalog_grid,
     _ingest_confirm,
     _ingest_preview,
+    _order_row_selected,
     _register_client,
     _save_exchange_rate,
     build_app,
@@ -44,6 +46,7 @@ from src.backoffice.customer_orders import (
     list_customer_orders,
     list_exchange_rates,
     order_detail,
+    order_state_diagram,
     recompute_pending_conversion,
     set_default_margin,
     set_exchange_rate,
@@ -387,8 +390,96 @@ def test_customer_orders_list_and_detail_include_ars_totals_and_snapshots(shop_c
     assert rows[0]["total"] == "256.50"
     assert rows[0]["conversion_pending"] is False
     detail = order_detail(db_session, order.order_id)
-    assert detail["lines"][0]["source"] == "LOCAL"
-    assert detail["lines"][0]["name"] == "Clavos Paris 2 Pulgadas"
+    line = detail["lines"][0]
+    assert line["sku"] == "CLV-001"
+    assert line["name"] == "Clavos Paris 2 Pulgadas"
+    assert line["cantidad"] == 2
+    assert line["source"] == "LOCAL"
+    assert line["base_price"] == "135.00"
+    assert line["precio_original"] == "100.00"
+    # Derived: markup (135 / 100 − 1) × 100; final 128.25 × qty 2.
+    assert line["margin_pct"] == "35.00"
+    assert line["line_total"] == "256.50"
+
+
+def test_order_line_margin_pct_derivation(shop_ctx):
+    """Margin % derives from original vs base price: LOCAL markup, RAG 0.00.
+
+    Missing (None) or zero original prices derive ``None`` (rendered "—");
+    the app layer guards the division by zero the same way.
+    """
+    db_session = shop_ctx["session"]
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, conversion_pending=False)
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="CLV-LOCAL",
+            cantidad=1,
+            base_price=Decimal("125.00"),
+            final_price=Decimal("118.75"),
+            adjustment=Decimal(0),
+            name="Local item",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal("100.00"),
+        )
+    )
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-1",
+            cantidad=2,
+            base_price=Decimal("250.00"),
+            final_price=Decimal("237.50"),
+            adjustment=Decimal(0),
+            name="RAG item",
+            source="RAG",
+            supplier="MSA",
+            moneda="USD",
+            precio_original=Decimal("250.0000"),
+        )
+    )
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="NO-ORIG",
+            cantidad=1,
+            base_price=Decimal("50.00"),
+            final_price=Decimal("47.50"),
+            adjustment=Decimal(0),
+            name="No snapshot",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=None,
+        )
+    )
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="ZERO-ORIG",
+            cantidad=1,
+            base_price=Decimal("50.00"),
+            final_price=Decimal("47.50"),
+            adjustment=Decimal(0),
+            name="Zero snapshot",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal(0),
+        )
+    )
+    db_session.flush()
+
+    lines = order_detail(db_session, order.order_id)["lines"]
+    assert lines[0]["margin_pct"] == "25.00"  # (125 / 100 − 1) × 100
+    assert lines[1]["margin_pct"] == "0.00"  # RAG: base == original × rate
+    assert lines[2]["margin_pct"] is None
+    assert lines[3]["margin_pct"] is None
+    assert lines[1]["line_total"] == "475.00"  # 237.50 × 2
 
 
 def test_exchange_rate_rejects_ars_and_persists_usd(shop_ctx):
@@ -624,6 +715,77 @@ def test_legal_actions_per_state(estado, expected):
     assert legal_actions(estado) == expected
 
 
+# ------------------------------------------------ state progress diagram (pure)
+
+
+def _pill_style(html: str, state: str) -> str:
+    """The inline style of one state pill in the diagram HTML."""
+    match = re.search(rf'data-state="{state}" style="([^"]*)"', html)
+    assert match is not None, f"missing pill for {state}"
+    return match.group(1)
+
+
+def _is_colored(style: str) -> bool:
+    """A pill is colored when its background is not the gray/white outline."""
+    return "background:#ffffff" not in style
+
+
+@pytest.mark.parametrize(
+    ("estado", "passed", "future"),
+    [
+        ("DRAFT", ("DRAFT",), ("CONFIRMED", "PICKING", "READY_FOR_DELIVERY", "CLOSED")),
+        ("CONFIRMED", ("DRAFT", "CONFIRMED"), ("PICKING", "READY_FOR_DELIVERY", "CLOSED")),
+        ("PICKING", ("DRAFT", "CONFIRMED", "PICKING"), ("READY_FOR_DELIVERY", "CLOSED")),
+        (
+            "READY_FOR_DELIVERY",
+            ("DRAFT", "CONFIRMED", "PICKING", "READY_FOR_DELIVERY"),
+            ("CLOSED",),
+        ),
+        (
+            "CLOSED",
+            ("DRAFT", "CONFIRMED", "PICKING", "READY_FOR_DELIVERY", "CLOSED"),
+            (),
+        ),
+    ],
+)
+def test_order_state_diagram_colors_passed_and_future_states(estado, passed, future):
+    """Passed and current main-path states are colored; future states stay gray."""
+    html = order_state_diagram(estado)
+    for state in passed:
+        assert _is_colored(_pill_style(html, state))
+    for state in future:
+        assert not _is_colored(_pill_style(html, state))
+
+
+def test_order_state_diagram_canceled_grays_path_and_highlights_badge():
+    """A canceled order grays the whole main path and highlights the Canceled badge."""
+    html = order_state_diagram("CANCELED")
+    for state in ("DRAFT", "CONFIRMED", "PICKING", "READY_FOR_DELIVERY", "CLOSED"):
+        assert not _is_colored(_pill_style(html, state))
+    canceled_style = _pill_style(html, "CANCELED")
+    assert _is_colored(canceled_style)
+    assert "#dc2626" in canceled_style
+
+
+@pytest.mark.parametrize("estado", ["", "WEIRD"])
+def test_order_state_diagram_unknown_estado_renders_all_uncolored(estado):
+    """Unknown or empty states render gray with no highlighted badge."""
+    html = order_state_diagram(estado)
+    for state in ("DRAFT", "CONFIRMED", "PICKING", "READY_FOR_DELIVERY", "CLOSED", "CANCELED"):
+        assert not _is_colored(_pill_style(html, state))
+
+
+def test_app_customer_orders_tab_has_state_progress_diagram():
+    """The Customer Orders tab renders the order state progress diagram."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    html_components = [c for c in tab.children if type(c).__name__ == "HTML"]
+    assert len(html_components) == 1
+    assert 'data-state="DRAFT"' in (html_components[0].value or "")
+    markdown_values = [c.value for c in tab.children if type(c).__name__ == "Markdown"]
+    assert any("Order state progress" in (value or "") for value in markdown_values)
+
+
 def _committed_order(session, *, estado: OrderEstado) -> Order:
     order = Order(customer_id=1, estado=estado)
     session.add(order)
@@ -786,3 +948,102 @@ def test_app_customer_orders_tab_has_fulfillment_buttons():
     assert "Deliver (Ready → Closed)" in labels
     assert "Cancel order" in labels
     assert "Legal actions for the selected order" in labels
+
+
+def test_app_customer_orders_tab_selects_rows_without_order_id_input():
+    """El tab ya no tiene el input Order ID ni el botón de detalle; hay grilla de líneas."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    labels = _all_labels(tab)
+    assert "Order ID" not in labels
+    assert "Show line detail" not in labels
+    # The detail grid, diagram and action buttons remain.
+    assert "Order lines" in labels
+    assert "Legal actions for the selected order" in labels
+    assert "Start picking (Confirmed → Picking)" in labels
+
+
+def test_order_row_selected_returns_state_label_diagram_and_lines(shop_ctx):
+    """Clicking a row yields the selected id, legal actions, diagram and frozen lines."""
+    db_session = shop_ctx["session"]
+    order = Order(
+        customer_id=1,
+        estado=OrderEstado.CONFIRMED,
+        subtotal=Decimal("270.00"),
+        total=Decimal("256.50"),
+        conversion_pending=False,
+    )
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="CLV-001",
+            cantidad=2,
+            base_price=Decimal("135.00"),
+            final_price=Decimal("128.25"),
+            adjustment=Decimal(0),
+            name="Clavos Paris 2 Pulgadas",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal("100.00"),
+        )
+    )
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-2",
+            cantidad=1,
+            base_price=Decimal("1100.00"),
+            final_price=Decimal("1045.00"),
+            adjustment=Decimal(0),
+            name="RAG item",
+            source="RAG",
+            supplier="RS",
+            moneda="USD",
+            precio_original=None,
+        )
+    )
+    db_session.commit()
+
+    evt = SimpleNamespace(
+        selected=True,
+        row_value=[order.order_id, "Ferretería Don Juan", "CONFIRMED", "270.00", "256.50", False],
+    )
+    selected_id, label, html, lines = _order_row_selected(evt)  # type: ignore[arg-type]
+
+    assert selected_id == order.order_id
+    assert "start_picking" in label
+    assert _is_colored(_pill_style(html, "CONFIRMED"))
+    assert not _is_colored(_pill_style(html, "PICKING"))
+    assert lines == [
+        [
+            "CLV-001",
+            "Clavos Paris 2 Pulgadas",
+            2,
+            "100.00",
+            "35.00",
+            "135.00",
+            "256.50",
+        ],
+        ["RAG-2", "RAG item", 1, "—", "—", "1100.00", "1045.00"],
+    ]
+
+
+@pytest.mark.parametrize(
+    "evt",
+    [
+        SimpleNamespace(selected=False, row_value=[1, "cust", "DRAFT"]),
+        SimpleNamespace(selected=True, row_value=None),
+        SimpleNamespace(selected=True, row_value=[]),
+    ],
+)
+def test_order_row_selected_deselection_returns_cleared_state(evt):
+    """Deselecting a row (or an event without a row) clears the whole panel."""
+    assert _order_row_selected(evt) == (  # type: ignore[arg-type]
+        None,
+        "Seleccioná un pedido.",
+        order_state_diagram(""),
+        [],
+    )

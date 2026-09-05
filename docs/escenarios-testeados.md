@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 365, agrupados en 30 dominios.
+**Total de escenarios:** 373, agrupados en 30 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -32,7 +32,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 37
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 45
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -515,6 +515,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Una fila sin SKU existente crea un producto nuevo con margen del supplier. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
 - Customer Orders returns persisted order totals and frozen line fields. _(`test_customer_orders_list_and_detail_include_ars_totals_and_snapshots`)_
+- Margin % derives from original vs base price: LOCAL markup, RAG 0.00. _(`test_order_line_margin_pct_derivation`)_
 - ARS cannot be edited while a USD rate is stored with a timestamp. _(`test_exchange_rate_rejects_ars_and_persists_usd`)_
 - Loading a rate recomputes a pending RAG order and clears its flag. _(`test_recompute_pending_conversion_clears_flag_and_fills_totals`)_
 - The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_
@@ -535,6 +536,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
   - READY_FOR_DELIVERY
   - CANCELED
   - CLOSED
+- Passed and current main-path states are colored; future states stay gray. _(`test_order_state_diagram_colors_passed_and_future_states`)_
+  - DRAFT
+  - CONFIRMED
+  - PICKING
+  - READY_FOR_DELIVERY
+  - CLOSED
+- A canceled order grays the whole main path and highlights the Canceled badge. _(`test_order_state_diagram_canceled_grays_path_and_highlights_badge`)_
+- Unknown or empty states render gray with no highlighted badge. _(`test_order_state_diagram_unknown_estado_renders_all_uncolored`)_
+  - (vacío)
+  - WEIRD
+- The Customer Orders tab renders the order state progress diagram. _(`test_app_customer_orders_tab_has_state_progress_diagram`)_
 - La acción start picking transiciona y hace commit (patrón po.py). _(`test_start_picking_action_commits_transition`)_
 - Confirmado → Picking → Ready → Closed; deliver guarda la fecha de entrega. _(`test_fulfillment_chain_commits_to_closed_with_delivery_date`)_
 - Cancelar desde Confirmado libera reservas; el actor del ajuste es backoffice. _(`test_cancel_action_releases_reservations_with_backoffice_actor`)_
@@ -542,6 +554,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Cancelar desde Picking restaura stock y audita con actor backoffice. _(`test_cancel_action_restores_deducted_stock_with_audit`)_
 - El monitor muestra los seis estados del pedido. _(`test_monitor_shows_all_six_states`)_
 - El tab Customer Orders expone las cuatro acciones de cumplimiento. _(`test_app_customer_orders_tab_has_fulfillment_buttons`)_
+- El tab ya no tiene el input Order ID ni el botón de detalle; hay grilla de líneas. _(`test_app_customer_orders_tab_selects_rows_without_order_id_input`)_
+- Clicking a row yields the selected id, legal actions, diagram and frozen lines. _(`test_order_row_selected_returns_state_label_diagram_and_lines`)_
+- Deselecting a row (or an event without a row) clears the whole panel. _(`test_order_row_selected_deselection_returns_cleared_state`)_
 
 ## Feature flags por fase
 
