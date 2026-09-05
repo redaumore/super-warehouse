@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 379, agrupados en 31 dominios.
+**Total de escenarios:** 380, agrupados en 31 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -21,7 +21,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
-- [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
+- [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
 - [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
@@ -379,6 +379,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Mayúsculas, puntuación y espacios extra no rompen la resolución. _(`test_unnormalized_input_still_resolves`)_
 - La búsqueda híbrida rankea primero el producto objetivo. _(`test_search_ranks_right_product_first`)_
 - Un único candidato bajo el umbral no se adivina: presenta menú. _(`test_low_confidence_single_candidate_presents_menu`)_
+- Una query corta que solapa tokens de dos productos presenta el menú. _(`test_short_query_with_overlapping_tokens_presents_menu`)_
 - Una consulta sin coincidencia se reporta como NO_ENCONTRADO. _(`test_no_match_is_reported`)_
 - La similitud vectorial rankea correcto cuando el fuzzy es débil. _(`test_vector_auto_maps_when_fuzzy_is_weak`)_
 - Embeedings equidistantes presentan un menú de dos candidatos. _(`test_vector_ambiguity_presents_two_candidate_menu`)_
