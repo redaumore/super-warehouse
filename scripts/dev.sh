@@ -18,6 +18,11 @@
 #   scripts/dev.sh up [--seed]   # start everything (default subcommand: up)
 #   scripts/dev.sh down          # stop app processes + Postgres (data kept)
 #   scripts/dev.sh status        # show what is running
+#   scripts/dev.sh backend       # restart only the intake API + telegram loop
+#   scripts/dev.sh backoffice    # restart only the Gradio backoffice UI
+#   scripts/dev.sh rag           # restart only the RAG catalog API
+#
+# Restarting a single component does not touch Postgres or the others.
 #
 # Logs and PID files live in ./logs/ (gitignored).
 set -euo pipefail
@@ -43,7 +48,7 @@ warn() { printf '\033[1;33m[dev]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[dev]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 is_alive() { kill -0 "$1" 2>/dev/null; }
@@ -157,6 +162,105 @@ wait_for_http() {
   die "$name did not respond within ${timeout}s — see $LOG_DIR/$name.log"
 }
 
+stop_one() {
+  # Stop a single dev.sh-managed process by component name (pid file).
+  local name="$1" pid pid_file="$LOG_DIR/$1.pid"
+  [[ -f "$pid_file" ]] || { info "$name is not running (no pid file)"; return 0; }
+  pid="$(cat "$pid_file")"
+  if is_alive "$pid"; then
+    info "Stopping $name (pid $pid)"
+    kill -TERM "$pid"
+    local deadline=$((SECONDS + 15))
+    while ((SECONDS < deadline)) && is_alive "$pid"; do
+      sleep 1
+    done
+    if is_alive "$pid"; then
+      warn "$name ignored SIGTERM — sending SIGKILL"
+      kill -KILL "$pid"
+    fi
+    # The telegram loop cleans up (deleteWebhook + ngrok) on SIGTERM.
+  else
+    info "$name is not running"
+  fi
+  rm -f "$pid_file"
+}
+
+wait_port_free() {
+  # Give a just-killed process a moment to release its port before restarting.
+  local port="$1" name="$2" deadline=$((SECONDS + 15))
+  while ((SECONDS < deadline)); do
+    [[ -z "$(port_pid "$port")" ]] && return 0
+    sleep 1
+  done
+  warn "Port $port is still in use after stopping $name"
+}
+
+start_backoffice() {
+  ensure_venv
+  ensure_env_file
+  if [[ -n "$(port_pid "$BACKOFFICE_PORT")" ]]; then
+    warn "Port $BACKOFFICE_PORT is already in use — skipping backoffice"
+    return 0
+  fi
+  start_service backoffice "$PY" -m src.backoffice.app
+  wait_for_http "http://127.0.0.1:$BACKOFFICE_PORT/" backoffice 60
+}
+
+start_rag() {
+  ensure_env_file
+  if [[ -n "$(port_pid "$RAG_PORT")" ]]; then
+    warn "Port $RAG_PORT is already in use — skipping RAG catalog API"
+    return 0
+  fi
+  if ! ensure_rag_venv; then
+    warn "RAG venv could not be prepared — skipping RAG catalog API (see log above)"
+    return 0
+  fi
+  start_service rag "$RAG_PY" "$RAG_DIR/cli.py" serve --port "$RAG_PORT"
+  wait_for_http "http://127.0.0.1:$RAG_PORT/api/v1/health" rag 90
+}
+
+start_telegram() {
+  ensure_venv
+  ensure_env_file
+  if [[ -n "$(port_pid "$TELEGRAM_PORT")" ]]; then
+    warn "Port $TELEGRAM_PORT is already in use — skipping telegram loop"
+    return 0
+  fi
+  grep -q '^TELEGRAM_BOT_TOKEN=.\+' .env \
+    || die "TELEGRAM_BOT_TOKEN is not set in .env — the telegram loop needs it."
+  command -v ngrok >/dev/null 2>&1 \
+    || die "ngrok is not installed or not on PATH (brew install ngrok && ngrok config add-authtoken <token>)."
+  start_service telegram "$PY" scripts/telegram_loop.py --port "$TELEGRAM_PORT"
+  wait_for_http "http://127.0.0.1:$TELEGRAM_PORT/healthz" telegram 90
+}
+
+do_restart() {
+  # Restart a single component; Postgres and the other components stay up.
+  local component="${1:-}"
+  mkdir -p "$LOG_DIR"
+  case "$component" in
+    backend | telegram)
+      stop_one telegram
+      wait_port_free "$TELEGRAM_PORT" telegram
+      start_telegram
+      ;;
+    backoffice)
+      stop_one backoffice
+      wait_port_free "$BACKOFFICE_PORT" backoffice
+      start_backoffice
+      ;;
+    rag)
+      stop_one rag
+      wait_port_free "$RAG_PORT" rag
+      start_rag
+      ;;
+    *)
+      die "Unknown component '${component}'. Valid components: backend, backoffice, rag"
+      ;;
+  esac
+}
+
 do_up() {
   local seed=0
   [[ "${1:-}" == "--seed" ]] && seed=1
@@ -233,27 +337,10 @@ do_up() {
 }
 
 do_down() {
-  local pid_file name pid
+  local pid_file
   for pid_file in "$LOG_DIR"/*.pid; do
     [[ -f "$pid_file" ]] || continue
-    name="$(basename "$pid_file" .pid)"
-    pid="$(cat "$pid_file")"
-    if is_alive "$pid"; then
-      info "Stopping $name (pid $pid)"
-      kill -TERM "$pid"
-      local deadline=$((SECONDS + 15))
-      while ((SECONDS < deadline)) && is_alive "$pid"; do
-        sleep 1
-      done
-      if is_alive "$pid"; then
-        warn "$name ignored SIGTERM — sending SIGKILL"
-        kill -KILL "$pid"
-      fi
-      # The telegram loop cleans up (deleteWebhook + ngrok) on SIGTERM.
-    else
-      info "$name is not running"
-    fi
-    rm -f "$pid_file"
+    stop_one "$(basename "$pid_file" .pid)"
   done
   info "Stopping Postgres (data volume preserved)"
   docker compose stop db 2>/dev/null || warn "Docker daemon not running — skipping db stop"
@@ -303,6 +390,8 @@ case "${1:-up}" in
   up) shift; do_up "$@" ;;
   down) do_down ;;
   status) do_status ;;
+  restart) shift; do_restart "${1:-}" ;;
+  backend | telegram | backoffice | rag) do_restart "$1" ;;
   -h | --help) usage ;;
   *) usage >&2; exit 1 ;;
 esac
