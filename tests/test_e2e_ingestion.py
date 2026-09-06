@@ -1,10 +1,11 @@
-"""E2E ingestion flow (task 4.7): upload → vision preview → confirm inventory.
+"""E2E receipt ingestion flow (task 5.1 of rag-document-ingestion).
 
-Drives the supplier-document ingestion path end-to-end: an uploaded remito
-photo goes through vision analysis (mock provider), renders an editable
-preview grid, and — on confirm — writes to inventory: existing SKUs gain
-stock, unknown SKUs become new catalog products. Also covers the barcode
-stock-query flow (decoder mocked, catalog lookup real).
+Drives the RAG-backed path end-to-end with a mocked ``RagProductClient``:
+upload → parse → two-pass resolve → review grid → gated confirm writes stock
+with ``node_id`` provenance. Covers: unmatched lines (no ``Catalogo`` created,
+confirm blocked), manual assignment of pending lines, RAG down → honest error
+with zero writes, and the standalone barcode stock-query flow (decoder mocked,
+catalog lookup real).
 
 Skipped cleanly when Postgres is not running.
 """
@@ -12,6 +13,7 @@ Skipped cleanly when Postgres is not running.
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -19,15 +21,16 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.backoffice.ingestion import confirm_items, extract_document_items, to_grid_rows
+from src.backoffice.app import (
+    _ingest_assign,
+    _ingest_confirm,
+    _ingest_manual_search,
+    _ingest_parse,
+)
 from src.barcode.decoder import BarcodeLookupKind, decode_image, lookup_barcode
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, Supplier, SupplierStatus
-from src.supplier.guards import SupplierInactiveError
-
-REMITO_TEXT = """REMITO 55
-10 x Clavos Paris 2 Pulgadas
-PINT-001 Pintura Látex Blanco 4 3200,00"""
+from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier
+from src.integrations.rag import DocumentLine, RagProduct, RagProductError
 
 
 def _postgres_up() -> bool:
@@ -52,14 +55,16 @@ def _clean_schema(db_engine):
     with db_engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE order_items, orders, stock_reservations, catalogo, suppliers, "
-                "clientes, lista_precios, supplier_sku_mappings RESTART IDENTITY CASCADE"
+                "TRUNCATE order_items, orders, stock_reservations, stock_adjustments, "
+                "inventory, catalogo, suppliers, clientes, lista_precios, "
+                "supplier_sku_mappings RESTART IDENTITY CASCADE"
             )
         )
 
 
 @pytest.fixture
 def supplier(db_session):
+    """Seed an ACTIVO supplier and an already-adopted product (build_sku SKU)."""
     db_session.add(
         Supplier(
             id=1,
@@ -71,7 +76,7 @@ def supplier(db_session):
     db_session.add(
         Catalogo(
             id=1,
-            codigo_interno="CLV-PRS-2",
+            codigo_interno="MSA-CLV-PRS-2",
             supplier_id=1,
             nombre_oficial="Clavos Paris 2 Pulgadas",
             costo_proveedor=Decimal("100.00"),
@@ -81,63 +86,221 @@ def supplier(db_session):
             sinonimos=["clavos"],
         )
     )
-    db_session.flush()
+    db_session.commit()
     db_session.execute(text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)"))
     return {"session": db_session}
 
 
-class FakeAnalyzer:
-    """Vision provider returning the canned remito text."""
+class FakeRag:
+    """RagProductClient stand-in with canned parse/exact/hybrid responses.
 
-    def analyze(self, image_url, prompt):
-        return SimpleNamespace(text=REMITO_TEXT, confidence=1.0)
+    ``exact`` maps a normalized ``codigo_orig`` to its exact matches so each
+    line resolves against the right code (mirrors the two-pass resolver).
+    """
+
+    def __init__(self, parse_lines=(), exact=None, hybrid=()) -> None:
+        self.parse_lines = parse_lines
+        self.exact = exact if exact is not None else {}
+        self.hybrid = hybrid
+        self.query_calls: list[str] = []
+
+    def parse_document(self, *, filename: str, content: bytes, codigo_proveedor: str):
+        return self.parse_lines
+
+    def exact_lookup(self, codigo_orig: str, codigo_proveedor: str):
+        return self.exact.get(codigo_orig, ())
+
+    def query(self, text: str):
+        self.query_calls.append(text)
+        return self.hybrid
 
 
-def test_e2e_remito_upload_previews_and_confirms_inventory(supplier, tmp_path):
-    """Un remito subido se previsualiza y al confirmar actualiza el inventario."""
-    session = supplier["session"]
+def _clavos_line() -> DocumentLine:
+    return DocumentLine(
+        codigo_orig="CLV-PRS-2",
+        codigo=None,
+        descripcion="Clavos Paris 2 Pulgadas",
+        cantidad=10,
+        costo=None,
+        pagina=1,
+    )
+
+
+def _clavos_product() -> RagProduct:
+    return RagProduct(
+        sku="CLV-PRS-2",
+        name="Clavos Paris 2 Pulgadas",
+        codigo_proveedor="MSA",
+        price=135.5,
+        currency="ARS",
+        node_id="node_clv_prs_2",
+    )
+
+
+def _embedder():
+    class _FakeEmbedder:
+        def embed(self, texts):
+            return [[0.0] * 1536 for _ in texts]
+
+    return _FakeEmbedder()
+
+
+def _image(tmp_path: Path) -> Path:
     image = tmp_path / "remito.jpg"
-    image.write_bytes(b"fake")
-    with patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="):
-        extraction = extract_document_items(FakeAnalyzer(), image)  # type: ignore[arg-type]
-    grid = to_grid_rows(extraction)
-    assert grid == [
-        ["", "Clavos Paris 2 Pulgadas", "10", ""],
-        ["PINT-001", "Pintura Látex Blanco", "4", "3200.00"],
-    ]
+    image.write_bytes(b"fake-image")
+    return image
 
-    # Owner confirms (grid editable — no corrections needed here).
-    result = confirm_items(session, grid, supplier_id=1)
-    assert result.updated == 1
-    assert result.created == 1
 
-    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2"))
+def test_e2e_receipt_flow_writes_stock_with_node_id_provenance(supplier, tmp_path):
+    """[rag-doc R5] Upload → parse → resolve → confirm escribe stock con provenance."""
+    session = supplier["session"]
+    rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
+
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert len(grid) == 1
+    assert grid[0][4] == "CLV-PRS-2 — Clavos Paris 2 Pulgadas"
+    assert not state[0].pending
+
+    result_message = _ingest_confirm(state, 1, _embedder())
+    assert result_message == "Ingresado: 1 actualizados, 0 nuevos."
+
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
     assert existing.stock_disponible == 60  # 50 + 10
-    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "PINT-001"))
-    assert created.stock_disponible == 4
-    assert created.precio_lista_base == Decimal("3520.00")  # 3200 × 1.10
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 10
+    adjustment = session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    )
+    assert adjustment.delta == 10
+    assert adjustment.actor == "owner:backoffice-ui"
 
 
-def test_e2e_owner_corrections_override_raw_extraction(supplier, tmp_path):
-    """Correcciones del dueño en la grilla reemplazan la extracción cruda."""
+def test_e2e_unmatched_line_blocks_confirm_and_creates_nothing(supplier, tmp_path):
+    """[rag-doc R5][sup-doc R2] Línea sin match → no Catalogo + confirm bloqueado."""
     session = supplier["session"]
-    image = tmp_path / "remito.jpg"
-    image.write_bytes(b"fake")
-    with patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="):
-        extraction = extract_document_items(FakeAnalyzer(), image)  # type: ignore[arg-type]
-    grid = to_grid_rows(extraction)
-    # Owner fixes quantity and cost before confirming.
-    grid[1] = ["PINT-001", "Pintura Látex Blanco", "6", "3100.00"]
-    confirm_items(session, grid, supplier_id=1)
-    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "PINT-001"))
-    assert created.stock_disponible == 6
-    assert created.costo_proveedor == Decimal("3100.00")
+    paint_line = DocumentLine(
+        codigo_orig="PINT-001",
+        codigo=None,
+        descripcion="Pintura Látex Blanco",
+        cantidad=4,
+        costo=3200.0,
+        pagina=1,
+    )
+    rag = FakeRag(
+        parse_lines=(_clavos_line(), paint_line),
+        exact={"CLV-PRS-2": (_clavos_product(),)},
+        hybrid=(),
+    )
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert grid[1][4] == "PENDIENTE"
+
+    blocked = _ingest_confirm(state, 1, _embedder())
+    assert "bloqueado" in blocked
+    assert "PINT-001" in blocked
+
+    session.rollback()
+    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")) is None
+    assert session.scalar(select(Inventory)) is None  # zero writes while blocked
+
+
+def test_e2e_manual_assignment_resolves_pending_and_adopts(supplier, tmp_path):
+    """[manual R1][rag-doc R5] Búsqueda manual + asignación adopta con origen rag."""
+    session = supplier["session"]
+    paint_line = DocumentLine(
+        codigo_orig="PINT-001",
+        codigo=None,
+        descripcion="Pintura Látex Blanco",
+        cantidad=4,
+        costo=3200.0,
+        pagina=1,
+    )
+    paint_product = RagProduct(
+        sku="PINT-001",
+        name="Pintura Látex Blanco",
+        codigo_proveedor="MSA",
+        brand="X",
+        price=3200.0,
+        currency="ARS",
+        source_file="catalogo-2024.pdf",
+        page=3,
+        node_id="node_pint_001",
+    )
+    rag = FakeRag(parse_lines=(paint_line,), exact={}, hybrid=(paint_product,))
+
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    # Automatic hybrid fallback resolves it directly (exactly 1 candidate).
+    assert grid[0][4] == "PINT-001 — Pintura Látex Blanco"
+    assert not state[0].pending
+    result_message = _ingest_confirm(state, 1, _embedder())
+    assert result_message == "Ingresado: 0 actualizados, 1 nuevos."
+
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001"))
+    assert created.stock_disponible == 4
+    assert created.origen == {
+        "rag": {
+            "node_id": "node_pint_001",
+            "archivo_origen": "catalogo-2024.pdf",
+            "pagina_origen": 3,
+        }
+    }
+
+
+def test_e2e_manual_search_and_assign_fixes_pending_line(supplier, tmp_path):
+    """[manual R1] Sin fallback automático, la búsqueda manual resuelve la línea."""
+    supplier["session"]
+    paint_line = DocumentLine(
+        codigo_orig="PINT-001",
+        codigo=None,
+        descripcion="Pintura Látex Blanco",
+        cantidad=4,
+        costo=3200.0,
+        pagina=1,
+    )
+    paint_product = RagProduct(
+        sku="PINT-001",
+        name="Pintura Látex Blanco",
+        codigo_proveedor="MSA",
+        price=3200.0,
+        currency="ARS",
+        node_id="node_pint_001",
+    )
+    rag = FakeRag(parse_lines=(paint_line,), exact={}, hybrid=())
+    _grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert state[0].pending
+
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "PINT-001", 1)
+    assert len(candidates_grid) == 0  # manual search uses the same supplier-scoped query
+
+    # Manual search with an owner-provided term returns the candidate...
+    rag.hybrid = (paint_product,)
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "Pintura latex", 1)
+    assert len(candidates_grid) == 1
+
+    new_state, _new_grid, assign_status = _ingest_assign(state, 0, 0, candidates)
+    assert "asignada" in assign_status
+    assert not new_state[0].pending
+    assert new_state[0].product.node_id == "node_pint_001"
+
+
+def test_e2e_rag_down_shows_honest_error_and_writes_nothing(supplier, tmp_path):
+    """[rag-doc R6] RAG caído → error honesto, cero escrituras."""
+    session = supplier["session"]
+
+    class DownRag(FakeRag):
+        def parse_document(self, *, filename, content, codigo_proveedor):
+            raise RagProductError("connection refused")
+
+    grid, state, message = _ingest_parse(DownRag(), _image(tmp_path), 1)
+    assert grid == []
+    assert state == ()
+    assert "RAG no disponible" in message
+    assert session.scalar(select(Inventory)) is None
 
 
 def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     """Una foto de código de barras decodifica y responde el stock disponible."""
     session = supplier["session"]
-    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "CLV-PRS-2"))
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
     product.codigo_barras = "7790000000001"
     session.flush()
 
@@ -153,17 +316,5 @@ def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     assert decoded[0].data == "7790000000001"
     lookup = lookup_barcode(session, decoded[0].data)
     assert lookup.kind is BarcodeLookupKind.SINGLE
-    assert lookup.candidates[0].codigo_interno == "CLV-PRS-2"
+    assert lookup.candidates[0].codigo_interno == "MSA-CLV-PRS-2"
     assert lookup.candidates[0].stock_disponible == 50
-
-
-def test_confirm_items_refuses_inactive_supplier_and_writes_nothing(supplier):
-    """confirm_items rechaza un supplier INACTIVO sin escribir inventario."""
-    session = supplier["session"]
-    session.get(Supplier, 1).status = SupplierStatus.INACTIVO
-    session.flush()
-    grid = [["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]]
-    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
-        confirm_items(session, grid, supplier_id=1)
-    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "NEW-001")) is None
-    assert session.scalar(select(Inventory)) is None

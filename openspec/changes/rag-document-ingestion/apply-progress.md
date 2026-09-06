@@ -10,8 +10,8 @@ Budget: 2500 changed lines (forecast 1950–2400) — no size exception.
 |-------|-------|--------------|--------|--------|
 | W1 | rag-api endpoints + parser + schemas + tests | `.venv/bin/python -m pytest tests/test_ingestion.py` (rag-api venv) | 9 passed (+19 existing rag-api = 28) | `f863b36` |
 | W2 | client `parse_document`/`exact_lookup` | `.venv/bin/pytest tests/test_rag.py -k "parse or exact"` | 9 passed (full file 33 passed) | `f820992` |
-| W3+W4 | ingestion.py rewrite + Ingestion tab UI | W3: `pytest tests/test_backoffice.py -k "receipt or resolve or ingest"` = 20 passed; W4: `-k "app_ingest"` = 6 passed; full file 76 passed | green | `??` |
-| W5 | E2E rewrite + cleanup + full suite | `tests/test_e2e_ingestion.py` | pending | — |
+| W3+W4 | ingestion.py rewrite + Ingestion tab UI | W3: `pytest tests/test_backoffice.py -k "receipt or resolve or ingest"` = 20 passed; W4: `-k "app_ingest"` = 6 passed; full file 76 passed | green | `7ca1ce7` |
+| W5 | E2E rewrite + cleanup + full suite | `pytest tests/test_e2e_ingestion.py` = 6 passed; full `pytest` = 841 passed; `ruff check src tests` clean; `mypy src` = 8 pre-existing errors (baseline 10, none new) | green | `??` |
 
 ## Test Environment
 
@@ -43,7 +43,28 @@ Budget: 2500 changed lines (forecast 1950–2400) — no size exception.
   writes `{"rag": {node_id, archivo_origen, pagina_origen}}` and requires `node_id` (fail closed).
 - Receipt tests seed catalog rows with the `build_sku`-convention SKU (e.g. `MSA-CLV-001`) since
   `ingest_receipt_lines` locates existing products by `build_sku(supplier.code, codigo_orig)`.
+- **Task 5.2 — dead-code deferral (no code change):** `src/supplier/ocr.py` remito helpers
+  (`extract_document` :162, `parse_line_items` :120) and their tests (`tests/test_ocr.py`:54–102)
+  are now unreferenced by the new flow but are NOT deleted — the same file's price-list helpers
+  stay live. Flagged for follow-up cleanup in the PR notes.
+- **Task 5.3 results:** `ruff check src tests` = all checks passed (10 issues auto-fixed in new
+  tests). `mypy src` = 8 errors, ALL pre-existing on the base commit (baseline was 10; the 2 old
+  `_ingest_confirm` errors disappeared; none introduced by this change). Full `pytest` = 841 passed
+  (Postgres running; rag-api suite separately 28 passed). `_rag_price` (`customer.py:483`) contract
+  unchanged — `price_lookup` 404→None preserved (see W2 note); adoption flow untouched
+  (`adoption.py` unmodified, `test_adoption.py` green).
+- Commit count vs tasks.md: W1, W2, W3+W4 (merged), W5 — 4 work-unit commits instead of 5 due to
+  the W3/W4 import coupling (documented above).
 
 ## Blockers
 
 - none
+
+## Work Unit Evidence
+
+| Unit | Focused test (exact result) | Runtime harness | Rollback boundary |
+|------|-----------------------------|-----------------|-------------------|
+| W1 | `pytest tests/test_ingestion.py` (rag-api venv): 9 passed; suite 28 passed | FastAPI TestClient, OpenAI monkeypatched (no live RAG/DB) | Revert `endpoints/ingestion.py`, `schemas/ingest.py`, `core/ingestion/document_parser.py`, router line |
+| W2 | `pytest tests/test_rag.py -k "parse or exact"`: 9 passed; file 33 passed | N/A — httpx.MockTransport unit boundary | Revert `src/integrations/rag.py` additions (keep price_lookup array unwrap with it) |
+| W3+W4 | `pytest tests/test_backoffice.py -k "receipt or resolve or ingest"`: 20 passed; `-k "app_ingest"`: 6 passed; file 76 passed | `python -m src.backoffice.app` (gradio); Docker pgvector | Revert `src/backoffice/ingestion.py` + app.py Ingestion tab/handlers (coupled) |
+| W5 | `pytest tests/test_e2e_ingestion.py`: 6 passed; full `pytest`: 841 passed | Docker pgvector, mock RagProductClient | Test-only revert; `src/supplier/ocr.py` untouched (deferral 5.2) |

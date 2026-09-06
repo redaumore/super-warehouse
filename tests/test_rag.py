@@ -550,4 +550,4 @@ def test_exact_lookup_timeout_raises_domain_error():
 def test_rag_client_timeout_bounded_by_settings():
     """El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73)."""
     client = _client(lambda request: httpx.Response(200, json=[]), rag_timeout_seconds=3.5)
-    assert client._holder._timeout == 3.5  # noqa: SLF001 — config plumbing probe
+    assert client._holder._timeout == 3.5

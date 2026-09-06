@@ -318,7 +318,7 @@ def _ingest_manual_search(
         candidates = hybrid_candidates(client, supplier_code, text)
     except RagProductError as exc:
         return [], (), f"Error: RAG no disponible ({exc})"
-    rows = [
+    rows: list[list[object]] = [
         [
             product.sku,
             product.name,
@@ -362,10 +362,11 @@ def _ingest_assign(
         return tuple(lines), _resolved_grid(lines), "Seleccioná una línea pendiente válida."
     if cand_idx < 0:
         return tuple(lines), _resolved_grid(lines), "Seleccioná un candidato de la grilla."
-    candidates_list = candidates if isinstance(candidates, (tuple, list)) else ()
-    if cand_idx >= len(candidates_list):
+    if not isinstance(candidates, (tuple, list)):
+        return tuple(lines), _resolved_grid(lines), "Buscá candidatos primero."
+    if cand_idx >= len(candidates):
         return tuple(lines), _resolved_grid(lines), "Seleccioná un candidato de la grilla."
-    product = candidates_list[cand_idx]
+    product = candidates[cand_idx]
     if not product.node_id:
         return tuple(lines), _resolved_grid(lines), "Error: el candidato no tiene procedencia (node_id)."
     current = lines[line_idx]

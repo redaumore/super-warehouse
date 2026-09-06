@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 436, agrupados en 33 dominios.
+**Total de escenarios:** 438, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -38,7 +38,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 64
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 6
 - [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
@@ -657,10 +657,12 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 ## E2E: ingesta de documentos
 
-- Un remito subido se previsualiza y al confirmar actualiza el inventario. _(`test_e2e_remito_upload_previews_and_confirms_inventory`)_
-- Correcciones del dueño en la grilla reemplazan la extracción cruda. _(`test_e2e_owner_corrections_override_raw_extraction`)_
+- [rag-doc R5] Upload → parse → resolve → confirm escribe stock con provenance. _(`test_e2e_receipt_flow_writes_stock_with_node_id_provenance`)_
+- [rag-doc R5][sup-doc R2] Línea sin match → no Catalogo + confirm bloqueado. _(`test_e2e_unmatched_line_blocks_confirm_and_creates_nothing`)_
+- [manual R1][rag-doc R5] Búsqueda manual + asignación adopta con origen rag. _(`test_e2e_manual_assignment_resolves_pending_and_adopts`)_
+- [manual R1] Sin fallback automático, la búsqueda manual resuelve la línea. _(`test_e2e_manual_search_and_assign_fixes_pending_line`)_
+- [rag-doc R6] RAG caído → error honesto, cero escrituras. _(`test_e2e_rag_down_shows_honest_error_and_writes_nothing`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
-- confirm_items rechaza un supplier INACTIVO sin escribir inventario. _(`test_confirm_items_refuses_inactive_supplier_and_writes_nothing`)_
 
 ## Observabilidad y logs por sesión
 

@@ -268,7 +268,7 @@ def _adopt_new(
         raise EmbeddingUnavailableError(
             f"embedding has {len(embedding)} dims, expected {_EMBED_DIMS}"
         )
-    costo = receipt.costo if receipt.costo is not None else _coerce_money(product.price)
+    costo = receipt.costo if receipt.costo is not None else (_coerce_money(product.price) or Decimal("0.00"))
     origen: dict[str, Any] = {
         "rag": {
             "node_id": product.node_id,

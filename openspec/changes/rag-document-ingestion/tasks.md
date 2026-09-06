@@ -57,8 +57,8 @@ Chain strategy: pending
 
 ## Phase 5: E2E + cleanup
 
-- [ ] 5.1 Rewrite `tests/test_e2e_ingestion.py`: RAG-backed flow with mocked RagProductClient — upload → parse → resolve → confirm writes stock with node_id provenance; unmatched line → no Catalogo created + confirm blocked; RAG down/slow → honest error, zero writes. Deps: 3.3, 4.3. Commit: W5. Accept: [rag-doc R5/R6] provenance writes, no-creation, down→no-writes; [sup-doc R2] parse failure → no write.
-- [ ] 5.2 Dead-code decision (design open Q): DEFER deletion of `src/supplier/ocr.py` remito helpers (`extract_document` :162, `parse_line_items` :120) + their tests (`tests/test_ocr.py`:54–102) — same file's price-list helpers stay live; flag removal in apply notes/PR for follow-up cleanup. No code change. Deps: 3.2 (helpers become unreferenced). Commit: W5.
-- [ ] 5.3 Run `ruff check src tests && mypy src`; full `pytest` (Postgres-dependent tests skip when down); confirm `src/agents/customer.py:483` `_rag_price` price_lookup contract unchanged (404→None) and adoption flow untouched. Deps: all. Commit: W5.
+- [x] 5.1 Rewrite `tests/test_e2e_ingestion.py`: RAG-backed flow with mocked RagProductClient — upload → parse → resolve → confirm writes stock with node_id provenance; unmatched line → no Catalogo created + confirm blocked; RAG down/slow → honest error, zero writes. Deps: 3.3, 4.3. Commit: W5. Accept: [rag-doc R5/R6] provenance writes, no-creation, down→no-writes; [sup-doc R2] parse failure → no write.
+- [x] 5.2 Dead-code decision (design open Q): DEFER deletion of `src/supplier/ocr.py` remito helpers (`extract_document` :162, `parse_line_items` :120) + their tests (`tests/test_ocr.py`:54–102) — same file's price-list helpers stay live; flag removal in apply notes/PR for follow-up cleanup. No code change. Deps: 3.2 (helpers become unreferenced). Commit: W5.
+- [x] 5.3 Run `ruff check src tests && mypy src`; full `pytest` (Postgres-dependent tests skip when down); confirm `src/agents/customer.py:483` `_rag_price` price_lookup contract unchanged (404→None) and adoption flow untouched. Deps: all. Commit: W5.
 
 Threat matrix: all rows N/A (no shell/subprocess/VCS/executable/process integration) — no RED tests beyond those above.
