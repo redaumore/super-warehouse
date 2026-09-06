@@ -15,6 +15,7 @@ import pytest
 
 from src.config import Settings
 from src.integrations.rag import (
+    DocumentLine,
     RagPrice,
     RagProduct,
     RagProductClient,
@@ -357,3 +358,196 @@ def test_price_lookup_transport_and_server_errors_raise_domain_error():
     server_client = _client(lambda request: httpx.Response(503, text="unavailable"))
     with pytest.raises(RagProductError, match="HTTP 503"):
         server_client.price_lookup("AT-5044")
+
+
+# ------------------------------------------------- document parse (W2 rag-doc)
+
+
+def _parse_response(*lines: dict) -> dict:
+    return {
+        "document": {
+            "lines": list(lines),
+            "source_filename": "remito.jpg",
+            "source_pages": 1,
+        }
+    }
+
+
+def test_parse_document_maps_lines_and_sends_multipart(monkeypatch):
+    """Un parse exitoso mapea líneas tipadas y envía multipart con proveedor."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["content_type"] = request.headers.get("content-type", "")
+        body = request.content.decode("utf-8", errors="replace")
+        seen["has_filename"] = "remito.jpg" in body
+        seen["has_provider"] = "AMX" in body
+        return httpx.Response(
+            200,
+            json=_parse_response(
+                {
+                    "codigo_orig": "AT-5044",
+                    "codigo": None,
+                    "descripcion": "Tarugo Fischer 8mm",
+                    "cantidad": 10,
+                    "costo": 135.5,
+                    "pagina": 1,
+                },
+                {
+                    "codigo_orig": "AT-5045",
+                    "codigo": None,
+                    "descripcion": "Tarugo Fischer 10mm",
+                    "cantidad": 4,
+                    "costo": None,
+                    "pagina": 1,
+                },
+            ),
+        )
+
+    client = _client(handler)
+    lines = client.parse_document(
+        filename="remito.jpg", content=b"fake-image", codigo_proveedor="AMX"
+    )
+
+    assert seen["url"] == "http://rag.test/api/v1/ingest/parse"
+    assert seen["content_type"].startswith("multipart/form-data")
+    assert seen["has_filename"] and seen["has_provider"]
+    assert lines == (
+        DocumentLine(
+            codigo_orig="AT-5044",
+            codigo=None,
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=10,
+            costo=135.5,
+            pagina=1,
+        ),
+        DocumentLine(
+            codigo_orig="AT-5045",
+            codigo=None,
+            descripcion="Tarugo Fischer 10mm",
+            cantidad=4,
+            costo=None,
+            pagina=1,
+        ),
+    )
+
+
+def test_parse_document_transport_failure_raises_domain_error():
+    """Un error de conexión al parsear se convierte en RagProductError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = _client(handler)
+    with pytest.raises(RagProductError, match="connection refused"):
+        client.parse_document(filename="remito.jpg", content=b"x", codigo_proveedor="AMX")
+
+
+def test_parse_document_timeout_raises_domain_error():
+    """Un timeout del parse se convierte en RagProductError, nunca transport crudo."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out")
+
+    client = _client(handler)
+    with pytest.raises(RagProductError, match="timed out"):
+        client.parse_document(filename="remito.jpg", content=b"x", codigo_proveedor="AMX")
+
+
+def test_parse_document_http_error_raises_domain_error():
+    """Un HTTP 500 del parse se convierte en RagProductError."""
+    client = _client(lambda request: httpx.Response(500, text="boom"))
+    with pytest.raises(RagProductError, match="HTTP 500"):
+        client.parse_document(filename="remito.jpg", content=b"x", codigo_proveedor="AMX")
+
+
+def test_parse_document_requires_filename_and_content():
+    """Faltar filename/content es un error de uso, no un error de transporte."""
+    client = _client(lambda request: httpx.Response(200, json=_parse_response()))
+    with pytest.raises(ValueError):
+        client.parse_document(filename="", content=b"x", codigo_proveedor="AMX")
+    with pytest.raises(ValueError):
+        client.parse_document(filename="remito.jpg", content=b"", codigo_proveedor="AMX")
+
+
+# ------------------------------------------------ exact lookup (W2 rag-product-query)
+
+
+def _exact_row(**fields: object) -> dict:
+    base = {
+        "codigo_orig": "AT-5044",
+        "codigo": "AMX-AT-5044",
+        "codigo_proveedor": "AMX",
+        "nombre_proveedor": "AMX",
+        "nombre": "Tarugo Fischer 8mm",
+        "marca": "Fischer",
+        "precio": 135.5,
+        "moneda": "ARS",
+        "pagina_origen": 12,
+        "archivo_origen": "catalogo-2024.pdf",
+        "node_id": "node_prod_AMX-AT-5044",
+    }
+    base.update(fields)
+    return base
+
+
+def test_exact_lookup_returns_all_matches_with_node_id():
+    """Un lookup exacto devuelve TODAS las coincidencias, cada una con node_id."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json=[
+                _exact_row(),
+                _exact_row(node_id="node_prod_AMX-AT-5044-bis", precio=140.0),
+            ],
+        )
+
+    client = _client(handler)
+    matches = client.exact_lookup("AT-5044", "AMX")
+
+    assert seen["url"] == "http://rag.test/api/v1/products/AT-5044?codigo_proveedor=AMX"
+    assert len(matches) == 2
+    assert matches[0].node_id == "node_prod_AMX-AT-5044"
+    assert matches[0].sku == "AT-5044"
+    assert matches[0].name == "Tarugo Fischer 8mm"
+    assert matches[1].node_id == "node_prod_AMX-AT-5044-bis"
+    assert matches[1].price == 140.0
+
+
+def test_exact_lookup_404_returns_empty_tuple():
+    """Un 404 (sin coincidencias) se mapea a tupla vacía, no a error."""
+    client = _client(lambda request: httpx.Response(404, json={"detail": "not found"}))
+
+    assert client.exact_lookup("UNKNOWN", "AMX") == ()
+
+
+def test_exact_lookup_transport_failure_raises_domain_error():
+    """Un error de conexión se convierte en RagProductError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = _client(handler)
+    with pytest.raises(RagProductError, match="connection refused"):
+        client.exact_lookup("AT-5044", "AMX")
+
+
+def test_exact_lookup_timeout_raises_domain_error():
+    """Un timeout del lookup exacto se convierte en RagProductError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out")
+
+    client = _client(handler)
+    with pytest.raises(RagProductError, match="timed out"):
+        client.exact_lookup("AT-5044", "AMX")
+
+
+def test_rag_client_timeout_bounded_by_settings():
+    """El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73)."""
+    client = _client(lambda request: httpx.Response(200, json=[]), rag_timeout_seconds=3.5)
+    assert client._holder._timeout == 3.5  # noqa: SLF001 — config plumbing probe

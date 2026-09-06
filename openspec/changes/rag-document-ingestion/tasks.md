@@ -37,9 +37,9 @@ Chain strategy: pending
 
 ## Phase 2: client methods (`src/integrations/rag.py`)
 
-- [ ] 2.1 RED `tests/test_rag.py` (httpx.MockTransport): parse_document maps lines; exact_lookup all matches + node_id; 404 → empty tuple; transport failure AND timeout → `RagProductError`, never raw httpx exception; bounded by `rag_timeout_seconds` (src/config.py:73). Deps: none (fails until 2.2–2.3). Commit: W2. Accept: [rag-product-query R1] parse/exact/provenance/domain-error/timeout scenarios.
-- [ ] 2.2 `src/integrations/rag.py`: frozen `DocumentLine` dataclass + `parse_document(self, *, filename, content, codigo_proveedor) -> tuple[DocumentLine, ...]` on `RagProductClient` — multipart POST **/api/v1/ingest/parse**; httpx.HTTPError → RagProductError; timeout = settings.rag_timeout_seconds. Deps: 1.4. Commit: W2. Accept: [rag-product-query R1] parse via client, domain error, bounded timeout.
-- [ ] 2.3 Same file: `exact_lookup(self, codigo_orig, codigo_proveedor) -> tuple[RagProduct, ...]` — GET **/api/v1/products/{sku}** + codigo_proveedor param; 404 → empty tuple; all matches mapped incl. node_id; failures → RagProductError. Deps: 1.4. Commit: W2. Accept: [rag-product-query R1] exact lookup + provenance; [rag-doc R3] exact hit resolves without hybrid.
+- [x] 2.1 RED `tests/test_rag.py` (httpx.MockTransport): parse_document maps lines; exact_lookup all matches + node_id; 404 → empty tuple; transport failure AND timeout → `RagProductError`, never raw httpx exception; bounded by `rag_timeout_seconds` (src/config.py:73). Deps: none (fails until 2.2–2.3). Commit: W2. Accept: [rag-product-query R1] parse/exact/provenance/domain-error/timeout scenarios.
+- [x] 2.2 `src/integrations/rag.py`: frozen `DocumentLine` dataclass + `parse_document(self, *, filename, content, codigo_proveedor) -> tuple[DocumentLine, ...]` on `RagProductClient` — multipart POST **/api/v1/ingest/parse**; httpx.HTTPError → RagProductError; timeout = settings.rag_timeout_seconds. Deps: 1.4. Commit: W2. Accept: [rag-product-query R1] parse via client, domain error, bounded timeout.
+- [x] 2.3 Same file: `exact_lookup(self, codigo_orig, codigo_proveedor) -> tuple[RagProduct, ...]` — GET **/api/v1/products/{sku}** + codigo_proveedor param; 404 → empty tuple; all matches mapped incl. node_id; failures → RagProductError. Deps: 1.4. Commit: W2. Accept: [rag-product-query R1] exact lookup + provenance; [rag-doc R3] exact hit resolves without hybrid.
 
 ## Phase 3: resolution + persistence use case (`src/backoffice/ingestion.py`)
 

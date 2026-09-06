@@ -37,8 +37,27 @@ logger = logging.getLogger("IngestionEndpoint")
 
 _EXACT_COLUMNS = (
     "node_id, codigo_producto, codigo_orig, marca, categoria_padre, categoria, "
-    "subcategoria, nombre_proveedor, codigo_proveedor, precio, moneda, pagina_origen"
+    "subcategoria, nombre_proveedor, codigo_proveedor, precio, moneda, pagina_origen, "
+    "text_content, metadata"
 )
+
+
+def _extract_text_field(text_content: str | None, key: str) -> str | None:
+    """Read one ``key: value`` line from the node's YAML-ish ``text_content``.
+
+    The product display name and description are not first-class columns of
+    ``catalogo_productos_rag`` — ``chunker.py`` embeds them as ``nombre:`` /
+    ``descripcion:`` lines in ``text_content`` (the text that was embedded).
+    """
+    if not text_content:
+        return None
+    prefix = f"{key}:"
+    for line in text_content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            value = stripped[len(prefix) :].strip()
+            return value or None
+    return None
 
 
 def _get_parser() -> DocumentLineParser:
@@ -78,19 +97,23 @@ def _fetch_exact_matches(
 
 def _row_to_product(row: dict[str, Any]) -> ProductLookupResponse:
     """Map one catalog row (dict_row) into the typed response DTO."""
+    metadata = row.get("metadata")
+    raw_metadata = metadata if isinstance(metadata, dict) else {}
+    text_content = row.get("text_content")
     return ProductLookupResponse(
         codigo_orig=row.get("codigo_orig"),
         codigo=row.get("codigo_producto"),
         codigo_proveedor=row.get("codigo_proveedor"),
         nombre_proveedor=row.get("nombre_proveedor"),
-        nombre=row.get("nombre_proveedor"),
+        nombre=_extract_text_field(text_content, "nombre"),
+        descripcion=_extract_text_field(text_content, "descripcion"),
         marca=row.get("marca"),
         categoria=row.get("categoria"),
         subcategoria=row.get("subcategoria"),
         precio=float(row["precio"]) if row.get("precio") is not None else None,
         moneda=row.get("moneda"),
         pagina_origen=row.get("pagina_origen"),
-        archivo_origen=None,
+        archivo_origen=raw_metadata.get("archivo_origen"),
         node_id=row.get("node_id"),
     )
 

@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 416, agrupados en 33 dominios.
+**Total de escenarios:** 426, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,7 +17,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 19
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 29
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -281,6 +281,16 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - A successful price lookup returns the offer and forwards the supplier code. _(`test_price_lookup_200_maps_price_and_supplier_query_parameter`)_
 - A missing supplier product is a normal lookup miss. _(`test_price_lookup_404_returns_none`)_
 - Transport and server failures never leak raw HTTP exceptions. _(`test_price_lookup_transport_and_server_errors_raise_domain_error`)_
+- Un parse exitoso mapea líneas tipadas y envía multipart con proveedor. _(`test_parse_document_maps_lines_and_sends_multipart`)_
+- Un error de conexión al parsear se convierte en RagProductError. _(`test_parse_document_transport_failure_raises_domain_error`)_
+- Un timeout del parse se convierte en RagProductError, nunca transport crudo. _(`test_parse_document_timeout_raises_domain_error`)_
+- Un HTTP 500 del parse se convierte en RagProductError. _(`test_parse_document_http_error_raises_domain_error`)_
+- Faltar filename/content es un error de uso, no un error de transporte. _(`test_parse_document_requires_filename_and_content`)_
+- Un lookup exacto devuelve TODAS las coincidencias, cada una con node_id. _(`test_exact_lookup_returns_all_matches_with_node_id`)_
+- Un 404 (sin coincidencias) se mapea a tupla vacía, no a error. _(`test_exact_lookup_404_returns_empty_tuple`)_
+- Un error de conexión se convierte en RagProductError. _(`test_exact_lookup_transport_failure_raises_domain_error`)_
+- Un timeout del lookup exacto se convierte en RagProductError. _(`test_exact_lookup_timeout_raises_domain_error`)_
+- El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73). _(`test_rag_client_timeout_bounded_by_settings`)_
 
 ## Búsqueda de producto (precedencia local → RAG)
 

@@ -117,6 +117,15 @@ def _row(**overrides: object) -> dict:
         "precio": 135.5,
         "moneda": "ARS",
         "pagina_origen": 12,
+        "text_content": (
+            "archivo_origen: catalogo-2024.pdf\n"
+            "codigo_proveedor: AMX\n"
+            "codigo_orig: AT-5044\n"
+            "nombre: Tarugo Fischer 8mm\n"
+            "descripcion: Tarugo de nylon 8mm\n"
+            "precio: 135.5\n"
+        ),
+        "metadata": {"archivo_origen": "catalogo-2024.pdf"},
     }
     base.update(overrides)
     return base
@@ -199,6 +208,9 @@ def test_catalog_exact_scopes_to_supplier_and_returns_all_matches(
     body = response.json()
     assert len(body["matches"]) == 2
     assert body["matches"][0]["node_id"] == "node_prod_AMX-AT-5044"
+    assert body["matches"][0]["nombre"] == "Tarugo Fischer 8mm"
+    assert body["matches"][0]["descripcion"] == "Tarugo de nylon 8mm"
+    assert body["matches"][0]["archivo_origen"] == "catalogo-2024.pdf"
     assert body["matches"][1]["precio"] == 140.0
     assert seen["codigo"] == "at-5044"
     assert seen["codigo_proveedor"] == "AMX"

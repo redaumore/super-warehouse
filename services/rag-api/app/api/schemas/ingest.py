@@ -53,6 +53,7 @@ class ProductLookupResponse(BaseModel):
     codigo_proveedor: str | None = None
     nombre_proveedor: str | None = None
     nombre: str | None = None
+    descripcion: str | None = None
     marca: str | None = None
     categoria: str | None = None
     subcategoria: str | None = None

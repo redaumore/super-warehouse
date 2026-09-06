@@ -114,6 +114,23 @@ class RagPrice:
     currency: str | None
 
 
+@dataclass(frozen=True)
+class DocumentLine:
+    """One structured line from the RAG document parse endpoint.
+
+    ``codigo_orig`` is the raw supplier article code on the document; ``costo``
+    is the unit supplier cost when the document shows it (remitos may omit it);
+    ``pagina`` is the 1-indexed source page (always 1 for image uploads).
+    """
+
+    codigo_orig: str | None
+    codigo: str | None
+    descripcion: str
+    cantidad: int
+    costo: float | None
+    pagina: int
+
+
 class RagProductError(Exception):
     """The RAG query failed (transport, status, or unparsable payload)."""
 
@@ -274,6 +291,12 @@ class RagProductClient:
             data = response.json()
         except ValueError as exc:
             raise RagProductError(f"rag price lookup returned non-JSON payload: {exc}") from exc
+        if isinstance(data, list):
+            # The product route returns an array of all matching rows; price
+            # lookup consumes the first one (the route 404s when none exist).
+            if not data:
+                return None
+            data = data[0]
         if not isinstance(data, dict):
             raise RagProductError("rag price lookup returned an invalid payload")
         raw_price = data.get("precio")
@@ -284,6 +307,147 @@ class RagProductClient:
                 raise RagProductError("rag price lookup returned an invalid price") from exc
         currency = data.get("moneda")
         return RagPrice(price=raw_price, currency=str(currency).upper() if currency else None)
+
+    def parse_document(
+        self, *, filename: str, content: bytes, codigo_proveedor: str
+    ) -> tuple[DocumentLine, ...]:
+        """Parse a supplier remito/invoice via ``POST /api/v1/ingest/parse``.
+
+        The endpoint never persists the document; transport failures, timeouts
+        and non-200 statuses raise ``RagProductError`` (never a raw httpx
+        exception), bounded by ``settings.rag_timeout_seconds``.
+        """
+        if not filename or not content:
+            raise ValueError("filename and content are required for document parse")
+        try:
+            response = self._holder.client.post(
+                "/api/v1/ingest/parse",
+                files={"file": (filename, content)},
+                data={"codigo_proveedor": codigo_proveedor},
+            )
+        except httpx.HTTPError as exc:
+            log_session_event(
+                "rag", "parse_error", {"filename": filename, "error": str(exc)}, level="ERROR"
+            )
+            raise RagProductError(f"rag document parse failed for {filename!r}: {exc}") from exc
+        if response.status_code != 200:
+            log_session_event(
+                "rag",
+                "parse_error",
+                {"filename": filename, "status": response.status_code},
+                level="WARNING",
+            )
+            raise RagProductError(
+                f"rag document parse returned HTTP {response.status_code} for {filename!r}"
+            )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RagProductError(f"rag document parse returned non-JSON payload: {exc}") from exc
+        lines_raw = (data.get("document") or {}).get("lines") or []
+        lines: list[DocumentLine] = []
+        for raw in lines_raw:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                cantidad = int(raw.get("cantidad", 0))
+            except (TypeError, ValueError):
+                cantidad = 0
+            costo = raw.get("costo")
+            if costo is not None:
+                try:
+                    costo = float(costo)
+                except (TypeError, ValueError):
+                    costo = None
+            try:
+                pagina = int(raw.get("pagina") or 1)
+            except (TypeError, ValueError):
+                pagina = 1
+            lines.append(
+                DocumentLine(
+                    codigo_orig=raw.get("codigo_orig"),
+                    codigo=raw.get("codigo"),
+                    descripcion=str(raw.get("descripcion") or ""),
+                    cantidad=cantidad,
+                    costo=costo,
+                    pagina=pagina,
+                )
+            )
+        log_session_event(
+            "rag", "parse_success", {"filename": filename, "lines_count": len(lines)}
+        )
+        return tuple(lines)
+
+    def exact_lookup(self, codigo_orig: str, codigo_proveedor: str) -> tuple[RagProduct, ...]:
+        """Exact ``codigo_orig`` lookup scoped to the supplier (ALL matches).
+
+        Reuses ``GET /api/v1/products/{sku}`` (design D5): the route returns an
+        array of every row whose ``codigo_orig`` matches exactly — so duplicate
+        codes surface for ambiguity detection instead of silently picking one.
+        A 404 (no match) maps to an empty tuple; transport failures, timeouts
+        and other non-200 statuses raise ``RagProductError``.
+        """
+        clean_code = str(codigo_orig or "").strip()
+        if not clean_code:
+            raise ValueError("codigo_orig is required for exact lookup")
+        params = (
+            {"codigo_proveedor": codigo_proveedor.strip()}
+            if codigo_proveedor and codigo_proveedor.strip()
+            else None
+        )
+        try:
+            response = self._holder.client.get(f"/api/v1/products/{clean_code}", params=params)
+        except httpx.HTTPError as exc:
+            log_session_event(
+                "rag", "exact_lookup_error", {"codigo_orig": clean_code, "error": str(exc)}, level="ERROR"
+            )
+            raise RagProductError(f"rag exact lookup failed for {clean_code!r}: {exc}") from exc
+        if response.status_code == 404:
+            return ()
+        if response.status_code != 200:
+            log_session_event(
+                "rag",
+                "exact_lookup_error",
+                {"codigo_orig": clean_code, "status": response.status_code},
+                level="WARNING",
+            )
+            raise RagProductError(
+                f"rag exact lookup returned HTTP {response.status_code} for {clean_code!r}"
+            )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RagProductError(f"rag exact lookup returned non-JSON payload: {exc}") from exc
+        if not isinstance(data, list):
+            raise RagProductError("rag exact lookup returned an invalid payload")
+        mapped = tuple(self._map_exact_product(raw) for raw in data if isinstance(raw, dict))
+        log_session_event(
+            "rag",
+            "exact_lookup_success",
+            {"codigo_orig": clean_code, "matches": len(mapped)},
+        )
+        return mapped
+
+    def _map_exact_product(self, raw: dict[str, Any]) -> RagProduct:
+        """Map one product-route row into a typed ``RagProduct`` with provenance.
+
+        The display name is not a first-class column of the RAG table — the
+        service exposes ``nombre``/``descripcion`` parsed from ``text_content``.
+        ``node_id`` travels on every row so ingestion can persist provenance
+        and detect duplicates.
+        """
+        return RagProduct(
+            sku=raw.get("codigo_orig") or raw.get("codigo") or "",
+            name=raw.get("nombre") or raw.get("descripcion") or "Producto",
+            provider=raw.get("nombre_proveedor"),
+            brand=raw.get("marca"),
+            price=raw.get("precio"),
+            currency=raw.get("moneda"),
+            source_file=raw.get("archivo_origen"),
+            page=raw.get("pagina_origen"),
+            codigo_proveedor=raw.get("codigo_proveedor") or None,
+            node_id=raw.get("node_id") or None,
+        )
 
     def _map_product(
         self, raw: dict[str, Any], fragment_to_chunk: dict[int, dict[str, Any]]
