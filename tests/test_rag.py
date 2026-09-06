@@ -551,3 +551,187 @@ def test_rag_client_timeout_bounded_by_settings():
     """El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73)."""
     client = _client(lambda request: httpx.Response(200, json=[]), rag_timeout_seconds=3.5)
     assert client._holder._timeout == 3.5
+
+
+# --------------------------------------- catalog ingestion + job status (async)
+
+
+def _job_payload(**overrides) -> dict:
+    base = {
+        "job_id": "job-123",
+        "status": "PENDING",
+        "created_at": "2026-01-01T00:00:00Z",
+        "source_document": "/uploads/catalogo.pdf",
+        "table_name": "catalogo_productos_rag",
+        "codigo_proveedor": "MSA",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_ingest_catalog_202_returns_job_id_and_sends_multipart():
+    """Un 202 con job_id devuelve el id; el multipart lleva proveedor y sync=false."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["content_type"] = request.headers.get("content-type", "")
+        body = request.content.decode("utf-8", errors="replace")
+        seen["has_filename"] = "catalogo.pdf" in body
+        seen["has_codigo"] = "MSA" in body
+        seen["has_nombre"] = "Mayorista SA" in body
+        seen["has_sync_false"] = 'name="sync"\r\n\r\nfalse' in body
+        seen["has_proveedor_id"] = 'name="proveedor_id"\r\n\r\n1' in body
+        return httpx.Response(202, json=_job_payload())
+
+    client = _client(handler)
+    job_id = client.ingest_catalog(
+        filename="catalogo.pdf",
+        content=b"%PDF-fake",
+        codigo_proveedor="MSA",
+        nombre_proveedor="Mayorista SA",
+        proveedor_id="1",
+    )
+
+    assert job_id == "job-123"
+    assert seen["url"] == "http://rag.test/api/v1/catalogs/ingest-file"
+    assert seen["content_type"].startswith("multipart/form-data")
+    assert seen["has_filename"] and seen["has_codigo"] and seen["has_nombre"]
+    assert seen["has_sync_false"] and seen["has_proveedor_id"]
+
+
+def test_ingest_catalog_omits_proveedor_id_when_absent():
+    """Sin proveedor_id el form no incluye el campo (opcional en el servicio)."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode("utf-8", errors="replace")
+        seen["has_proveedor_id"] = "proveedor_id" in body
+        return httpx.Response(202, json=_job_payload())
+
+    client = _client(handler)
+    job_id = client.ingest_catalog(
+        filename="catalogo.pdf",
+        content=b"%PDF-fake",
+        codigo_proveedor="MSA",
+        nombre_proveedor="Mayorista SA",
+    )
+    assert job_id == "job-123"
+    assert not seen["has_proveedor_id"]
+
+
+def test_ingest_catalog_http_error_raises_domain_error():
+    """Un HTTP 500 del ingest-file se convierte en RagProductError."""
+    client = _client(lambda request: httpx.Response(500, text="boom"))
+    with pytest.raises(RagProductError, match="HTTP 500"):
+        client.ingest_catalog(
+            filename="catalogo.pdf",
+            content=b"x",
+            codigo_proveedor="MSA",
+            nombre_proveedor="Mayorista SA",
+        )
+
+
+def test_ingest_catalog_connect_error_raises_domain_error():
+    """Un error de conexión al subir el PDF se convierte en RagProductError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = _client(handler)
+    with pytest.raises(RagProductError, match="connection refused"):
+        client.ingest_catalog(
+            filename="catalogo.pdf",
+            content=b"x",
+            codigo_proveedor="MSA",
+            nombre_proveedor="Mayorista SA",
+        )
+
+
+def test_ingest_catalog_requires_filename_and_content():
+    """Faltar filename/content es un error de uso, no de transporte."""
+    client = _client(lambda request: httpx.Response(202, json=_job_payload()))
+    with pytest.raises(ValueError):
+        client.ingest_catalog(
+            filename="", content=b"x", codigo_proveedor="MSA", nombre_proveedor="Mayorista SA"
+        )
+    with pytest.raises(ValueError):
+        client.ingest_catalog(
+            filename="catalogo.pdf",
+            content=b"",
+            codigo_proveedor="MSA",
+            nombre_proveedor="Mayorista SA",
+        )
+
+
+def test_ingest_catalog_missing_job_id_raises_domain_error():
+    """Un 202 sin job_id en el payload se convierte en RagProductError."""
+    client = _client(lambda request: httpx.Response(202, json={"status": "PENDING"}))
+    with pytest.raises(RagProductError, match="no job_id"):
+        client.ingest_catalog(
+            filename="catalogo.pdf",
+            content=b"x",
+            codigo_proveedor="MSA",
+            nombre_proveedor="Mayorista SA",
+        )
+
+
+def test_get_job_200_maps_typed_status():
+    """Un 200 mapea el snapshot del job a RagJobStatus tipado con result y error."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "http://rag.test/api/v1/jobs/job-123"
+        return httpx.Response(
+            200,
+            json=_job_payload(
+                status="COMPLETED",
+                progress_message="Ingesta finalizada con éxito",
+                result={"total_productos": 42},
+            ),
+        )
+
+    client = _client(handler)
+    job = client.get_job("job-123")
+    assert job.job_id == "job-123"
+    assert job.status == "COMPLETED"
+    assert job.progress_message == "Ingesta finalizada con éxito"
+    assert job.result == {"total_productos": 42}
+    assert job.error is None
+
+
+def test_get_job_failed_maps_error_detail():
+    """Un job FAILED expone el detalle de error del servicio."""
+    client = _client(
+        lambda request: httpx.Response(200, json=_job_payload(status="FAILED", error="OCR explode"))
+    )
+    job = client.get_job("job-123")
+    assert job.status == "FAILED"
+    assert job.error == "OCR explode"
+
+
+def test_get_job_requires_job_id():
+    """Un job_id vacío es un error de uso, no de transporte."""
+    client = _client(lambda request: httpx.Response(200, json=_job_payload()))
+    with pytest.raises(ValueError):
+        client.get_job("   ")
+
+
+def test_get_job_unknown_id_and_transport_errors_raise_domain_error():
+    """Un 404 (job desconocido) y un fallo de transporte son RagProductError."""
+    not_found = _client(lambda request: httpx.Response(404, json={"detail": "no such job"}))
+    with pytest.raises(RagProductError, match="HTTP 404"):
+        not_found.get_job("missing")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    transport = _client(handler)
+    with pytest.raises(RagProductError, match="connection refused"):
+        transport.get_job("job-123")
+
+
+def test_get_job_missing_status_raises_domain_error():
+    """Un 200 sin status se convierte en RagProductError."""
+    client = _client(lambda request: httpx.Response(200, json={"job_id": "job-123"}))
+    with pytest.raises(RagProductError, match="no status"):
+        client.get_job("job-123")

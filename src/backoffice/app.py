@@ -420,6 +420,74 @@ def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> s
     return f"Ingresado: {result.updated} actualizados, {result.created} nuevos."
 
 
+# ------------------------------------------------ catalog ingest tab (RAG PDF)
+
+
+def _catalog_ingest(
+    client: RagProductClient, upload: object, supplier_id: object
+) -> tuple[str | None, str]:
+    """Upload the supplier catalog PDF to the RAG async ingestion queue.
+
+    Returns ``(job_id, status)``: the job id travels in ``gr.State`` so the
+    "Consultar estado" button can poll it. The service replaces ALL previously
+    indexed rows for the supplier's code — the tab warns the user; this handler
+    only validates supplier + file and launches the job. RAG unavailability
+    surfaces as an honest error and launches nothing.
+    """
+    if upload is None:
+        return None, "Subí el PDF del catálogo del proveedor."
+    with SessionLocal() as session:
+        try:
+            supplier = ensure_active_supplier(session, int(str(supplier_id)))
+        except (KeyError, SupplierInactiveError) as exc:
+            return None, f"Error: {exc}"
+        supplier_code = supplier.code
+        supplier_name = supplier.business_name
+        supplier_pk = str(supplier.id)
+    path = getattr(upload, "path", None) or str(upload)
+    filename = os.path.basename(str(path))
+    with open(str(path), "rb") as fh:
+        content = fh.read()
+    try:
+        job_id = client.ingest_catalog(
+            filename=filename,
+            content=content,
+            codigo_proveedor=supplier_code,
+            nombre_proveedor=supplier_name,
+            proveedor_id=supplier_pk,
+        )
+    except RagProductError as exc:
+        return None, f"Error: RAG no disponible ({exc})"
+    return job_id, f"Ingesta lanzada (job {job_id}). Consultá el estado."
+
+
+def _catalog_job_status(client: RagProductClient, job_id: object) -> str:
+    """Render the async ingestion job snapshot for the tab's status box."""
+    clean_job_id = str(job_id or "").strip()
+    if not clean_job_id:
+        return "Todavía no se lanzó ninguna ingesta en esta sesión."
+    try:
+        job = client.get_job(clean_job_id)
+    except RagProductError as exc:
+        return f"Error: RAG no disponible ({exc})"
+    if job.status in ("PENDING", "RUNNING"):
+        detail = job.progress_message or "En proceso..."
+        return f"Job {job.job_id}: {job.status}. {detail}"
+    if job.status == "COMPLETED":
+        result = job.result or {}
+        summary_bits = [
+            str(result[key])
+            for key in ("total_productos", "productos_indexados", "total_paginas", "paginas")
+            if result.get(key) is not None
+        ]
+        summary = f" ({', '.join(summary_bits)})" if summary_bits else ""
+        return f"Job {job.job_id}: COMPLETED{summary}. {job.progress_message or ''}".strip()
+    if job.status == "FAILED":
+        detail = job.error or "Error desconocido."
+        return f"Job {job.job_id}: FAILED. {detail}"
+    return f"Job {job.job_id}: {job.status}."
+
+
 def _as_index(raw: object) -> int:
     """Coerce a Gradio numeric/None input to a 0-based index (-1 when blank)."""
     if raw is None or str(raw).strip() == "":
@@ -1245,6 +1313,37 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _ingest_confirm,
                 inputs=[resolved_state, supplier_selector, gr.State(_get_embedder())],
                 outputs=confirm_status,
+            )
+
+        with gr.Tab("Catálogo"):
+            gr.Markdown(
+                "### Ingesta del catálogo PDF del proveedor al índice RAG\n\n"
+                "⚠️ **Atención:** la ingesta **reemplaza TODAS las filas indexadas "
+                "previamente** para el código del proveedor (reemplazo total)."
+            )
+            catalog_supplier_selector = gr.Dropdown(
+                choices=_active_supplier_choices(),
+                label="Proveedor (activo)",
+            )
+            catalog_supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            catalog_supplier_refresh.click(
+                _supplier_choices_update, outputs=catalog_supplier_selector
+            )
+            catalog_upload = gr.File(label="Catálogo PDF", file_types=[".pdf"])
+            catalog_ingest_btn = gr.Button("Ingestar catálogo", variant="primary")
+            catalog_job_state = gr.State(None)
+            catalog_ingest_status = gr.Textbox(label="Ingesta", interactive=False)
+            catalog_check_btn = gr.Button("Consultar estado", variant="secondary")
+            catalog_job_status = gr.Textbox(label="Estado del job", interactive=False)
+            catalog_ingest_btn.click(
+                _catalog_ingest,
+                inputs=[gr.State(_get_rag_client()), catalog_upload, catalog_supplier_selector],
+                outputs=[catalog_job_state, catalog_ingest_status],
+            )
+            catalog_check_btn.click(
+                _catalog_job_status,
+                inputs=[gr.State(_get_rag_client()), catalog_job_state],
+                outputs=catalog_job_status,
             )
 
         with gr.Tab("Adoption (RAG)"):

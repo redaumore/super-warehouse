@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 439, agrupados en 33 dominios.
+**Total de escenarios:** 459, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,7 +17,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 29
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 40
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -35,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 65
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 74
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 6
@@ -291,6 +291,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un error de conexión se convierte en RagProductError. _(`test_exact_lookup_transport_failure_raises_domain_error`)_
 - Un timeout del lookup exacto se convierte en RagProductError. _(`test_exact_lookup_timeout_raises_domain_error`)_
 - El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73). _(`test_rag_client_timeout_bounded_by_settings`)_
+- Un 202 con job_id devuelve el id; el multipart lleva proveedor y sync=false. _(`test_ingest_catalog_202_returns_job_id_and_sends_multipart`)_
+- Sin proveedor_id el form no incluye el campo (opcional en el servicio). _(`test_ingest_catalog_omits_proveedor_id_when_absent`)_
+- Un HTTP 500 del ingest-file se convierte en RagProductError. _(`test_ingest_catalog_http_error_raises_domain_error`)_
+- Un error de conexión al subir el PDF se convierte en RagProductError. _(`test_ingest_catalog_connect_error_raises_domain_error`)_
+- Faltar filename/content es un error de uso, no de transporte. _(`test_ingest_catalog_requires_filename_and_content`)_
+- Un 202 sin job_id en el payload se convierte en RagProductError. _(`test_ingest_catalog_missing_job_id_raises_domain_error`)_
+- Un 200 mapea el snapshot del job a RagJobStatus tipado con result y error. _(`test_get_job_200_maps_typed_status`)_
+- Un job FAILED expone el detalle de error del servicio. _(`test_get_job_failed_maps_error_detail`)_
+- Un job_id vacío es un error de uso, no de transporte. _(`test_get_job_requires_job_id`)_
+- Un 404 (job desconocido) y un fallo de transporte son RagProductError. _(`test_get_job_unknown_id_and_transport_errors_raise_domain_error`)_
+- Un 200 sin status se convierte en RagProductError. _(`test_get_job_missing_status_raises_domain_error`)_
 
 ## Búsqueda de producto (precedencia local → RAG)
 
@@ -562,6 +573,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 - Building the app creates tabs with the expected labels. _(`test_build_app_creates_tabs_with_expected_labels`)_
 - La pestaña Ingestion expone el dropdown de proveedor y no un ID numérico. _(`test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id`)_
+- El tab Catálogo warn del reemplazo total y expone el flujo completo. _(`test_build_app_catalogo_tab_has_warning_and_flow_components`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - La grilla de catálogo devuelve todos los campos por producto. _(`test_catalog_list_products_returns_expected_fields`)_
 - Editar stock y precio se refleja en la grilla. _(`test_catalog_update_stock_and_price`)_
@@ -638,6 +650,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Adoptar el mismo producto dos veces avisa que el SKU ya existe. _(`test_app_adoption_confirm_surfaces_sku_collision`)_
 - Un stock inicial no positivo se rechaza con mensaje de validación. _(`test_app_adoption_confirm_rejects_non_positive_stock`)_
 - Sin búsqueda previa o sin fila seleccionada no se adopta nada. _(`test_app_adoption_confirm_requires_selection`)_
+- Sin PDF subido no se lanza ninguna ingesta. _(`test_app_catalog_ingest_requires_file`)_
+- El upload lanza el job con code/business_name/id y retorna el job_id. _(`test_app_catalog_ingest_launches_job_and_returns_id`)_
+- Un fallo del RAG muestra el error y no lanza ningún job. _(`test_app_catalog_ingest_surfaces_rag_unavailability`)_
+- Sin job lanzado se lo indica en lugar de consultar al RAG. _(`test_app_catalog_job_status_without_job_prompts_first_launch`)_
+- PENDING/RUNNING se muestran como en proceso con el mensaje del servicio. _(`test_app_catalog_job_status_running_shows_progress`)_
+- COMPLETED muestra el resumen que trae el payload del job. _(`test_app_catalog_job_status_completed_shows_result_summary`)_
+- FAILED expone el detalle de error del servicio. _(`test_app_catalog_job_status_failed_shows_error_detail`)_
+- Un fallo al consultar el job se muestra como error honesto. _(`test_app_catalog_job_status_surfaces_rag_unavailability`)_
 
 ## Feature flags por fase
 

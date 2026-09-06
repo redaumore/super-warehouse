@@ -31,6 +31,8 @@ from src.backoffice.app import (
     _adoption_search,
     _catalog_edit,
     _catalog_grid,
+    _catalog_ingest,
+    _catalog_job_status,
     _ingest_assign,
     _ingest_confirm,
     _ingest_manual_search,
@@ -93,7 +95,7 @@ from src.db.models import (
     SupplierStatus,
 )
 from src.db.session import SessionLocal
-from src.integrations.rag import RagProduct, RagProductError
+from src.integrations.rag import RagJobStatus, RagProduct, RagProductError
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.purchasing.accumulate import accumulate_need
@@ -131,6 +133,7 @@ def test_build_app_creates_tabs_with_expected_labels():
         "Orders/Monitor",
         "Purchase Orders",
         "Ingestion",
+        "Catálogo",
         "Adoption (RAG)",
         "Suppliers",
         "Customer Orders",
@@ -146,6 +149,21 @@ def test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id():
     labels = _component_labels(ingestion_tab)
     assert "Proveedor (activo)" in labels
     assert "Supplier ID" not in labels  # no free numeric ID (spec R1)
+
+
+def test_build_app_catalogo_tab_has_warning_and_flow_components():
+    """El tab Catálogo warn del reemplazo total y expone el flujo completo."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Catálogo")
+    labels = _all_labels(tab)
+    assert "Proveedor (activo)" in labels
+    assert "Catálogo PDF" in labels
+    assert "Ingestar catálogo" in labels
+    assert "Consultar estado" in labels
+    assert "Estado del job" in labels
+    # The destructive-replacement warning is the tab's Markdown copy.
+    markdown_values = [c.value for c in tab.children if type(c).__name__ == "Markdown"]
+    assert any("reemplaza TODAS las filas indexadas" in (value or "") for value in markdown_values)
 
 
 def test_build_app_catalog_tab_has_product_grid():
@@ -1478,3 +1496,132 @@ def test_app_adoption_confirm_requires_selection(shop_ctx):
         _adoption_confirm((_RAG_PRODUCT,), None, 1, _FakeEmbedder())
         == "Seleccioná un producto de la grilla."
     )
+
+
+# ------------------------------------------------ catalog ingest tab (RAG PDF)
+
+
+class _FakeCatalogRag:
+    """RagProductClient stand-in for the catalog ingest/status flow."""
+
+    def __init__(
+        self,
+        *,
+        job_id: str = "job-123",
+        job: RagJobStatus | None = None,
+        ingest_error: str | None = None,
+        job_error: str | None = None,
+    ) -> None:
+        self.job_id = job_id
+        self.job = job
+        self.ingest_error = ingest_error
+        self.job_error = job_error
+        self.ingest_calls: list[dict] = []
+
+    def ingest_catalog(
+        self, *, filename, content, codigo_proveedor, nombre_proveedor, proveedor_id=None
+    ):
+        self.ingest_calls.append(
+            {
+                "filename": filename,
+                "content": content,
+                "codigo_proveedor": codigo_proveedor,
+                "nombre_proveedor": nombre_proveedor,
+                "proveedor_id": proveedor_id,
+            }
+        )
+        if self.ingest_error:
+            raise RagProductError(self.ingest_error)
+        return self.job_id
+
+    def get_job(self, job_id: str) -> RagJobStatus:
+        if self.job_error:
+            raise RagProductError(self.job_error)
+        assert self.job is not None
+        return self.job
+
+
+def test_app_catalog_ingest_requires_file():
+    """Sin PDF subido no se lanza ninguna ingesta."""
+    job_id, message = _catalog_ingest(_FakeCatalogRag(), None, 1)
+    assert job_id is None
+    assert "Subí el PDF" in message
+
+
+def test_app_catalog_ingest_launches_job_and_returns_id(shop_ctx, tmp_path):
+    """El upload lanza el job con code/business_name/id y retorna el job_id."""
+    shop_ctx["session"].commit()
+    pdf = tmp_path / "catalogo-mayorista.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1)
+
+    assert job_id == "job-abc"
+    assert "Ingesta lanzada (job job-abc)" in message
+    call = rag.ingest_calls[0]
+    assert call["filename"] == "catalogo-mayorista.pdf"
+    assert call["content"] == b"%PDF-fake"
+    assert call["codigo_proveedor"] == "MSA"
+    assert call["nombre_proveedor"] == "Mayorista SA"
+    assert call["proveedor_id"] == "1"
+
+
+def test_app_catalog_ingest_surfaces_rag_unavailability(shop_ctx, tmp_path):
+    """Un fallo del RAG muestra el error y no lanza ningún job."""
+    shop_ctx["session"].commit()
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(ingest_error="connection refused")
+    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1)
+    assert job_id is None
+    assert message.startswith("Error: RAG no disponible")
+    assert rag.ingest_calls  # the attempt happened; the launch failed
+
+
+def test_app_catalog_job_status_without_job_prompts_first_launch():
+    """Sin job lanzado se lo indica en lugar de consultar al RAG."""
+    assert (
+        _catalog_job_status(_FakeCatalogRag(), None)
+        == "Todavía no se lanzó ninguna ingesta en esta sesión."
+    )
+
+
+def test_app_catalog_job_status_running_shows_progress():
+    """PENDING/RUNNING se muestran como en proceso con el mensaje del servicio."""
+    rag = _FakeCatalogRag(
+        job=RagJobStatus(
+            job_id="job-123", status="RUNNING", progress_message="Procesando Fases 0 a 3..."
+        )
+    )
+    message = _catalog_job_status(rag, "job-123")
+    assert "RUNNING" in message
+    assert "Procesando Fases 0 a 3..." in message
+
+
+def test_app_catalog_job_status_completed_shows_result_summary():
+    """COMPLETED muestra el resumen que trae el payload del job."""
+    rag = _FakeCatalogRag(
+        job=RagJobStatus(
+            job_id="job-123",
+            status="COMPLETED",
+            progress_message="Ingesta finalizada con éxito",
+            result={"total_productos": 42},
+        )
+    )
+    message = _catalog_job_status(rag, "job-123")
+    assert "COMPLETED" in message
+    assert "42" in message
+
+
+def test_app_catalog_job_status_failed_shows_error_detail():
+    """FAILED expone el detalle de error del servicio."""
+    rag = _FakeCatalogRag(job=RagJobStatus(job_id="job-123", status="FAILED", error="OCR explode"))
+    message = _catalog_job_status(rag, "job-123")
+    assert "FAILED" in message
+    assert "OCR explode" in message
+
+
+def test_app_catalog_job_status_surfaces_rag_unavailability():
+    """Un fallo al consultar el job se muestra como error honesto."""
+    message = _catalog_job_status(_FakeCatalogRag(job_error="HTTP 404"), "job-123")
+    assert message.startswith("Error: RAG no disponible")

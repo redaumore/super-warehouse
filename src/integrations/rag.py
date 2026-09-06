@@ -37,6 +37,15 @@ from src.observability.session_logger import log_session_event
 
 logger = logging.getLogger(__name__)
 
+RAG_CATALOG_INGEST_PATH = "/api/v1/catalogs/ingest-file"
+RAG_JOB_STATUS_PATH = "/api/v1/jobs/{job_id}"
+
+# Catalog PDFs are big multipart uploads processed by a slow OCR pipeline: the
+# upload request gets a per-request timeout scaled up from the base
+# ``rag_timeout_seconds`` (the job itself runs async server-side, so only the
+# upload+accept round-trip is bounded here).
+RAG_INGEST_TIMEOUT_FACTOR = 20.0
+
 
 def normalize_rag_sku(codigo: str, provider: str) -> str:
     """Collapse a duplicated ``{provider}-`` prefix in a RAG ``codigo``.
@@ -129,6 +138,23 @@ class DocumentLine:
     cantidad: int
     costo: float | None
     pagina: int
+
+
+@dataclass(frozen=True)
+class RagJobStatus:
+    """One async ingestion job snapshot from ``GET /api/v1/jobs/{job_id}``.
+
+    ``status`` is the service-side lifecycle value (``PENDING``, ``RUNNING``,
+    ``COMPLETED``, ``FAILED``); ``progress_message`` carries the service's
+    human progress text, ``result`` the completion payload (ingestion summary
+    dict) and ``error`` the failure detail.
+    """
+
+    job_id: str
+    status: str
+    progress_message: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
 
 
 class RagProductError(Exception):
@@ -427,6 +453,128 @@ class RagProductClient:
             {"codigo_orig": clean_code, "matches": len(mapped)},
         )
         return mapped
+
+    def ingest_catalog(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        codigo_proveedor: str,
+        nombre_proveedor: str,
+        proveedor_id: str | None = None,
+    ) -> str:
+        """Upload a supplier catalog PDF for async ingestion (``sync=false``).
+
+        ``POST /api/v1/catalogs/ingest-file`` with multipart data. The service
+        accepts the upload with HTTP 202 and returns a ``JobStatusResponse``
+        whose ``job_id`` tracks the background ingestion. The upload timeout is
+        scaled by ``RAG_INGEST_TIMEOUT_FACTOR`` because PDFs are large; the
+        ingestion itself is async server-side. Transport failures, timeouts,
+        non-2xx statuses and payloads without a ``job_id`` raise
+        ``RagProductError`` (never a raw httpx exception).
+
+        Note: the service replaces every previously indexed row for
+        ``codigo_proveedor`` — the caller must warn the user before calling.
+        """
+        if not filename or not content:
+            raise ValueError("filename and content are required for catalog ingestion")
+        data: dict[str, str] = {
+            "codigo_proveedor": codigo_proveedor,
+            "nombre_proveedor": nombre_proveedor,
+            "sync": "false",
+        }
+        if proveedor_id:
+            data["proveedor_id"] = proveedor_id
+        started = time.perf_counter()
+        try:
+            response = self._holder.client.post(
+                RAG_CATALOG_INGEST_PATH,
+                files={"file": (filename, content)},
+                data=data,
+                timeout=self.settings.rag_timeout_seconds * RAG_INGEST_TIMEOUT_FACTOR,
+            )
+        except httpx.HTTPError as exc:
+            log_session_event(
+                "rag",
+                "catalog_ingest_error",
+                {"filename": filename, "error": str(exc)},
+                level="ERROR",
+            )
+            raise RagProductError(f"rag catalog ingest failed for {filename!r}: {exc}") from exc
+        if response.status_code not in (200, 202):
+            log_session_event(
+                "rag",
+                "catalog_ingest_error",
+                {"filename": filename, "status": response.status_code},
+                level="WARNING",
+            )
+            raise RagProductError(
+                f"rag catalog ingest returned HTTP {response.status_code} for {filename!r}"
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RagProductError(f"rag catalog ingest returned non-JSON payload: {exc}") from exc
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RagProductError("rag catalog ingest returned no job_id")
+        log_session_event(
+            "rag",
+            "catalog_ingest_accepted",
+            {
+                "filename": filename,
+                "job_id": job_id,
+                "latency_sec": round(time.perf_counter() - started, 3),
+            },
+        )
+        logger.info("rag catalog ingest job=%s filename=%r", job_id, filename)
+        return job_id
+
+    def get_job(self, job_id: str) -> RagJobStatus:
+        """Fetch one ingestion job snapshot via ``GET /api/v1/jobs/{job_id}``.
+
+        The typed ``RagJobStatus`` carries ``status`` plus the progress/result/
+        error fields; a 404 (unknown job id) and any other non-200 status,
+        transport failure or unparsable payload raise ``RagProductError``.
+        """
+        clean_job_id = str(job_id or "").strip()
+        if not clean_job_id:
+            raise ValueError("job_id is required to fetch job status")
+        try:
+            response = self._holder.client.get(RAG_JOB_STATUS_PATH.format(job_id=clean_job_id))
+        except httpx.HTTPError as exc:
+            log_session_event(
+                "rag",
+                "job_status_error",
+                {"job_id": clean_job_id, "error": str(exc)},
+                level="ERROR",
+            )
+            raise RagProductError(f"rag job status failed for {clean_job_id!r}: {exc}") from exc
+        if response.status_code != 200:
+            log_session_event(
+                "rag",
+                "job_status_error",
+                {"job_id": clean_job_id, "status": response.status_code},
+                level="WARNING",
+            )
+            raise RagProductError(
+                f"rag job status returned HTTP {response.status_code} for {clean_job_id!r}"
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RagProductError(f"rag job status returned non-JSON payload: {exc}") from exc
+        status_value = payload.get("status")
+        if not isinstance(status_value, str) or not status_value.strip():
+            raise RagProductError("rag job status returned no status")
+        result = payload.get("result")
+        return RagJobStatus(
+            job_id=str(payload.get("job_id") or clean_job_id),
+            status=status_value,
+            progress_message=payload.get("progress_message"),
+            result=result if isinstance(result, dict) else None,
+            error=payload.get("error"),
+        )
 
     def _map_exact_product(self, raw: dict[str, Any]) -> RagProduct:
         """Map one product-route row into a typed ``RagProduct`` with provenance.
