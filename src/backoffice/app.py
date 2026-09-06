@@ -9,7 +9,8 @@ which keeps tests and CI safe.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
 from functools import lru_cache
@@ -17,9 +18,9 @@ from typing import cast
 
 import gradio as gr
 import pandas as pd
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.perception import VisionAnalyzer
 from src.backoffice.adoption import (
     AdoptRequest,
     Embedder,
@@ -48,7 +49,14 @@ from src.backoffice.customer_orders import (
     set_exchange_rate,
     start_picking_action,
 )
-from src.backoffice.ingestion import confirm_items, to_grid_rows
+from src.backoffice.ingestion import (
+    ResolvedLine,
+    UnresolvedLineError,
+    hybrid_candidates,
+    ingest_receipt_lines,
+    resolve_lines,
+    to_receipt_lines,
+)
 from src.backoffice.monitor import list_orders
 from src.backoffice.po import (
     cancel_po_action,
@@ -74,10 +82,10 @@ from src.backoffice.suppliers import (
 from src.config import Settings, get_settings
 from src.db.models import IvaCondition, ListaPrecios, Supplier, SupplierStatus
 from src.db.session import SessionLocal
-from src.integrations.openai import OpenAIEmbedder, OpenAIVisionAnalyzer
+from src.integrations.openai import OpenAIEmbedder
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
 from src.integrations.sheets import SheetsWriter
-from src.supplier.guards import SupplierInactiveError
+from src.supplier.guards import SupplierInactiveError, ensure_active_supplier
 from src.supplier.validation import suggest_code
 from src.tz import to_buenos_aires
 
@@ -210,40 +218,206 @@ def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: floa
     return f"Guardado: {sku}"
 
 
-def _ingest_preview(analyzer: VisionAnalyzer, image_path: object) -> tuple[list[list[str]], str]:
-    """Analyze an uploaded supplier document and render the editable preview."""
-    if not image_path:
-        return [], "Subí una foto del remito o factura."
-    # Gradio delivers the upload as a file path (or FileData wrapper).
-    path = getattr(image_path, "path", None) or str(image_path)
-    from src.backoffice.ingestion import extract_document_items
-
-    try:
-        extraction = extract_document_items(analyzer, path)
-    except Exception as exc:  # noqa: BLE001 — surfaced in the UI
-        return [], f"Error al extraer: {exc}"
-    grid = to_grid_rows(extraction)
-    message = (
-        f"{len(grid)} filas extraídas. Revisá y corregí antes de confirmar."
-        if grid
-        else "No se pudieron extraer filas legibles."
-    )
-    return grid, message
+# ------------------------------------------------ ingestion tab (RAG receipts)
 
 
-def _ingest_confirm(rows: object, supplier_id: object) -> str:
-    if hasattr(rows, "iloc"):  # Gradio hands a pandas DataFrame when headers are set
-        rows = [
-            [None if pd.isna(cell) else cell for cell in row]
-            for row in rows.itertuples(index=False, name=None)
-        ]
+def _active_supplier_choices() -> list[tuple[str, int]]:
+    """(business_name → id) pairs for ACTIVO suppliers — no free numeric ID.
+
+    The dropdown displays ``business_name`` (spec: supplier-first selection)
+    and retains the supplier ID internally as the component value.
+    """
+    with SessionLocal() as session:
+        suppliers = session.scalars(
+            select(Supplier)
+            .where(Supplier.status == SupplierStatus.ACTIVO)
+            .order_by(Supplier.business_name)
+        )
+        return [(supplier.business_name, supplier.id) for supplier in suppliers]
+
+
+def _resolved_grid(lines: Sequence[ResolvedLine]) -> list[list[object]]:
+    """Render resolved/pending receipt lines for the review grid."""
+    rows: list[list[object]] = []
+    for resolved in lines:
+        receipt = resolved.receipt
+        if resolved.product is not None:
+            resolution = f"{resolved.product.sku} — {resolved.product.name}"
+        else:
+            resolution = "PENDIENTE"
+        rows.append(
+            [
+                receipt.codigo_orig or "",
+                receipt.descripcion,
+                receipt.cantidad,
+                receipt.costo if receipt.costo is not None else "",
+                resolution,
+            ]
+        )
+    return rows
+
+
+def _ingest_parse(
+    client: RagProductClient, upload: object, supplier_id: object
+) -> tuple[list[list[object]], tuple[ResolvedLine, ...], str]:
+    """Upload → RAG parse → two-pass resolve → review grid. Zero writes.
+
+    RAG/Luna unavailability surfaces as an honest error and writes nothing
+    (spec: RAG down → no inventory/catalog write).
+    """
+    if upload is None:
+        return [], (), "Subí un remito o factura (PDF o foto)."
+    path = getattr(upload, "path", None) or str(upload)
+    filename = os.path.basename(str(path))
+    with open(str(path), "rb") as fh:
+        content = fh.read()
     with SessionLocal() as session:
         try:
-            result = confirm_items(session, rows or [], int(str(supplier_id)))
+            supplier = ensure_active_supplier(session, int(str(supplier_id)))
+        except (KeyError, SupplierInactiveError) as exc:
+            return [], (), f"Error: {exc}"
+        supplier_code = supplier.code
+    try:
+        document_lines = client.parse_document(
+            filename=filename, content=content, codigo_proveedor=supplier_code
+        )
+    except RagProductError as exc:
+        return [], (), f"Error: RAG no disponible ({exc})"
+    receipt_lines = to_receipt_lines(document_lines)
+    with SessionLocal() as session:
+        resolved = resolve_lines(
+            session, client, receipt_lines, supplier_id=int(str(supplier_id))
+        )
+    grid = _resolved_grid(resolved)
+    pending = sum(1 for line in resolved if line.pending and line.receipt.cantidad > 0)
+    message = (
+        f"{len(grid)} líneas; {pending} pendiente(s) de resolver."
+        if grid
+        else "No se extrajeron líneas legibles."
+    )
+    return grid, resolved, message
+
+
+def _ingest_manual_search(
+    client: RagProductClient, line_index: object, query_text: object, supplier_id: object
+) -> tuple[list[list[object]], tuple[RagProduct, ...], str]:
+    """Per-line RAG product-code search for a pending line (supplier-scoped)."""
+    line_idx = _as_index(line_index)
+    if line_idx < 0:
+        return [], (), "Seleccioná el número de línea pendiente (1-based)."
+    text = str(query_text or "").strip()
+    if not text:
+        return [], (), "Escribí un código o término de búsqueda."
+    with SessionLocal() as session:
+        try:
+            supplier = ensure_active_supplier(session, int(str(supplier_id)))
+        except (KeyError, SupplierInactiveError) as exc:
+            return [], (), f"Error: {exc}"
+        supplier_code = supplier.code
+    try:
+        candidates = hybrid_candidates(client, supplier_code, text)
+    except RagProductError as exc:
+        return [], (), f"Error: RAG no disponible ({exc})"
+    rows = [
+        [
+            product.sku,
+            product.name,
+            product.brand or "",
+            product.price if product.price is not None else "",
+            product.node_id or "",
+        ]
+        for product in candidates
+    ]
+    message = (
+        f"{len(rows)} candidato(s) para la línea {line_idx + 1}. Seleccioná uno y asignalo."
+        if rows
+        else "Sin resultados: la línea sigue pendiente."
+    )
+    return rows, candidates, message
+
+
+def _manual_row_selected(evt: gr.SelectData) -> int | None:
+    """Map the clicked candidate row back to its position in the state."""
+    if not getattr(evt, "selected", False):
+        return None
+    index = evt.index
+    raw = index[0] if isinstance(index, (list, tuple)) else index
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ingest_assign(
+    state: object,
+    line_index: object,
+    candidate_index: object,
+    candidates: object,
+) -> tuple[tuple[ResolvedLine, ...], list[list[object]], str]:
+    """Attach the selected candidate to the pending line (node_id provenance)."""
+    lines = list(state) if isinstance(state, (tuple, list)) else []
+    line_idx = _as_index(line_index)
+    cand_idx = _as_index(candidate_index)
+    if line_idx < 0 or line_idx >= len(lines):
+        return tuple(lines), _resolved_grid(lines), "Seleccioná una línea pendiente válida."
+    if cand_idx < 0:
+        return tuple(lines), _resolved_grid(lines), "Seleccioná un candidato de la grilla."
+    candidates_list = candidates if isinstance(candidates, (tuple, list)) else ()
+    if cand_idx >= len(candidates_list):
+        return tuple(lines), _resolved_grid(lines), "Seleccioná un candidato de la grilla."
+    product = candidates_list[cand_idx]
+    if not product.node_id:
+        return tuple(lines), _resolved_grid(lines), "Error: el candidato no tiene procedencia (node_id)."
+    current = lines[line_idx]
+    if not current.pending:
+        return tuple(lines), _resolved_grid(lines), "Esa línea ya está resuelta."
+    lines[line_idx] = ResolvedLine(receipt=current.receipt, product=product)
+    updated = tuple(lines)
+    return updated, _resolved_grid(updated), f"Línea {line_idx + 1} asignada: {product.sku}"
+
+
+def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> str:
+    """Gated confirmation: blocked while any positive-qty line is unresolved."""
+    lines = list(state) if isinstance(state, (tuple, list)) else []
+    if not lines:
+        return "Primero parseá un documento."
+    pending = [line for line in lines if line.pending and line.receipt.cantidad > 0]
+    if pending:
+        detail = "; ".join(
+            line.receipt.codigo_orig or line.receipt.descripcion for line in pending[:5]
+        )
+        return f"Ingreso bloqueado: líneas sin resolver: {detail}"
+    with SessionLocal() as session:
+        try:
+            result = ingest_receipt_lines(
+                session,
+                int(str(supplier_id)),
+                lines,
+                OwnerContext(owner_id="backoffice-ui"),
+                embedder,
+            )
             session.commit()
+        except (KeyError, SupplierInactiveError) as exc:
+            return f"Error: {exc}"
+        except MissingProvenanceError:
+            return "Error: una línea no tiene procedencia (node_id); no se guardó nada."
+        except EmbeddingUnavailableError:
+            return "Error: el servicio de embeddings falló; no se guardó nada. Intentá de nuevo."
+        except UnresolvedLineError as exc:
+            return f"Ingreso bloqueado: {exc}"
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error al ingresar: {exc}"
-    return f"Ingresado: {result.updated} actualizados, {result.created} creados."
+    return f"Ingresado: {result.updated} actualizados, {result.created} nuevos."
+
+
+def _as_index(raw: object) -> int:
+    """Coerce a Gradio numeric/None input to a 0-based index (-1 when blank)."""
+    if raw is None or str(raw).strip() == "":
+        return -1
+    try:
+        return int(float(str(raw)))
+    except (TypeError, ValueError):
+        return -1
 
 
 # ------------------------------------------------ adoption tab (RAG products)
@@ -994,26 +1168,70 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
 
         with gr.Tab("Ingestion"):
-            gr.Markdown("### Supplier remito / invoice entry")
+            gr.Markdown("### Supplier remito / invoice entry (RAG-backed)")
+            supplier_selector = gr.Dropdown(
+                choices=_active_supplier_choices(),
+                label="Proveedor (activo)",
+            )
             upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
             preview_grid = gr.Dataframe(
-                headers=["Código", "Descripción", "Cantidad", "Supplier cost"],
-                datatype=["str", "str", "number", "str"],
-                label="Vista previa (editable)",
-                interactive=True,
+                headers=["Código", "Descripción", "Cantidad", "Costo", "Resolución"],
+                datatype=["str", "str", "number", "str", "str"],
+                label="Revisión (resueltas / pendientes)",
+                interactive=False,
             )
-            preview_status = gr.Textbox(label="Extracción", interactive=False)
-            supplier_id = gr.Number(label="Supplier ID", precision=0, value=1)
+            resolved_state = gr.State(())
+            preview_status = gr.Textbox(label="Parse", interactive=False)
+            with gr.Row():
+                pending_line_index = gr.Number(label="Línea pendiente (nº)", precision=0, value=1)
+                manual_query = gr.Textbox(
+                    label="Buscar producto en RAG (código)", scale=3
+                )
+                manual_search_btn = gr.Button("Buscar", variant="secondary")
+            manual_results = gr.Dataframe(
+                headers=["Código", "Nombre", "Marca", "Precio", "node_id"],
+                datatype=["str", "str", "str", "number", "str"],
+                label="Candidatos RAG",
+            )
+            manual_results_state = gr.State(())
+            manual_candidate_index = gr.State(None)
+            manual_status = gr.Textbox(label="Búsqueda manual", interactive=False)
+            assign_btn = gr.Button("Asignar seleccionado a la línea", variant="secondary")
             confirm_button = gr.Button("Confirmar e Ingresar a Inventario", variant="primary")
             confirm_status = gr.Textbox(label="Ingreso", interactive=False)
             upload.upload(
-                _ingest_preview,
-                inputs=[gr.State(_get_vision_analyzer()), upload],
-                outputs=[preview_grid, preview_status],
+                _ingest_parse,
+                inputs=[gr.State(_get_rag_client()), upload, supplier_selector],
+                outputs=[preview_grid, resolved_state, preview_status],
+            )
+            manual_search_btn.click(
+                _ingest_manual_search,
+                inputs=[
+                    gr.State(_get_rag_client()),
+                    pending_line_index,
+                    manual_query,
+                    supplier_selector,
+                ],
+                outputs=[manual_results, manual_results_state, manual_status],
+            )
+            manual_results.select(
+                _manual_row_selected,
+                None,
+                [manual_candidate_index],
+            )
+            assign_btn.click(
+                _ingest_assign,
+                inputs=[
+                    resolved_state,
+                    pending_line_index,
+                    manual_candidate_index,
+                    manual_results_state,
+                ],
+                outputs=[resolved_state, preview_grid, manual_status],
             )
             confirm_button.click(
                 _ingest_confirm,
-                inputs=[preview_grid, supplier_id],
+                inputs=[resolved_state, supplier_selector, gr.State(_get_embedder())],
                 outputs=confirm_status,
             )
 
@@ -1366,12 +1584,6 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _on_refresh_sessions, outputs=[session_selector, session_trace_grid]
             )
     return cast(gr.Blocks, demo)
-
-
-@lru_cache
-def _get_vision_analyzer() -> OpenAIVisionAnalyzer:
-    """Lazily build the real vision analyzer (mockable in tests via settings)."""
-    return OpenAIVisionAnalyzer()
 
 
 def launch(*, server_name: str = "127.0.0.1", port: int = 7860) -> None:

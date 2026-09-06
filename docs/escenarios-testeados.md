@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 426, agrupados en 33 dominios.
+**Total de escenarios:** 436, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -35,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 54
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 64
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -561,19 +561,28 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 ## Backoffice (catálogo, clientes, monitor, ingesta)
 
 - Building the app creates tabs with the expected labels. _(`test_build_app_creates_tabs_with_expected_labels`)_
-- La pestaña Ingestion expone la vista previa editable y el botón de confirmar. _(`test_build_app_ingestion_tab_has_preview_and_confirm`)_
+- La pestaña Ingestion expone el dropdown de proveedor y no un ID numérico. _(`test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
-- Las filas extraídas se renderizan como grilla editable. _(`test_to_grid_rows_renders_editable_preview`)_
-- La extracción delega en el analizador de visión y parsea las filas. _(`test_extract_document_items_uses_vision_analyzer`)_
-- Un documento ilegible se rechaza con un error claro. _(`test_extract_document_items_rejects_illegible`)_
 - La grilla de catálogo devuelve todos los campos por producto. _(`test_catalog_list_products_returns_expected_fields`)_
 - Editar stock y precio se refleja en la grilla. _(`test_catalog_update_stock_and_price`)_
 - Cambiar el margen recalcula el precio de lista con el motor de precios. _(`test_catalog_update_margin_recomputes_base_price`)_
 - Registrar un cliente normaliza el teléfono al formato canónico. _(`test_clients_create_normalizes_phone`)_
 - Un teléfono inválido impide registrar el cliente. _(`test_clients_create_rejects_invalid_phone`)_
 - Editar un cliente cambia su descuento particular. _(`test_clients_update_changes_discount`)_
-- Confirmar filas con SKU existente aumenta el stock y el costo. _(`test_confirm_items_updates_existing_product_stock`)_
-- Una fila sin SKU existente crea un producto nuevo con margen del supplier. _(`test_confirm_items_creates_new_product_for_unknown_sku`)_
+- [rag-doc R3] Un hit exacto resuelve la línea sin correr búsqueda híbrida. _(`test_resolve_lines_exact_hit_resolves_without_hybrid`)_
+- [rag-doc R3] Un miss exacto cae al híbrido, scoped al proveedor. _(`test_resolve_lines_exact_miss_falls_back_to_hybrid_scoped`)_
+- [rag-doc R3] El híbrido se filtra al proveedor: filas de otro proveedor no resuelven. _(`test_resolve_lines_hybrid_ignores_other_supplier_products`)_
+- [rag-doc R3/R5] >1 hit exacto → pendiente: nunca se elige silenciosamente. _(`test_resolve_lines_duplicate_exact_stays_pending`)_
+- [manual R2] Sin match exacto ni híbrido → la línea queda pendiente. _(`test_resolve_lines_no_match_stays_pending`)_
+- [rag-doc R3] El código se normaliza UPPER(TRIM) antes del lookup exacto. _(`test_resolve_lines_normalizes_codigo_orig_uppercase_trim`)_
+- Las líneas sin cantidad positiva no se resuelven ni bloquean el ingreso. _(`test_resolve_lines_zero_quantity_does_not_gate`)_
+- [rag-doc R5] Una línea positiva sin resolver impide el ingreso (fail closed). _(`test_ingest_unresolved_positive_line_fails_closed`)_
+- [rag-doc R5] SKU existente: bump + Inventory + StockAdjustment, origen intacto. _(`test_ingest_updates_existing_stock_keeps_origen_and_audits`)_
+- [rag-doc R5] Solo-en-RAG: se adopta con origen {"rag": {node_id, ...}}. _(`test_ingest_adopts_new_product_with_rag_origen_dict`)_
+- [rag-doc R5] Fallo de embedding → la confirmación completa se revierte. _(`test_ingest_embed_failure_rolls_back_whole_confirmation`)_
+- [rag-doc R5] Resuelto sin node_id → no se persiste nada (provenance obligatoria). _(`test_ingest_missing_node_id_fails_closed`)_
+- [rag-doc R1] Proveedor desconocido → KeyError antes de escribir. _(`test_ingest_unknown_supplier_raises`)_
+- [rag-doc R1] Proveedor INACTIVO → rechazado sin escrituras. _(`test_ingest_inactive_supplier_refused`)_
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
 - Customer Orders returns persisted order totals and frozen line fields. _(`test_customer_orders_list_and_detail_include_ars_totals_and_snapshots`)_
 - Margin % derives from original vs base price: LOCAL markup, RAG 0.00. _(`test_order_line_margin_pct_derivation`)_
@@ -585,10 +594,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Registrar un cliente recarga la grilla y limpia el formulario. _(`test_app_register_client_returns_success_message`)_
 - Editar stock desde la UI persiste el cambio en el catálogo. _(`test_app_catalog_edit_persists_stock_change`)_
 - Un teléfono inválido desde la UI devuelve el error y no toca el formulario. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
-- Confirmar la ingesta desde la UI reporta actualizados y creados. _(`test_app_ingest_confirm_reports_counts`)_
-- Confirmar una fila nueva desde la UI la crea en el catálogo. _(`test_app_ingest_confirm_creates_new_product`)_
-- La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_
-- La vista previa de ingesta devuelve la grilla y un mensaje de estado. _(`test_app_ingest_preview_returns_grid_and_message`)_
+- [backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes. _(`test_app_ingest_parse_returns_grid_with_resolved_and_pending`)_
+- [rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla. _(`test_app_ingest_parse_exact_resolves_line`)_
+- [manual R1] La búsqueda manual devuelve candidatos y asignar resuelve la línea. _(`test_app_ingest_manual_search_and_assign_fix_pending`)_
+- [rag-doc R4] Confirmación bloqueada con líneas pendientes; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_pending`)_
+- [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_
 - The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
 - Solo las acciones legales del estado se ofrecen en el tab (backoffice spec). _(`test_legal_actions_per_state`)_
   - DRAFT

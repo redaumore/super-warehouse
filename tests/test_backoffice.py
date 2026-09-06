@@ -15,19 +15,25 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pandas as pd
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
+from src.backoffice.adoption import (
+    EmbeddingUnavailableError,
+    MissingProvenanceError,
+    OwnerContext,
+)
 from src.backoffice.app import (
     _adoption_confirm,
     _adoption_row_selected,
     _adoption_search,
     _catalog_edit,
     _catalog_grid,
+    _ingest_assign,
     _ingest_confirm,
-    _ingest_preview,
+    _ingest_manual_search,
+    _ingest_parse,
     _order_row_selected,
     _register_client,
     _save_exchange_rate,
@@ -56,10 +62,12 @@ from src.backoffice.customer_orders import (
     start_picking_action,
 )
 from src.backoffice.ingestion import (
-    ConfirmedIngest,
-    confirm_items,
-    extract_document_items,
-    to_grid_rows,
+    IngestResult,
+    ReceiptLine,
+    ResolvedLine,
+    UnresolvedLineError,
+    ingest_receipt_lines,
+    resolve_lines,
 )
 from src.backoffice.monitor import list_orders
 from src.config import get_settings
@@ -81,6 +89,7 @@ from src.db.models import (
     SupplierPurchaseOrder,
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
+    SupplierStatus,
 )
 from src.db.session import SessionLocal
 from src.integrations.rag import RagProduct, RagProductError
@@ -88,7 +97,7 @@ from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.purchasing.accumulate import accumulate_need
 from src.sourcing.persistence import upsert_sourcing_need
-from src.supplier.ocr import DocumentExtraction, ExtractedItem
+from src.supplier.guards import SupplierInactiveError
 
 # ---------------------------------------------------------------- app structure
 
@@ -96,6 +105,19 @@ from src.supplier.ocr import DocumentExtraction, ExtractedItem
 def _tabs_block(demo) -> object:
     """The Tabs layout inside the Blocks tree (ignoring Markdown siblings)."""
     return next(c for c in demo.children if type(c).__name__ == "Tabs")
+
+
+def _component_labels(block) -> set:
+    """Collect every component label in a tab, descending Gradio Form/Row wrappers."""
+    labels: set = set()
+    stack = list(getattr(block, "children", []) or [])
+    while stack:
+        child = stack.pop()
+        label = getattr(child, "label", None)
+        if label:
+            labels.add(label)
+        stack.extend(getattr(child, "children", []) or [])
+    return labels
 
 
 def test_build_app_creates_tabs_with_expected_labels():
@@ -116,12 +138,13 @@ def test_build_app_creates_tabs_with_expected_labels():
     ]
 
 
-def test_build_app_ingestion_tab_has_preview_and_confirm():
-    """La pestaña Ingestion expone la vista previa editable y el botón de confirmar."""
+def test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id():
+    """La pestaña Ingestion expone el dropdown de proveedor y no un ID numérico."""
     demo = build_app()
     ingestion_tab = next(tab for tab in _tabs_block(demo).children if tab.label == "Ingestion")
-    component_labels = {getattr(c, "label", None) for c in ingestion_tab.children}
-    assert "Vista previa (editable)" in component_labels
+    labels = _component_labels(ingestion_tab)
+    assert "Proveedor (activo)" in labels
+    assert "Supplier ID" not in labels  # no free numeric ID (spec R1)
 
 
 def test_build_app_catalog_tab_has_product_grid():
@@ -135,39 +158,55 @@ def test_build_app_catalog_tab_has_product_grid():
 # -------------------------------------------------- ingestion logic (no DB)
 
 
-def test_to_grid_rows_renders_editable_preview():
-    """Las filas extraídas se renderizan como grilla editable."""
-    extraction = DocumentExtraction(
-        items=(
-            ExtractedItem(
-                codigo="CLV-001", descripcion="Clavos", cantidad=10, costo=Decimal("1250.00")
-            ),
-        )
+class FakeRag:
+    """RagProductClient stand-in: canned parse/exact/hybrid responses.
+
+    Records the exact-lookup and hybrid-query calls so tests can assert the
+    two-pass resolution order (exact first, hybrid only on miss, scoping).
+    """
+
+    def __init__(self, parse_lines=(), exact=(), hybrid=()) -> None:
+        self.parse_lines = parse_lines
+        self.exact = exact
+        self.hybrid = hybrid
+        self.exact_calls: list[tuple[str, str]] = []
+        self.query_calls: list[str] = []
+
+    def parse_document(self, *, filename: str, content: bytes, codigo_proveedor: str):
+        return self.parse_lines
+
+    def exact_lookup(self, codigo_orig: str, codigo_proveedor: str):
+        self.exact_calls.append((codigo_orig, codigo_proveedor))
+        return self.exact
+
+    def query(self, text: str):
+        self.query_calls.append(text)
+        return self.hybrid
+
+
+def _product(*, sku: str = "CLV-001", name: str = "Clavos Paris 2 Pulgadas", node_id: str = "node-1"):
+    return RagProduct(
+        sku=sku,
+        name=name,
+        codigo_proveedor="MSA",
+        price=135.5,
+        currency="ARS",
+        node_id=node_id,
     )
-    assert to_grid_rows(extraction) == [["CLV-001", "Clavos", "10", "1250.00"]]
 
 
-def test_extract_document_items_uses_vision_analyzer(tmp_path):
-    """La extracción delega en el analizador de visión y parsea las filas."""
-    image = tmp_path / "remito.jpg"
-    image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(
-        analyze=lambda url, prompt: SimpleNamespace(text="10 x Clavos Paris", confidence=1.0)
+def _receipt(
+    codigo_orig: str | None = "CLV-001",
+    descripcion: str = "Clavos Paris 2 Pulgadas",
+    cantidad: int = 5,
+) -> ReceiptLine:
+    return ReceiptLine(
+        codigo_orig=codigo_orig,
+        descripcion=descripcion,
+        cantidad=cantidad,
+        costo=Decimal("95.00"),
+        pagina=1,
     )
-    extraction = extract_document_items(analyzer, image)  # type: ignore[arg-type]
-    assert extraction.items[0].descripcion == "Clavos Paris"
-    assert extraction.items[0].cantidad == 10
-
-
-def test_extract_document_items_rejects_illegible(tmp_path):
-    """Un documento ilegible se rechaza con un error claro."""
-    image = tmp_path / "mancha.jpg"
-    image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(
-        analyze=lambda url, prompt: SimpleNamespace(text="texto sin filas", confidence=0.2)
-    )
-    with pytest.raises(Exception, match="illegible"):
-        extract_document_items(analyzer, image)  # type: ignore[arg-type]
 
 
 # -------------------------------------------------- DB-backed module logic
@@ -319,33 +358,219 @@ def test_clients_update_changes_discount(client_ctx):
     ).descuento_particular_pct == Decimal("0.05")
 
 
-def test_confirm_items_updates_existing_product_stock(shop_ctx):
-    """Confirmar filas con SKU existente aumenta el stock y el costo."""
-    result = confirm_items(
-        shop_ctx["session"],
-        [["CLV-001", "Clavos Paris 2 Pulgadas", 5, "95.00"]],
+def _seed_receipt_product(session, *, codigo_interno="MSA-CLV-001", stock=10, origen=None) -> Catalogo:
+    """Seed a catalog row whose SKU follows the build_sku convention (adoption-style)."""
+    product = Catalogo(
+        codigo_interno=codigo_interno,
         supplier_id=1,
+        nombre_oficial="Clavos Paris 2 Pulgadas",
+        costo_proveedor=Decimal("100.00"),
+        margen_aplicado_pct=Decimal("0.35"),
+        precio_lista_base=Decimal("135.00"),
+        stock_disponible=stock,
+        sinonimos=["clavos"],
+        origen=origen,
     )
-    assert result == ConfirmedIngest(updated=1, created=0)
-    product = shop_ctx["session"].get(Catalogo, 1)
-    assert product.stock_disponible == 15
-    assert product.costo_proveedor == Decimal("95.00")
-    assert product.precio_lista_base == Decimal("128.25")  # 95 × 1.35
+    session.add(product)
+    session.flush()
+    return product
 
 
-def test_confirm_items_creates_new_product_for_unknown_sku(shop_ctx):
-    """Una fila sin SKU existente crea un producto nuevo con margen del supplier."""
-    result = confirm_items(
+def _embedder(*, fail: bool = False):
+    """Fake 1536-dim embedder; ``fail=True`` raises like an unavailable service."""
+
+    class _FakeEmbedder:
+        def embed(self, texts):
+            if fail:
+                raise RuntimeError("embedding service down")
+            return [[0.0] * 1536 for _ in texts]
+
+    return _FakeEmbedder()
+
+
+def test_resolve_lines_exact_hit_resolves_without_hybrid(shop_ctx):
+    """[rag-doc R3] Un hit exacto resuelve la línea sin correr búsqueda híbrida."""
+    rag = FakeRag(exact=(_product(),))
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
+    assert len(resolved) == 1
+    assert not resolved[0].pending
+    assert resolved[0].product.node_id == "node-1"
+    assert rag.query_calls == []  # exact first, hybrid only on miss
+
+
+def test_resolve_lines_exact_miss_falls_back_to_hybrid_scoped(shop_ctx):
+    """[rag-doc R3] Un miss exacto cae al híbrido, scoped al proveedor."""
+    rag = FakeRag(exact=(), hybrid=(_product(sku="AT-5044", name="Tarugo", node_id="n-hyb"),))
+    resolved = resolve_lines(
         shop_ctx["session"],
-        [["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]],
+        rag,
+        [_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm")],
         supplier_id=1,
     )
-    assert result == ConfirmedIngest(updated=0, created=1)
-    product = shop_ctx["session"].scalar(
-        select(Catalogo).where(Catalogo.codigo_interno == "NEW-001")
+    assert len(resolved) == 1
+    assert not resolved[0].pending
+    assert resolved[0].product.node_id == "n-hyb"
+    assert rag.query_calls == ["AT-5044 Tarugo 8mm"]
+
+
+def test_resolve_lines_hybrid_ignores_other_supplier_products(shop_ctx):
+    """[rag-doc R3] El híbrido se filtra al proveedor: filas de otro proveedor no resuelven."""
+    other = _product(sku="X-1", name="Otro proveedor")
+    other = RagProduct(
+        sku="X-1", name="Otro proveedor", codigo_proveedor="ZZZ", node_id="n-zzz"
     )
-    assert product.stock_disponible == 4
-    assert product.precio_lista_base == Decimal("3520.00")  # 3200 × 1.10
+    rag = FakeRag(exact=(), hybrid=(other,))
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
+    assert resolved[0].pending  # supplier-scoped filter → no candidate
+
+
+def test_resolve_lines_duplicate_exact_stays_pending(shop_ctx):
+    """[rag-doc R3/R5] >1 hit exacto → pendiente: nunca se elige silenciosamente."""
+    rag = FakeRag(exact=(_product(node_id="n-1"), _product(node_id="n-2")))
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
+    assert resolved[0].pending
+    assert rag.query_calls == []  # ambiguous exact is pending, no hybrid either
+
+
+def test_resolve_lines_no_match_stays_pending(shop_ctx):
+    """[manual R2] Sin match exacto ni híbrido → la línea queda pendiente."""
+    rag = FakeRag(exact=(), hybrid=())
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
+    assert resolved[0].pending
+
+
+def test_resolve_lines_normalizes_codigo_orig_uppercase_trim(shop_ctx):
+    """[rag-doc R3] El código se normaliza UPPER(TRIM) antes del lookup exacto."""
+    rag = FakeRag(exact=(_product(),))
+    resolve_lines(shop_ctx["session"], rag, [_receipt(codigo_orig="  clv-001  ")], supplier_id=1)
+    assert rag.exact_calls == [("CLV-001", "MSA")]
+
+
+def test_resolve_lines_zero_quantity_does_not_gate(shop_ctx):
+    """Las líneas sin cantidad positiva no se resuelven ni bloquean el ingreso."""
+    rag = FakeRag(exact=(), hybrid=())
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt(cantidad=0)], supplier_id=1)
+    assert len(resolved) == 1
+    assert rag.exact_calls == []  # never queried
+
+
+def test_ingest_unresolved_positive_line_fails_closed(shop_ctx):
+    """[rag-doc R5] Una línea positiva sin resolver impide el ingreso (fail closed)."""
+    lines = [ResolvedLine(receipt=_receipt(), product=None)]
+    with pytest.raises(UnresolvedLineError, match="unresolved"):
+        ingest_receipt_lines(
+            shop_ctx["session"], 1, lines, OwnerContext(owner_id="t"), _embedder()
+        )
+    assert shop_ctx["session"].scalar(select(Inventory)) is None  # nothing written
+
+
+def test_ingest_updates_existing_stock_keeps_origen_and_audits(shop_ctx):
+    """[rag-doc R5] SKU existente: bump + Inventory + StockAdjustment, origen intacto."""
+    session = shop_ctx["session"]
+    _seed_receipt_product(session, origen={"rag": {"node_id": "node-1"}})
+    line = ResolvedLine(receipt=_receipt(cantidad=5), product=_product())
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=1, created=0)
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
+    assert product.stock_disponible == 15  # 10 + 5
+    assert product.origen == {"rag": {"node_id": "node-1"}}  # write-once: untouched
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-001"))
+    assert inventory.quantity_on_hand == 5
+    adjustment = session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    )
+    assert adjustment.delta == 5
+    assert adjustment.actor == "owner:t"
+
+
+def test_ingest_adopts_new_product_with_rag_origen_dict(shop_ctx):
+    """[rag-doc R5] Solo-en-RAG: se adopta con origen {"rag": {node_id, ...}}."""
+    session = shop_ctx["session"]
+    product = RagProduct(
+        sku="AT-5044",
+        name="Tarugo Fischer 8mm",
+        codigo_proveedor="MSA",
+        brand="Fischer",
+        price=135.5,
+        currency="ARS",
+        source_file="catalogo-2024.pdf",
+        page=12,
+        node_id="node-prod-AT-5044",
+    )
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044", descripcion="Tarugo Fischer 8mm", cantidad=4, costo=None, pagina=1
+        ),
+        product=product,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created.stock_disponible == 4
+    assert created.origen == {
+        "rag": {
+            "node_id": "node-prod-AT-5044",
+            "archivo_origen": "catalogo-2024.pdf",
+            "pagina_origen": 12,
+        }
+    }
+    assert session.scalar(
+        select(StockAdjustment).where(StockAdjustment.sku == "MSA-AT-5044")
+    ).delta == 4
+    assert session.scalar(
+        select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")
+    ).quantity_on_hand == 4
+
+
+def test_ingest_embed_failure_rolls_back_whole_confirmation(shop_ctx):
+    """[rag-doc R5] Fallo de embedding → la confirmación completa se revierte."""
+    session = shop_ctx["session"]
+    _seed_receipt_product(session)
+    session.commit()  # persist the seed so rollback restores this exact state
+    first = ResolvedLine(receipt=_receipt(cantidad=3), product=_product())
+    failing = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044", descripcion="Tarugo", cantidad=4, costo=None, pagina=1
+        ),
+        product=RagProduct(sku="AT-5044", name="Tarugo", codigo_proveedor="MSA", node_id="n-tar"),
+    )
+    with pytest.raises(EmbeddingUnavailableError, match="embedding failed"):
+        ingest_receipt_lines(
+            session, 1, [first, failing], OwnerContext(owner_id="t"), _embedder(fail=True)
+        )
+    session.rollback()  # caller-commits: rollback undoes the whole batch
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
+    assert product.stock_disponible == 10  # first line's bump rolled back too
+    assert session.scalar(select(Inventory)) is None
+
+
+def test_ingest_missing_node_id_fails_closed(shop_ctx):
+    """[rag-doc R5] Resuelto sin node_id → no se persiste nada (provenance obligatoria)."""
+    session = shop_ctx["session"]
+    line = ResolvedLine(
+        receipt=ReceiptLine(codigo_orig="AT-5044", descripcion="Tarugo", cantidad=2, costo=None, pagina=1),
+        product=RagProduct(sku="AT-5044", name="Tarugo", codigo_proveedor="MSA", node_id=None),
+    )
+    with pytest.raises(MissingProvenanceError):
+        ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert session.scalar(select(Inventory)) is None
+
+
+def test_ingest_unknown_supplier_raises(shop_ctx):
+    """[rag-doc R1] Proveedor desconocido → KeyError antes de escribir."""
+    rag = FakeRag(exact=(_product(),))
+    with pytest.raises(KeyError, match="unknown supplier"):
+        resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=999)
+
+
+def test_ingest_inactive_supplier_refused(shop_ctx):
+    """[rag-doc R1] Proveedor INACTIVO → rechazado sin escrituras."""
+    session = shop_ctx["session"]
+    session.get(Supplier, 1).status = SupplierStatus.INACTIVO
+    session.flush()
+    rag = FakeRag(exact=(_product(),))
+    with pytest.raises(SupplierInactiveError, match="INACTIVO"):
+        resolve_lines(session, rag, [_receipt()], supplier_id=1)
 
 
 def test_monitor_lists_orders_with_state_and_sheets_status(shop_ctx):
@@ -606,56 +831,114 @@ def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
     assert all(not isinstance(v, str) for v in result[1:])
 
 
-def test_app_ingest_confirm_reports_counts(shop_ctx):
-    """Confirmar la ingesta desde la UI reporta actualizados y creados."""
-    shop_ctx["session"].commit()
-    message = _ingest_confirm([["CLV-001", "Clavos Paris 2 Pulgadas", 3, "95.00"]], 1)
-    assert message == "Ingresado: 1 actualizados, 0 creados."
-    with SessionLocal() as session:
-        product = session.get(Catalogo, 1)
-    assert product.stock_disponible == 13  # 10 sembrados + 3 ingresados
-    assert product.costo_proveedor == Decimal("95.00")
-
-
-def test_app_ingest_confirm_creates_new_product(shop_ctx):
-    """Confirmar una fila nueva desde la UI la crea en el catálogo."""
-    shop_ctx["session"].commit()
-    message = _ingest_confirm([["NEW-001", "Pintura Látex Blanco", 4, "3200.00"]], 1)
-    assert message == "Ingresado: 0 actualizados, 1 creados."
-    with SessionLocal() as session:
-        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "NEW-001"))
-    assert product is not None
-    assert product.stock_disponible == 4
-
-
-def test_app_ingest_confirm_accepts_dataframe_with_headers(shop_ctx):
-    """La grilla con headers llega como DataFrame y se confirma igual."""
-    shop_ctx["session"].commit()
-    df = pd.DataFrame(
-        [["CLV-001", "Clavos Paris 2 Pulgadas", 3, "95.00"]],
-        columns=["Código", "Descripción", "Cantidad", "Supplier cost"],
-    )
-    message = _ingest_confirm(df, 1)
-    assert message == "Ingresado: 1 actualizados, 0 creados."
-    with SessionLocal() as session:
-        assert session.get(Catalogo, 1).stock_disponible == 13  # 10 sembrados + 3 ingresados
-
-
-def test_app_ingest_preview_returns_grid_and_message(shop_ctx, tmp_path):
-    """La vista previa de ingesta devuelve la grilla y un mensaje de estado."""
+def test_app_ingest_parse_returns_grid_with_resolved_and_pending(shop_ctx, tmp_path):
+    """[backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes."""
     shop_ctx["session"].commit()
     image = tmp_path / "remito.jpg"
     image.write_bytes(b"fake")
-    analyzer = SimpleNamespace(
-        analyze=lambda url, prompt: SimpleNamespace(
-            text="10 x Clavos Paris 2 Pulgadas", confidence=1.0
-        )
-    )
-    with patch("src.supplier.ocr.image_to_data_url", return_value="data:image/jpeg;base64,AA=="):
-        grid, message = _ingest_preview(analyzer, image)  # type: ignore[arg-type]
-    assert len(grid) == 1
+
+    from src.integrations.rag import DocumentLine
+
+    class _ParsingRag(FakeRag):
+        def parse_document(self, *, filename, content, codigo_proveedor):
+            return (
+                DocumentLine(
+                    codigo_orig="CLV-001",
+                    codigo=None,
+                    descripcion="Clavos Paris 2 Pulgadas",
+                    cantidad=5,
+                    costo=95.0,
+                    pagina=1,
+                ),
+                DocumentLine(
+                    codigo_orig="AT-5044",
+                    codigo=None,
+                    descripcion="Tarugo Fischer 8mm",
+                    cantidad=4,
+                    costo=None,
+                    pagina=1,
+                ),
+            )
+
+    rag = _ParsingRag(exact=(), hybrid=())
+    grid, state, message = _ingest_parse(rag, image, 1)
+    assert len(grid) == 2
+    assert grid[0][0] == "CLV-001"
     assert grid[0][1] == "Clavos Paris 2 Pulgadas"
-    assert "1 filas extraídas" in message
+    assert grid[0][4] == "PENDIENTE"
+    assert grid[1][4] == "PENDIENTE"
+    assert len(state) == 2  # both lines pending: exact miss + no hybrid candidates
+    assert all(line.pending for line in state)
+    assert "2 líneas; 2 pendiente(s)" in message
+
+
+def test_app_ingest_parse_exact_resolves_line(shop_ctx, tmp_path):
+    """[rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+
+    from src.integrations.rag import DocumentLine
+
+    class _ParsingRag(FakeRag):
+        def parse_document(self, *, filename, content, codigo_proveedor):
+            return (
+                DocumentLine(
+                    codigo_orig="CLV-001",
+                    codigo=None,
+                    descripcion="Clavos Paris 2 Pulgadas",
+                    cantidad=5,
+                    costo=95.0,
+                    pagina=1,
+                ),
+            )
+
+    rag = _ParsingRag(exact=(_product(),), hybrid=())
+    grid, state, _message = _ingest_parse(rag, image, 1)
+    assert grid[0][4] == "CLV-001 — Clavos Paris 2 Pulgadas"
+    assert len(state) == 1
+    assert not state[0].pending
+
+
+def test_app_ingest_manual_search_and_assign_fix_pending(shop_ctx):
+    """[manual R1] La búsqueda manual devuelve candidatos y asignar resuelve la línea."""
+    shop_ctx["session"].commit()
+    pending = ResolvedLine(receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"))
+    rag = FakeRag(
+        hybrid=(RagProduct(sku="AT-5044", name="Tarugo Fischer 8mm", codigo_proveedor="MSA", node_id="n-tar"),)
+    )
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "AT-5044", 1)
+    assert len(candidates_grid) == 1
+    assert candidates_grid[0][0] == "AT-5044"
+    assert candidates_grid[0][4] == "n-tar"
+    new_state, grid, assign_status = _ingest_assign((pending,), 0, 0, candidates)
+    assert "asignada" in assign_status
+    assert new_state[0].product.node_id == "n-tar"
+    assert grid[0][4] == "AT-5044 — Tarugo Fischer 8mm"
+
+
+def test_app_ingest_confirm_blocked_while_pending(shop_ctx):
+    """[rag-doc R4] Confirmación bloqueada con líneas pendientes; mensaje las lista."""
+    shop_ctx["session"].commit()
+    pending = ResolvedLine(receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"))
+    message = _ingest_confirm((pending,), 1, _embedder())
+    assert "bloqueado" in message
+    assert "AT-5044" in message
+    with SessionLocal() as session:
+        assert session.scalar(select(Inventory)) is None  # zero writes while blocked
+
+
+def test_app_ingest_confirm_unblocked_when_all_resolved(shop_ctx):
+    """[rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id."""
+    session = shop_ctx["session"]
+    _seed_receipt_product(session)
+    session.commit()
+    resolved = ResolvedLine(receipt=_receipt(cantidad=3), product=_product())
+    message = _ingest_confirm((resolved,), 1, _embedder())
+    assert message == "Ingresado: 1 actualizados, 0 nuevos."
+    with SessionLocal() as session:
+        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
+        assert product.stock_disponible == 13  # 10 + 3
 
 
 def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
