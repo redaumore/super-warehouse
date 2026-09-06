@@ -236,6 +236,15 @@ def _active_supplier_choices() -> list[tuple[str, int]]:
         return [(supplier.business_name, supplier.id) for supplier in suppliers]
 
 
+def _supplier_choices_update() -> gr.Dropdown:
+    """Re-query ACTIVO suppliers so the dropdown reflects additions at runtime.
+
+    Gradio freezes ``choices=`` evaluated at Blocks build time; returning a
+    component instance from a click handler updates only the given props.
+    """
+    return gr.Dropdown(choices=_active_supplier_choices())
+
+
 def _resolved_grid(lines: Sequence[ResolvedLine]) -> list[list[object]]:
     """Render resolved/pending receipt lines for the review grid."""
     rows: list[list[object]] = []
@@ -1174,6 +1183,8 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 choices=_active_supplier_choices(),
                 label="Proveedor (activo)",
             )
+            supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            supplier_refresh.click(_supplier_choices_update, outputs=supplier_selector)
             upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
             preview_grid = gr.Dataframe(
                 headers=["Código", "Descripción", "Cantidad", "Costo", "Resolución"],
