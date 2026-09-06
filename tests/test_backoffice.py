@@ -1135,11 +1135,9 @@ def test_app_adoption_confirm_adopts_selected_product(shop_ctx):
     """Adoptar el producto seleccionado crea el SKU con stock y provenance."""
     shop_ctx["session"].commit()
     message = _adoption_confirm((_RAG_PRODUCT,), 0, 1, _FakeEmbedder())
-    assert message == "Adoptado: RAG-MSA-AT-5044"
+    assert message == "Adoptado: MSA-AT-5044"
     with SessionLocal() as session:
-        product = session.scalar(
-            select(Catalogo).where(Catalogo.codigo_interno == "RAG-MSA-AT-5044")
-        )
+        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
     assert product is not None
     assert product.stock_disponible == 1
     assert product.origen["rag"]["node_id"] == "node-1"

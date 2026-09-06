@@ -162,7 +162,7 @@ def test_adopcion_crea_catalogo_inventory_y_stock_adjustment(db_session):
     _seed_supplier(db_session)
     product = adopt_product(db_session, _dto(), OWNER, FakeEmbedder())
 
-    assert product.codigo_interno == "RAG-AMX-AT-5044"
+    assert product.codigo_interno == "AMX-AT-5044"
     assert product.stock_disponible == 50
     inventory = db_session.scalar(
         select(Inventory).where(Inventory.sku_id == product.codigo_interno)
@@ -179,10 +179,10 @@ def test_adopcion_crea_catalogo_inventory_y_stock_adjustment(db_session):
 
 
 def test_sku_sigue_plantilla_deterministica_y_se_trunca_a_64(db_session):
-    """El SKU es RAG-{codigo}-{codigo_orig normalizado} y nunca supera 64 chars."""
+    """El SKU es {codigo}-{codigo_orig normalizado} y nunca supera 64 chars."""
     _seed_supplier(db_session, code="AMX")
     adopt_product(db_session, _dto(sku=" at-5044 "), OWNER, FakeEmbedder())
-    assert db_session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "RAG-AMX-AT-5044"))
+    assert db_session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "AMX-AT-5044"))
 
     largo = build_sku("AMX", "x" * 200)
     assert len(largo) == 64
@@ -193,7 +193,7 @@ def test_sku_colision_rechazada_sin_persistir(db_session):
     _seed_supplier(db_session)
     seeds = [
         Catalogo(
-            codigo_interno=f"RAG-AMX-AT-{i}",
+            codigo_interno=f"AMX-AT-{i}",
             supplier_id=1,
             nombre_oficial=f"Semilla {i}",
             costo_proveedor=Decimal("1.00"),
@@ -334,7 +334,7 @@ def test_endpoint_adopcion_feliz_crea_tres_filas_y_no_toca_rag(
     assert r.text == "adopted"
     product = db_session.scalar(select(Catalogo))
     assert product is not None
-    assert product.codigo_interno == "RAG-AMX-AT-5044"
+    assert product.codigo_interno == "AMX-AT-5044"
     assert product.stock_disponible == 50
     assert product.origen == {
         "rag": {
@@ -359,7 +359,7 @@ def test_endpoint_colision_sku_rechazada_409(db_session, client, fake_embedder):
     _seed_supplier(db_session)
     db_session.add(
         Catalogo(
-            codigo_interno="RAG-AMX-AT-5044",
+            codigo_interno="AMX-AT-5044",
             supplier_id=1,
             nombre_oficial="Ya existe",
             costo_proveedor=Decimal("1.00"),

@@ -397,7 +397,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 ## Adopción de productos RAG (use case de backoffice)
 
 - Una adopción feliz crea Catalogo + Inventory + StockAdjustment en una transacción. _(`test_adopcion_crea_catalogo_inventory_y_stock_adjustment`)_
-- El SKU es RAG-{codigo}-{codigo_orig normalizado} y nunca supera 64 chars. _(`test_sku_sigue_plantilla_deterministica_y_se_trunca_a_64`)_
+- El SKU es {codigo}-{codigo_orig normalizado} y nunca supera 64 chars. _(`test_sku_sigue_plantilla_deterministica_y_se_trunca_a_64`)_
 - Un SKU ya existente en catalogo devuelve 409 y no persiste nada nuevo. _(`test_sku_colision_rechazada_sin_persistir`)_
 - Precio None se normaliza a Decimal("0.00") siguiendo el patrón _coerce_cost. _(`test_precio_ausente_se_guarda_como_cero`)_
 - La moneda se guarda en mayúsculas; ausente queda None. _(`test_moneda_se_normaliza_a_mayusculas`)_

@@ -30,7 +30,6 @@ from src.pricing.engine import compute_base
 from src.supplier.guards import SupplierInactiveError
 
 _CENT = Decimal("0.01")
-_SKU_PREFIX = "RAG"
 _SKU_MAX_LEN = 64
 _ADOPTION_REASON = "product_adoption"
 _EMBED_DIMS = 1536
@@ -100,12 +99,12 @@ def _normalize_sku_part(code: str) -> str:
 
 
 def build_sku(supplier_code: str, codigo_orig: str) -> str:
-    """SKU determinístico ``RAG-{code}-{codigo_orig normalizado}``, máx. 64 chars.
+    """SKU determinístico ``{code}-{codigo_orig normalizado}``, máx. 64 chars.
 
     La plantilla es idempotente: el mismo ``codigo_orig`` siempre produce el
     mismo SKU, y la colisión se rechaza en 409 en el use case.
     """
-    return f"{_SKU_PREFIX}-{supplier_code}-{_normalize_sku_part(codigo_orig)}"[:_SKU_MAX_LEN]
+    return f"{supplier_code}-{_normalize_sku_part(codigo_orig)}"[:_SKU_MAX_LEN]
 
 
 def _compose_embedding_text(dto: AdoptRequest) -> str:
