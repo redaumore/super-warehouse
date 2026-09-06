@@ -15,7 +15,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints import ingestion as ingestion_ep
-from app.core.ingestion.document_parser import ReceiptLine, ReceiptPageResult
+from app.core.ingestion.document_parser import (
+    DocumentLineParser,
+    ReceiptLine,
+    ReceiptPageResult,
+    _render_pages,
+)
 from app.main import app
 
 client = TestClient(app)
@@ -190,6 +195,97 @@ def test_ingest_parse_transport_failure_is_structured_error(monkeypatch: pytest.
     )
     assert response.status_code == 500
     assert "parse error" in response.json()["detail"]
+
+
+# --------------------------------------------------- page-render adapter (D1)
+
+
+def _two_page_pdf() -> bytes:
+    """Build a real two-page PDF in memory (pymupdf)."""
+    import pymupdf as fitz
+
+    doc = fitz.open()
+    try:
+        for index in range(2):
+            page = doc.new_page()
+            page.insert_text((72, 72), f"Articulo {index + 1}")
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
+def test_render_pages_pdf_renders_page_by_page_with_text_and_image():
+    """[sup-doc R1] A PDF renders page-by-page: text layer + base64 PNG per page."""
+    pages = _render_pages(_two_page_pdf(), "factura.pdf")
+    assert [page.pagina for page in pages] == [1, 2]
+    assert all("Articulo" in page.text for page in pages)
+    assert all(page.image_b64 for page in pages)
+
+
+def test_render_pages_image_is_single_page_without_text_layer():
+    """[sup-doc R1] An image wraps as one page (pagina=1, empty text layer)."""
+    pages = _render_pages(b"fake-image-bytes", "remito.jpg")
+    assert len(pages) == 1
+    assert pages[0].pagina == 1
+    assert pages[0].text == ""
+    assert pages[0].image_b64.startswith("data:image/")
+
+
+def _patch_real_parser(monkeypatch: pytest.MonkeyPatch, lines: list[dict]) -> None:
+    """Point the endpoint's parser factory at a REAL parser with a fake OpenAI."""
+
+    def build_parser():
+        return DocumentLineParser(client=_fake_parse_client(lines))
+
+    monkeypatch.setattr(ingestion_ep, "_get_parser", build_parser)
+
+
+def test_ingest_parse_pdf_extracts_lines_through_real_parser(monkeypatch: pytest.MonkeyPatch):
+    """[sup-doc R1] Invoice PDF: same structured fields with per-page provenance."""
+    _patch_real_parser(
+        monkeypatch,
+        [{"codigo_orig": "AT-5044", "descripcion": "Tarugo Fischer 8mm", "cantidad": 10, "costo": 135.5}],
+    )
+    before = _uploads_count()
+    response = client.post(
+        "/api/v1/ingest/parse",
+        files={"file": ("factura.pdf", _two_page_pdf(), "application/pdf")},
+        data={"codigo_proveedor": "AMX"},
+    )
+    assert response.status_code == 200
+    document = response.json()["document"]
+    assert document["source_filename"] == "factura.pdf"
+    assert document["source_pages"] == 2
+    assert [line["pagina"] for line in document["lines"]] == [1, 2]
+    assert document["lines"][0]["cantidad"] == 10
+    assert document["lines"][0]["costo"] == 135.5
+    assert _uploads_count() == before  # never persisted
+
+
+def test_ingest_parse_photo_extracts_lines_through_real_parser(monkeypatch: pytest.MonkeyPatch):
+    """[sup-doc R1] Remito photo: code/description/quantity/cost from one page."""
+    _patch_real_parser(
+        monkeypatch,
+        [{"codigo_orig": "CLV-1", "descripcion": "Clavos 2p", "cantidad": 5, "costo": 95.0}],
+    )
+    response = client.post(
+        "/api/v1/ingest/parse",
+        files={"file": ("remito.jpg", b"fake-image-bytes", "image/jpeg")},
+        data={"codigo_proveedor": "AMX"},
+    )
+    assert response.status_code == 200
+    document = response.json()["document"]
+    assert document["source_pages"] == 1
+    assert document["lines"] == [
+        {
+            "codigo_orig": "CLV-1",
+            "codigo": None,
+            "descripcion": "Clavos 2p",
+            "cantidad": 5,
+            "costo": 95.0,
+            "pagina": 1,
+        }
+    ]
 
 
 # --------------------------------------------------------------- exact lookup

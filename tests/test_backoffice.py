@@ -25,6 +25,7 @@ from src.backoffice.adoption import (
     OwnerContext,
 )
 from src.backoffice.app import (
+    _active_supplier_choices,
     _adoption_confirm,
     _adoption_row_selected,
     _adoption_search,
@@ -829,6 +830,22 @@ def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
     assert result[0].startswith("Error:")
     # The other outputs are gr.update() keepers, not cleared values.
     assert all(not isinstance(v, str) for v in result[1:])
+
+
+def test_active_supplier_choices_lists_activo_by_business_name(shop_ctx):
+    """[rag-doc R1] El dropdown lista solo ACTIVO por business_name y retiene el ID."""
+    shop_ctx["session"].add(
+        Supplier(
+            id=2,
+            code="XYZ",
+            business_name="Inactivo SA",
+            default_margin_pct=Decimal("0.10"),
+            status=SupplierStatus.INACTIVO,
+        )
+    )
+    shop_ctx["session"].commit()
+    choices = _active_supplier_choices()
+    assert choices == [("Mayorista SA", 1)]  # business_name → id; ACTIVO only
 
 
 def test_app_ingest_parse_returns_grid_with_resolved_and_pending(shop_ctx, tmp_path):
