@@ -572,9 +572,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_
 - Approval registration refuses an order until its prices are converted. _(`test_pending_conversion_order_is_blocked_at_approval`)_
 - La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
-- Registrar un cliente desde la UI devuelve un mensaje de éxito. _(`test_app_register_client_returns_success_message`)_
+- Registrar un cliente recarga la grilla y limpia el formulario. _(`test_app_register_client_returns_success_message`)_
 - Editar stock desde la UI persiste el cambio en el catálogo. _(`test_app_catalog_edit_persists_stock_change`)_
-- Un teléfono inválido desde la UI devuelve el error en pantalla. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
+- Un teléfono inválido desde la UI devuelve el error y no toca el formulario. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
 - Confirmar la ingesta desde la UI reporta actualizados y creados. _(`test_app_ingest_confirm_reports_counts`)_
 - Confirmar una fila nueva desde la UI la crea en el catálogo. _(`test_app_ingest_confirm_creates_new_product`)_
 - La grilla con headers llega como DataFrame y se confirma igual. _(`test_app_ingest_confirm_accepts_dataframe_with_headers`)_

@@ -165,7 +165,14 @@ def _po_cancel(po_id: object) -> str:
             return f"Error: {exc}"
 
 
-def _register_client(nombre: str, telefono: str, lista_id: object, descuento: float) -> str:
+def _register_client(
+    nombre: str, telefono: str, lista_id: object, descuento: float
+) -> tuple[object, object, object, object, object, object]:
+    """Register a client; on success reload the grid and clear the form.
+
+    Returns ``(status, grid_rows, name, phone, price_list, discount)``. On
+    failure every non-status component is left untouched via ``gr.update()``.
+    """
     with SessionLocal() as session:
         try:
             create_client(
@@ -177,8 +184,15 @@ def _register_client(nombre: str, telefono: str, lista_id: object, descuento: fl
             )
             session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
-            return f"Error: {exc}"
-    return "Cliente registrado"
+            return (
+                f"Error: {exc}",
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
+    return "Cliente registrado", _clients_grid(), "", "", None, 0
 
 
 def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: float | None) -> str:
@@ -932,7 +946,14 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             client_save.click(
                 _register_client,
                 inputs=[client_name, client_phone, client_list, client_discount],
-                outputs=client_status,
+                outputs=[
+                    client_status,
+                    clients_grid,
+                    client_name,
+                    client_phone,
+                    client_list,
+                    client_discount,
+                ],
             )
             client_refresh = gr.Button("Refrescar")
             client_refresh.click(_clients_grid, outputs=clients_grid)

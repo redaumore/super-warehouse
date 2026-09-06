@@ -573,10 +573,14 @@ def test_app_catalog_grid_renders_seeded_products(shop_ctx):
 
 
 def test_app_register_client_returns_success_message(shop_ctx):
-    """Registrar un cliente desde la UI devuelve un mensaje de éxito."""
+    """Registrar un cliente recarga la grilla y limpia el formulario."""
     shop_ctx["session"].commit()
-    message = _register_client("Nueva Ferretería", "11 6666 7777", 1, 0.0)
+    message, rows, name, phone, lista, discount = _register_client(
+        "Nueva Ferretería", "11 6666 7777", 1, 0.0
+    )
     assert message == "Cliente registrado"
+    assert any(row[1] == "Nueva Ferretería" for row in rows)
+    assert (name, phone, lista, discount) == ("", "", None, 0)
     with SessionLocal() as session:
         assert (
             session.scalar(select(Cliente).where(Cliente.nombre_comercial == "Nueva Ferretería"))
@@ -594,10 +598,12 @@ def test_app_catalog_edit_persists_stock_change(shop_ctx):
 
 
 def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
-    """Un teléfono inválido desde la UI devuelve el error en pantalla."""
+    """Un teléfono inválido desde la UI devuelve el error y no toca el formulario."""
     shop_ctx["session"].commit()
-    message = _register_client("Pepe", "no-es-telefono", 1, 0.0)
-    assert message.startswith("Error:")
+    result = _register_client("Pepe", "no-es-telefono", 1, 0.0)
+    assert result[0].startswith("Error:")
+    # The other outputs are gr.update() keepers, not cleared values.
+    assert all(not isinstance(v, str) for v in result[1:])
 
 
 def test_app_ingest_confirm_reports_counts(shop_ctx):
