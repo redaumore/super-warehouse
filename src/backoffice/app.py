@@ -682,6 +682,33 @@ def _save_default_margin(value: object) -> str:
     return f"Default margin saved: {saved}%"
 
 
+GRID_SELECTION_CSS = """
+/* Grid selection UX: Gradio's default selected-cell styling draws a per-cell
+   ring plus floating menu/selection buttons (the side tabs), which do not
+   identify the selected row. Replace it with a full-row highlight. */
+[data-testid^="cell-"] .cell-menu-button,
+[data-testid^="cell-"] .selection-button {
+    display: none !important;
+}
+[data-testid^="cell-"].cell-selected,
+[data-testid^="cell-"].cell-selected .text {
+    --ring-color: var(--color-accent);
+    box-shadow: none !important;
+}
+[data-testid^="cell-"].cell-selected .text {
+    background: transparent !important;
+}
+.virtual-row:has(.body-cell.cell-selected) .body-cell {
+    background: color-mix(
+        in srgb, var(--color-accent) 16%, var(--background-fill-primary)
+    ) !important;
+}
+.virtual-row:has(.body-cell.cell-selected) .body-cell:first-child {
+    box-shadow: inset 3px 0 0 0 var(--color-accent) !important;
+}
+"""
+
+
 def build_app(settings: Settings | None = None) -> gr.Blocks:
     """Construct the seven-tab Blocks tree (no server is started).
 
@@ -1125,7 +1152,11 @@ def _get_vision_analyzer() -> OpenAIVisionAnalyzer:
 
 def launch(*, server_name: str = "127.0.0.1", port: int = 7860) -> None:
     """Launch the backoffice UI (only when run explicitly)."""
-    build_app().launch(server_name=server_name, server_port=port)
+    build_app().launch(
+        server_name=server_name,
+        server_port=port,
+        css=GRID_SELECTION_CSS,
+    )
 
 
 if __name__ == "__main__":
