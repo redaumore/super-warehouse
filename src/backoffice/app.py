@@ -56,6 +56,14 @@ from src.backoffice.po import (
     receive_po_action,
     send_po_action,
 )
+from src.backoffice.price_lists import (
+    create_price_list,
+    delete_price_list,
+    update_price_list,
+)
+from src.backoffice.price_lists import (
+    list_price_lists as list_price_list_rows,
+)
 from src.backoffice.sessions import list_sessions, session_events_grid
 from src.backoffice.suppliers import (
     create_supplier,
@@ -64,7 +72,7 @@ from src.backoffice.suppliers import (
     update_supplier,
 )
 from src.config import Settings, get_settings
-from src.db.models import IvaCondition, Supplier, SupplierStatus
+from src.db.models import IvaCondition, ListaPrecios, Supplier, SupplierStatus
 from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIEmbedder, OpenAIVisionAnalyzer
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
@@ -512,6 +520,153 @@ def _price_list_choices() -> list[dict[str, object]]:
         return list_price_lists(session)
 
 
+def _price_list_dropdown_choices() -> list[tuple[str, int]]:
+    """Build fresh ``(label, id)`` choices showing each list's % in the label.
+
+    Storage holds a FRACTION (0.10 = 10%, -0.05 = 5% surcharge), so the label
+    converts back to % points: ``"Gremio A (10%)"``, ``"Default (0%)"``.
+    """
+    choices: list[tuple[str, int]] = []
+    for lista in _price_list_choices():
+        pct = f"{Decimal(str(lista['descuento_lista_pct'])) * 100:f}"
+        if "." in pct:  # "0" has no decimal point; don't rstrip it to ""
+            pct = pct.rstrip("0").rstrip(".")
+        choices.append((f"{lista['nombre']} ({pct}%)", int(str(lista["lista_id"]))))
+    return choices
+
+
+def _price_lists_grid() -> list[list[object]]:
+    """Render the price lists for the Settings block (discount shown as % points).
+
+    Storage holds a FRACTION (0.10 = 10%, -0.05 = 5% surcharge), so the grid
+    multiplies by 100; the save handler divides back.
+    """
+    with SessionLocal() as session:
+        rows = list_price_list_rows(session)
+    return [
+        [
+            r["lista_id"],
+            r["nombre"],
+            float(Decimal(str(r["descuento_lista_pct"])) * 100),
+            r["clientes"],
+        ]
+        for r in rows
+    ]
+
+
+def _price_list_row_selected(evt: gr.SelectData, grid: pd.DataFrame) -> tuple[object, ...]:
+    """Populate the price-list form + state from the selected grid row.
+
+    Gradio delivers a pandas DataFrame when ``headers`` are set, so the row is
+    read via iloc — positional, the header labels never matter.
+    """
+    row_index = evt.index[0]
+    row = grid.iloc[row_index]
+    lista_id = int(row.iloc[0])  # "ID" column — positional, labels never matter
+    with SessionLocal() as session:
+        lista = session.get(ListaPrecios, lista_id)
+    if lista is None:
+        return 0, "", 0.0
+    return lista.lista_id, lista.nombre, float(lista.descuento_lista_pct) * 100
+
+
+def _save_price_list(
+    price_list_id: object,
+    nombre: str,
+    descuento_pct: float | None,
+) -> tuple[str, list[list[object]], int, str, float, list[tuple[str, int]]]:
+    """Save (create or update) a price list, converting % points → fraction.
+
+    Returns ``(message, grid, selected_id, nombre, descuento_pct, dropdown_choices)``
+    matching the ``price_list_save.click`` outputs; the trailing choices refresh the
+    client-form dropdown so new lists are selectable right away. A successful create
+    clears the form and resets the selection to 0 so the next save is a new list; a
+    successful update or a validation error echoes the submitted values back so the
+    form stays as the user left it.
+    """
+    submitted_pct = float(descuento_pct) if descuento_pct is not None else 0.0
+    submitted = (nombre or "", submitted_pct)
+    current_id = int(str(price_list_id or 0))
+    with SessionLocal() as session:
+        try:
+            fraction = None if descuento_pct is None else Decimal(str(descuento_pct)) / 100
+            if current_id:
+                update_price_list(session, current_id, nombre=nombre or "", descuento_pct=fraction)
+                message = "Lista guardada"
+                selected_id, form_values = current_id, submitted
+            else:
+                created = create_price_list(session, nombre=nombre or "", descuento_pct=fraction)
+                message = f"Lista creada: {created.nombre}"
+                selected_id, form_values = 0, ("", 0.0)
+            session.commit()
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return (
+                f"Error: {exc}",
+                _price_lists_grid(),
+                current_id,
+                *submitted,
+                _price_list_dropdown_choices(),
+            )
+    return (
+        message,
+        _price_lists_grid(),
+        selected_id,
+        *form_values,
+        _price_list_dropdown_choices(),
+    )
+
+
+def _delete_price_list(
+    price_list_id: object,
+) -> tuple[str, list[list[object]], int, str, float, list[tuple[str, int]]]:
+    """Delete the selected price list (refused while clients reference it).
+
+    Returns ``(message, grid, selected_id, nombre, descuento_pct, dropdown_choices)``:
+    a successful delete clears the form and the selection; an error keeps the
+    selection and restores the row's values. The trailing choices refresh the
+    client-form dropdown so removed lists disappear from it.
+    """
+    target_id = int(str(price_list_id or 0))
+    if not target_id:
+        return (
+            "Seleccione una fila de la grilla primero",
+            _price_lists_grid(),
+            0,
+            "",
+            0.0,
+            _price_list_dropdown_choices(),
+        )
+    with SessionLocal() as session:
+        try:
+            nombre = delete_price_list(session, target_id)
+            session.commit()
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            with SessionLocal() as fresh:
+                lista = fresh.get(ListaPrecios, target_id)
+            if lista is not None:
+                form: tuple[str, float] = (
+                    lista.nombre,
+                    float(lista.descuento_lista_pct) * 100,
+                )
+            else:
+                form = ("", 0.0)
+            return (
+                f"Error: {exc}",
+                _price_lists_grid(),
+                target_id,
+                *form,
+                _price_list_dropdown_choices(),
+            )
+    return (
+        f"Lista eliminada: {nombre}",
+        _price_lists_grid(),
+        0,
+        "",
+        0.0,
+        _price_list_dropdown_choices(),
+    )
+
+
 def _customer_orders_grid() -> list[list[object]]:
     """Render persisted customer orders for the seventh tab."""
     with SessionLocal() as session:
@@ -768,10 +923,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 client_name = gr.Textbox(label="Nombre comercial")
                 client_phone = gr.Textbox(label="Teléfono WhatsApp")
                 client_list = gr.Dropdown(
-                    choices=[
-                        (f"{l['nombre']} (ID {int(str(l['lista_id']))})", int(str(l["lista_id"])))
-                        for l in _price_list_choices()
-                    ],
+                    choices=_price_list_dropdown_choices(),
                     label="Lista de precios",
                 )
                 client_discount = gr.Number(label="Descuento particular %", value=0)
@@ -784,6 +936,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             client_refresh = gr.Button("Refrescar")
             client_refresh.click(_clients_grid, outputs=clients_grid)
+            client_refresh.click(_price_list_dropdown_choices, None, client_list)
 
         with gr.Tab("Orders/Monitor"):
             gr.Markdown("### Pedidos en vivo")
@@ -1106,6 +1259,56 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 inputs=default_margin,
                 outputs=default_margin_status,
             )
+
+            gr.Markdown("### Listas de precios")
+            price_lists_grid = gr.Dataframe(
+                headers=["ID", "Nombre", "Descuento %", "Clientes"],
+                datatype=["number", "str", "number", "number"],
+                value=lambda: _price_lists_grid(),
+                label="Listas de precios (0 = sin descuento, negativo = recargo)",
+                interactive=False,
+            )
+            price_list_state = gr.State(value=0)
+            with gr.Row():
+                price_list_nombre = gr.Textbox(label="Nombre")
+                price_list_descuento = gr.Number(
+                    label="Descuento % (negativo = recargo)", value=0.0
+                )
+            price_list_status = gr.Textbox(label="Estado de listas de precios", interactive=False)
+            with gr.Row():
+                price_list_save = gr.Button("Guardar lista", variant="primary")
+                price_list_delete = gr.Button("Eliminar lista", variant="stop")
+                price_list_refresh = gr.Button("Refrescar")
+            price_lists_grid.select(
+                _price_list_row_selected,
+                inputs=[price_lists_grid],
+                outputs=[price_list_state, price_list_nombre, price_list_descuento],
+            )
+            price_list_save.click(
+                _save_price_list,
+                inputs=[price_list_state, price_list_nombre, price_list_descuento],
+                outputs=[
+                    price_list_status,
+                    price_lists_grid,
+                    price_list_state,
+                    price_list_nombre,
+                    price_list_descuento,
+                    client_list,
+                ],
+            )
+            price_list_delete.click(
+                _delete_price_list,
+                inputs=[price_list_state],
+                outputs=[
+                    price_list_status,
+                    price_lists_grid,
+                    price_list_state,
+                    price_list_nombre,
+                    price_list_descuento,
+                    client_list,
+                ],
+            )
+            price_list_refresh.click(_price_lists_grid, None, price_lists_grid)
 
         with gr.Tab("Sessions"):
             gr.Markdown("### User Telegram Sessions & Traces")

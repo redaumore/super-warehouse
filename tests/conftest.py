@@ -76,6 +76,11 @@ def db_engine():
     cfg = AlembicConfig(str(_ALEMBIC_INI))
     command.stamp(cfg, "base")
     command.upgrade(cfg, "head")
+    # The d9fb1b9737e4 seed migration leaves a "Default" price-list row behind;
+    # many suites insert explicit lista_id=1 rows, so start every session from
+    # the same empty-table state the pre-seed migrations produced.
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE"))
     yield engine
     Base.metadata.drop_all(engine)
     engine.dispose()
