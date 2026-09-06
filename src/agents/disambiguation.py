@@ -87,11 +87,14 @@ def _fuzzy_score(query: str, candidate: str) -> float:
     normalized_query = normalize_text(query)
     normalized_candidate = normalize_text(candidate)
     if 2 <= len(query.split()) <= 3:
-        return max(
-            fuzz.token_sort_ratio(normalized_query, normalized_candidate),
-            fuzz.token_set_ratio(normalized_query, normalized_candidate),
-            fuzz.partial_ratio(normalized_query, normalized_candidate),
-        ) / 100.0
+        return (
+            max(
+                fuzz.token_sort_ratio(normalized_query, normalized_candidate),
+                fuzz.token_set_ratio(normalized_query, normalized_candidate),
+                fuzz.partial_ratio(normalized_query, normalized_candidate),
+            )
+            / 100.0
+        )
     return fuzz.token_sort_ratio(normalized_query, normalized_candidate) / 100.0
 
 

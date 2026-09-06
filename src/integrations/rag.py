@@ -315,9 +315,8 @@ class RagProductClient:
             codigo_proveedor=raw.get("codigo_proveedor") or None,
             node_id=chunk.get("node_id") if chunk else None,
             fragment_id=fragment_id,
-            categoria_padre=raw.get("categoria_padre") or (
-                chunk.get("categoria_padre") if chunk else None
-            ),
+            categoria_padre=raw.get("categoria_padre")
+            or (chunk.get("categoria_padre") if chunk else None),
             categoria=raw.get("categoria") or (chunk.get("categoria") if chunk else None),
             subcategoria=raw.get("subcategoria") or (chunk.get("subcategoria") if chunk else None),
         )

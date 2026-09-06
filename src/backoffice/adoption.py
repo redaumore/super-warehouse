@@ -165,7 +165,9 @@ def adopt_product(
     except Exception as exc:  # cualquier falla del embedder cierra
         raise EmbeddingUnavailableError(f"embedding failed: {exc}") from exc
     if len(embedding) != _EMBED_DIMS:
-        raise EmbeddingUnavailableError(f"embedding has {len(embedding)} dims, expected {_EMBED_DIMS}")
+        raise EmbeddingUnavailableError(
+            f"embedding has {len(embedding)} dims, expected {_EMBED_DIMS}"
+        )
     margen = supplier.default_margin_pct
     origen: dict[str, Any] = {
         "rag": {

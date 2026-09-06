@@ -164,7 +164,9 @@ def test_adopcion_crea_catalogo_inventory_y_stock_adjustment(db_session):
 
     assert product.codigo_interno == "RAG-AMX-AT-5044"
     assert product.stock_disponible == 50
-    inventory = db_session.scalar(select(Inventory).where(Inventory.sku_id == product.codigo_interno))
+    inventory = db_session.scalar(
+        select(Inventory).where(Inventory.sku_id == product.codigo_interno)
+    )
     assert inventory is not None
     assert inventory.quantity_on_hand == 50
     adjustment = db_session.scalar(

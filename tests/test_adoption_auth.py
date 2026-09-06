@@ -1,7 +1,7 @@
 """Pruebas del gate y del wiring del endpoint de adopción (tasks 2.6–3.2).
 
 Cubren el contrato de ``src.api.adoption`` sin tocar la base de datos: HMAC
-sobre el body crudo (falta/inválido → 401, rotación con secreto viejo), 
+sobre el body crudo (falta/inválido → 401, rotación con secreto viejo),
 allowlist de ``X-Owner-Id`` (fuera de lista → 403, vacía fail-closed), parseo
 de ``AdoptRequest`` (body inválido → 422), feature flag fase 4 (→ 503) y la
 fábrica de embedder que consume los settings de adopción.

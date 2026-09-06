@@ -44,7 +44,13 @@ class _ClientHolder:
     clear error surfaces only when a real call is attempted.
     """
 
-    def __init__(self, client: OpenAI | None, api_key: str, timeout: float | None = None, retries: int | None = None) -> None:
+    def __init__(
+        self,
+        client: OpenAI | None,
+        api_key: str,
+        timeout: float | None = None,
+        retries: int | None = None,
+    ) -> None:
         self._client = client
         self._api_key = api_key
         self._timeout = timeout
