@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 373, agrupados en 30 dominios.
+**Total de escenarios:** 416, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,11 +17,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 16
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 19
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
-- [Búsqueda en catálogo](#búsqueda-en-catálogo) — 9
+- [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
+- [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
+- [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 17
+- [Autenticación de adopción (HMAC y allowlist de owners)](#autenticación-de-adopción-hmac-y-allowlist-de-owners) — 10
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
@@ -32,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 45
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 54
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -264,6 +267,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un is_refusal=true se traduce a lista vacía (no encontrado en catálogos). _(`test_rag_client_refusal_returns_empty_tuple`)_
 - Un SUCCESS sin productos devuelve lista vacía, no un error. _(`test_rag_client_empty_products_returns_empty_tuple`)_
 - Los productos sin nombre se omiten del resultado tipado. _(`test_rag_client_skips_products_without_name`)_
+- El node_id del producto se resuelve desde context_chunks vía fragmento_id. _(`test_rag_client_resolves_node_id_from_context_chunks`)_
+- Un fragmento sin chunk asociado deja node_id en None (provenance ausente). _(`test_rag_client_unresolved_fragment_leaves_node_id_none`)_
+- Las categorías ausentes en la fila se completan desde el chunk del contexto. _(`test_rag_client_fills_categories_from_context_chunk`)_
 - El codigo_orig gana; el codigo normalizado es solo el fallback. _(`test_rag_client_prefers_codigo_orig_over_normalized_codigo`)_
 - Sin codigo_orig, el codigo con doble prefijo se normaliza al mostrarlo. _(`test_rag_client_normalizes_double_prefix_codigo`)_
 - Un error de conexión se convierte en RagProductError, nunca transport crudo. _(`test_rag_client_connect_error_raises_domain_error`)_
@@ -375,9 +381,54 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Mayúsculas, puntuación y espacios extra no rompen la resolución. _(`test_unnormalized_input_still_resolves`)_
 - La búsqueda híbrida rankea primero el producto objetivo. _(`test_search_ranks_right_product_first`)_
 - Un único candidato bajo el umbral no se adivina: presenta menú. _(`test_low_confidence_single_candidate_presents_menu`)_
+- Una query corta que solapa tokens de dos productos presenta el menú. _(`test_short_query_with_overlapping_tokens_presents_menu`)_
 - Una consulta sin coincidencia se reporta como NO_ENCONTRADO. _(`test_no_match_is_reported`)_
 - La similitud vectorial rankea correcto cuando el fuzzy es débil. _(`test_vector_auto_maps_when_fuzzy_is_weak`)_
 - Embeedings equidistantes presentan un menú de dos candidatos. _(`test_vector_ambiguity_presents_two_candidate_menu`)_
+
+## Calibración de búsqueda (queries cortas)
+
+- La query de 2 tokens "clavos paris" supera el piso contra el producto largo. _(`test_short_query_regression_matches_long_product`)_
+- Las queries sin solapamiento real no false-positivan sobre el piso. _(`test_unrelated_queries_stay_below_floor`)_
+  - tarugo
+  - pintura
+- Un solo token conserva token_sort puro: el blend parcial solo aplica a 2–3 tokens. _(`test_single_token_keeps_token_sort_only`)_
+
+## Adopción de productos RAG (use case de backoffice)
+
+- Una adopción feliz crea Catalogo + Inventory + StockAdjustment en una transacción. _(`test_adopcion_crea_catalogo_inventory_y_stock_adjustment`)_
+- El SKU es RAG-{codigo}-{codigo_orig normalizado} y nunca supera 64 chars. _(`test_sku_sigue_plantilla_deterministica_y_se_trunca_a_64`)_
+- Un SKU ya existente en catalogo devuelve 409 y no persiste nada nuevo. _(`test_sku_colision_rechazada_sin_persistir`)_
+- Precio None se normaliza a Decimal("0.00") siguiendo el patrón _coerce_cost. _(`test_precio_ausente_se_guarda_como_cero`)_
+- La moneda se guarda en mayúsculas; ausente queda None. _(`test_moneda_se_normaliza_a_mayusculas`)_
+  - usd / USD
+  - ARS / ARS
+- El embedding compone nombre+marca+categoria+subcategoria normalizados. _(`test_composicion_del_embedding_texto_normalizado`)_
+- Un embedder que falla revierte la adopción: nada se persiste (502). _(`test_embedding_falla_y_rollback_total`)_
+- Stock <= 0 se rechaza con error de validación y no persiste nada. _(`test_stock_no_positivo_rechazado`)_
+- El origen JSONB guarda rag.node_id, archivo_origen y pagina_origen. _(`test_provenance_almacenada_write_once`)_
+- Sin node_id la adopción falla cerrado y no persiste nada. _(`test_provenance_faltante_fail_closed`)_
+- Un codigo_proveedor sin proveedor da error explícito y no persiste nada. _(`test_proveedor_desconocido_error_explicito`)_
+- Un proveedor INACTIVO da error explícito y no persiste nada. _(`test_proveedor_inactivo_error_explicito`)_
+- El endpoint adopta: 3 filas atómicas, provenance guardada y RAG intacto. _(`test_endpoint_adopcion_feliz_crea_tres_filas_y_no_toca_rag`)_
+- Un SKU ya existente devuelve 409 por el endpoint y no persiste nada. _(`test_endpoint_colision_sku_rechazada_409`)_
+- Un embedder que falla devuelve 502 y la transacción se revierte. _(`test_endpoint_embedding_falla_502_y_rollback`)_
+- Stock <= 0 por el endpoint devuelve 422 invalid_stock y no persiste nada. _(`test_endpoint_stock_no_positivo_rechazado_422`)_
+- La migración de adopción sube y baja las 5 columnas sin tocar el RAG. _(`test_migracion_metadatos_adopcion_up_down`)_
+
+## Autenticación de adopción (HMAC y allowlist de owners)
+
+- Un HMAC válido con owner permitido llega al handler con su OwnerContext. _(`test_hmac_valido_entrega_handler_con_ownercontext`)_
+- Un request sin X-Signature se rechaza con 401 y no llega al handler. _(`test_firma_ausente_rechazada_401`)_
+- Un HMAC incorrecto se rechaza con 401 (comparación constante). _(`test_firma_invalida_rechazada_401`)_
+- Un owner no permitido con HMAC válido se rechaza con 403 y no persiste nada. _(`test_owner_fuera_de_allowlist_rechazado_403`)_
+- Sin X-Owner-Id el gate cierra con 403 (no hay identidad que auditar). _(`test_owner_header_ausente_rechazado_403`)_
+- Allowlist vacía en settings = fail-closed 403 aunque el HMAC sea válido. _(`test_allowlist_vacia_falla_cerrado_403`)_
+- Durante la rotación el secreto viejo sigue firmando válido (zero-downtime). _(`test_secreto_viejo_aceptado_durante_rotacion`)_
+- Un body que no parsea a AdoptRequest con HMAC válido se rechaza con 422. _(`test_body_invalido_rechazado_422`)_
+  - {not json
+- Con fase 4 deshabilitada el handler real corta en el límite (503). _(`test_fase4_deshabilitada_rechaza_503`)_
+- La fábrica de embedder consume adoption_embed_timeout/retries de Settings. _(`test_embedder_factory_aplica_timeout_y_retries_de_settings`)_
 
 ## Vencimiento de reservas (scheduler)
 
@@ -557,6 +608,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El tab ya no tiene el input Order ID ni el botón de detalle; hay grilla de líneas. _(`test_app_customer_orders_tab_selects_rows_without_order_id_input`)_
 - Clicking a row yields the selected id, legal actions, diagram and frozen lines. _(`test_order_row_selected_returns_state_label_diagram_and_lines`)_
 - Deselecting a row (or an event without a row) clears the whole panel. _(`test_order_row_selected_deselection_returns_cleared_state`)_
+- El tab Adoption (RAG) expone la búsqueda, la grilla y el botón de adoptar. _(`test_build_app_adoption_tab_has_search_and_adopt_flow`)_
+- La búsqueda RAG renderiza las filas y conserva los resultados crudos. _(`test_app_adoption_search_maps_rows_and_state`)_
+- Sin resultados del RAG se muestra un mensaje y no hay filas. _(`test_app_adoption_search_empty_results_returns_message`)_
+- Un fallo del RAG se muestra en el estado sin romper el handler. _(`test_app_adoption_search_surfaces_rag_unavailability`)_
+- El click en una fila mapea al índice del resultado crudo. _(`test_app_adoption_row_selected_maps_index`)_
+- Adoptar el producto seleccionado crea el SKU con stock y provenance. _(`test_app_adoption_confirm_adopts_selected_product`)_
+- Adoptar el mismo producto dos veces avisa que el SKU ya existe. _(`test_app_adoption_confirm_surfaces_sku_collision`)_
+- Un stock inicial no positivo se rechaza con mensaje de validación. _(`test_app_adoption_confirm_rejects_non_positive_stock`)_
+- Sin búsqueda previa o sin fila seleccionada no se adopta nada. _(`test_app_adoption_confirm_requires_selection`)_
 
 ## Feature flags por fase
 

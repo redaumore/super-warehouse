@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     # Webhook security
     webhook_secret: str = "change-me"
 
+    # Adoption endpoint (owner-scoped product adoption: writes catalogo +
+    # inventory + stock audit). Empty secret / allowlist fail closed: this
+    # endpoint writes inventory, so a request without credentials is refused.
+    adoption_owner_secret: str = ""
+    # Optional rotation window: while set, the OLD secret is also accepted so
+    # the owner can roll ADOPTION_OWNER_SECRET without a downtime window.
+    adoption_owner_secret_old: str = ""
+    # CSV allowlist of X-Owner-Id values allowed to adopt; empty = fail closed.
+    adoption_owner_ids: str = ""
+    # Embedding call tuning for the adoption path (OpenAI SDK timeout / retries).
+    adoption_embed_timeout_seconds: float = 15.0
+    adoption_embed_retries: int = 2
+
     # Reservation soft-lock TTL (minutes)
     reservation_ttl_minutes: int = 30
 

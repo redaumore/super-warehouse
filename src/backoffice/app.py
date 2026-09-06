@@ -20,6 +20,17 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from src.agents.perception import VisionAnalyzer
+from src.backoffice.adoption import (
+    AdoptRequest,
+    Embedder,
+    EmbeddingUnavailableError,
+    InvalidStockError,
+    MissingProvenanceError,
+    OwnerContext,
+    SkuCollisionError,
+    SupplierUnknownError,
+    adopt_product,
+)
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.customer_orders import (
@@ -55,8 +66,10 @@ from src.backoffice.suppliers import (
 from src.config import Settings, get_settings
 from src.db.models import IvaCondition, Supplier, SupplierStatus
 from src.db.session import SessionLocal
-from src.integrations.openai import OpenAIVisionAnalyzer
+from src.integrations.openai import OpenAIEmbedder, OpenAIVisionAnalyzer
+from src.integrations.rag import RagProduct, RagProductClient, RagProductError
 from src.integrations.sheets import SheetsWriter
+from src.supplier.guards import SupplierInactiveError
 from src.supplier.validation import suggest_code
 from src.tz import to_buenos_aires
 
@@ -209,6 +222,128 @@ def _ingest_confirm(rows: object, supplier_id: object) -> str:
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error al ingresar: {exc}"
     return f"Ingresado: {result.updated} actualizados, {result.created} creados."
+
+
+# ------------------------------------------------ adoption tab (RAG products)
+
+
+@lru_cache
+def _get_rag_client() -> RagProductClient:
+    """Lazily build the RAG product client (same lazy pattern as the embedder)."""
+    return RagProductClient()
+
+
+@lru_cache
+def _get_embedder() -> Embedder:
+    """Real adoption embedder, constructed exactly like the REST endpoint's."""
+    cfg = get_settings()
+    return OpenAIEmbedder(
+        settings=cfg,
+        timeout=cfg.adoption_embed_timeout_seconds,
+        retries=cfg.adoption_embed_retries,
+    )
+
+
+def _adoption_search(
+    client: RagProductClient, query_text: str
+) -> tuple[list[list[object]], tuple[RagProduct, ...], str]:
+    """Query the RAG for ``query_text`` and render one row per product.
+
+    Returns ``(grid_rows, raw_results, status)``: the raw ``RagProduct`` tuple
+    travels in ``gr.State`` so the selected grid row maps back to its typed
+    product. RAG unavailability and refusals surface as status text — never a
+    crash. (Single-row selection: multiple selection is deferred.)
+    """
+    text = (query_text or "").strip()
+    if not text:
+        return [], (), "Escribí un término de búsqueda."
+    try:
+        products = client.query(text)
+    except RagProductError as exc:
+        return [], (), f"Error: RAG no disponible ({exc})"
+    rows = [
+        [
+            product.sku,
+            product.name,
+            product.brand or "",
+            product.categoria or "",
+            product.price if product.price is not None else "",
+            product.currency or "",
+        ]
+        for product in products
+    ]
+    message = (
+        f"{len(rows)} resultado(s). Seleccioná una fila y adoptala."
+        if rows
+        else "Sin resultados: el producto no está en los catálogos actuales."
+    )
+    return rows, products, message
+
+
+def _adoption_row_selected(evt: gr.SelectData) -> int | None:
+    """Map the clicked grid row back to its position in the results state."""
+    if not getattr(evt, "selected", False):
+        return None
+    index = evt.index
+    raw = index[0] if isinstance(index, (list, tuple)) else index
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _adoption_confirm(
+    results: object, selected_index: object, stock: object, embedder: Embedder
+) -> str:
+    """Adopt the selected RAG product into inventory via the pure use case.
+
+    Builds the ``AdoptRequest`` from the selected ``RagProduct`` (provenance
+    ``node_id`` included — empty means the use case fails closed) and commits
+    with the session-in / caller-commits pattern. Domain errors map to
+    friendly owner-facing messages.
+    """
+    if not results:
+        return "Buscá productos en el RAG primero."
+    index = int(str(selected_index)) if selected_index is not None else -1
+    if index < 0 or index >= len(results):
+        return "Seleccioná un producto de la grilla."
+    product: RagProduct = results[index]
+    stock_int = int(float(str(stock))) if stock is not None else 0
+    if stock_int <= 0:
+        return "Error: el stock inicial debe ser mayor que cero."
+    dto = AdoptRequest(
+        sku=product.sku,
+        nombre=product.name,
+        codigo_proveedor=product.codigo_proveedor or "",
+        marca=product.brand,
+        categoria=product.categoria,
+        subcategoria=product.subcategoria,
+        precio=product.price,
+        moneda=product.currency,
+        archivo_origen=product.source_file,
+        pagina=product.page,
+        node_id=product.node_id or "",
+        stock=stock_int,
+    )
+    with SessionLocal() as session:
+        try:
+            created = adopt_product(session, dto, OwnerContext(owner_id="backoffice-ui"), embedder)
+            session.commit()
+        except SkuCollisionError:
+            return "Error: ya existe un producto con ese código (SKU en uso)."
+        except InvalidStockError:
+            return "Error: el stock inicial debe ser mayor que cero."
+        except SupplierUnknownError:
+            return "Error: proveedor desconocido; cargá el proveedor antes de adoptar."
+        except SupplierInactiveError:
+            return "Error: el proveedor está inactivo; activalo antes de adoptar."
+        except MissingProvenanceError:
+            return "Error: el producto no tiene procedencia (node_id); no se puede adoptar."
+        except EmbeddingUnavailableError:
+            return "Error: el servicio de embeddings falló; no se guardó nada. Intentá de nuevo."
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            return f"Error: {exc}"
+    return f"Adoptado: {created.codigo_interno}"
 
 
 def _suppliers_grid(query: str, status: str) -> list[list[object]]:
@@ -677,6 +812,45 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _ingest_confirm,
                 inputs=[preview_grid, supplier_id],
                 outputs=confirm_status,
+            )
+
+        with gr.Tab("Adoption (RAG)"):
+            gr.Markdown("### Search the supplier RAG catalog and adopt into inventory")
+            adoption_query = gr.Textbox(
+                label="Búsqueda (nombre, código, marca)", placeholder="tornillo autoperforante"
+            )
+            adoption_search_btn = gr.Button("Buscar en RAG", variant="primary")
+            adoption_results = gr.Dataframe(
+                headers=["Código", "Nombre", "Marca", "Categoría", "Precio", "Moneda"],
+                datatype=["str", "str", "str", "str", "number", "str"],
+                label="Resultados RAG",
+            )
+            adoption_results_state = gr.State(())
+            adoption_search_status = gr.Textbox(label="Búsqueda", interactive=False)
+            with gr.Row():
+                adoption_stock = gr.Number(label="Stock inicial", value=1, precision=0)
+                adoption_confirm_btn = gr.Button("Adoptar seleccionado", variant="primary")
+            adoption_confirm_status = gr.Textbox(label="Adopción", interactive=False)
+            adoption_selected_index = gr.State(None)
+            adoption_search_btn.click(
+                _adoption_search,
+                inputs=[gr.State(_get_rag_client()), adoption_query],
+                outputs=[adoption_results, adoption_results_state, adoption_search_status],
+            )
+            adoption_results.select(
+                _adoption_row_selected,
+                None,
+                [adoption_selected_index],
+            )
+            adoption_confirm_btn.click(
+                _adoption_confirm,
+                inputs=[
+                    adoption_results_state,
+                    adoption_selected_index,
+                    adoption_stock,
+                    gr.State(_get_embedder()),
+                ],
+                outputs=[adoption_confirm_status],
             )
 
         with gr.Tab("Suppliers"):

@@ -136,8 +136,10 @@ def test_exact_synonym_auto_maps_unambiguously(catalog):
     """Un sinónimo exacto mapea sin ambigüedad al SKU oficial.
 
     A curated synonym maps cleanly to its official SKU at full confidence.
+    Uses the Paris-only synonym: under the short-query blend, "clavos 2
+    pulgadas" is contained in both nail products and correctly shows a menu.
     """
-    resolution = resolve_item(catalog, "clavos 2 pulgadas")
+    resolution = resolve_item(catalog, "clavo paris 2")
     assert resolution.kind is ResolutionKind.AUTO_MAPPED
     assert resolution.candidate is not None
     assert resolution.candidate.sku == "CLV-PRS-2"
@@ -169,13 +171,29 @@ def test_low_confidence_single_candidate_presents_menu(catalog):
     """Un único candidato bajo el umbral no se adivina: presenta menú.
 
     A lone candidate below the auto-map threshold is not silently guessed.
+    Four-token query: the short-query blend only applies to 2-3 tokens, so
+    this lands mid-band (>= floor, < auto-map) and shows the menu.
     """
-    resolution = resolve_item(catalog, "paris 2 pulgadas")
+    resolution = resolve_item(catalog, "paris 2 pulgadas 50")
     assert resolution.kind is ResolutionKind.AMBIGUOUS
     assert resolution.candidate is None
     assert len(resolution.candidates) == 1
     assert resolution.candidates[0].sku == "CLV-PRS-2"
     assert resolution.candidates[0].confidence < 0.85
+
+
+def test_short_query_with_overlapping_tokens_presents_menu(catalog):
+    """Una query corta que solapa tokens de dos productos presenta el menú.
+
+    Under the short-query blend, "clavos 2 pulgadas" is contained in both
+    nail products: token_sort alone silently guessed Paris; the blend lifts
+    both to full confidence and the disambiguation menu decides instead.
+    """
+    resolution = resolve_item(catalog, "clavos 2 pulgadas")
+    assert resolution.kind is ResolutionKind.AMBIGUOUS
+    assert resolution.candidate is None
+    assert {c.sku for c in resolution.candidates} == {"CLV-PRS-2", "CLV-ESP-2"}
+    assert all(c.confidence == pytest.approx(1.0) for c in resolution.candidates)
 
 
 def test_no_match_is_reported(catalog):

@@ -13,6 +13,7 @@ from __future__ import annotations
 import enum
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -31,6 +32,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -188,6 +190,9 @@ class Catalogo(Base):
     """Catalog product with cost, margin, base price, stock, synonyms and vector.
 
     `embedding` is a pgvector `vector(1536)` used by hybrid search (Phase 2).
+    `marca`/`categoria`/`subcategoria`/`moneda` mirror RAG product metadata and
+    `origen` is the write-once adoption provenance JSONB (single INSERT site in
+    the adoption use case, no ORM update path).
     """
 
     __tablename__ = "catalogo"
@@ -204,6 +209,11 @@ class Catalogo(Base):
     precio_lista_base: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     stock_disponible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sinonimos: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    marca: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    categoria: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    subcategoria: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    moneda: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    origen: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=True)
 
     supplier: Mapped[Supplier] = relationship()
