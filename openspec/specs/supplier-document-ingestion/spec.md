@@ -8,7 +8,7 @@ Ingest supplier purchase documents (remitos/invoices as photos or PDFs, and pric
 
 ### Requirement: Extract items, quantities, and costs
 
-The system MUST extract items, quantities, and supplier costs from supplier remito/invoice documents submitted as photos or PDFs.
+The system MUST extract items, quantities, and supplier costs from supplier remito/invoice documents submitted as photos or PDFs via the RAG/Luna structured-output parse endpoint, returning structured lines with quantity and cost plus source metadata. Document format support (image vs PDF) is resolved in design.
 
 #### Scenario: Remito photo extracted
 
@@ -38,28 +38,21 @@ The system MUST NOT write extracted data to inventory until the owner confirms i
 - WHEN the correction is made and then confirmed
 - THEN the corrected values, not the raw extraction, are written to inventory
 
-### Requirement: Map items to existing SKUs or suggest new ones
+### Requirement: Handle parse failure
 
-The system MUST map each extracted item to an existing catalog SKU, or suggest creating a new SKU when no match exists.
+The system MUST detect RAG/Luna parse failure and route affected lines for manual resolution rather than silently writing bad data. Parse errors MUST produce no write.
 
-#### Scenario: Item maps to an existing SKU
+#### Scenario: Parse fails
 
-- GIVEN an extracted item matches an existing SKU (including via supplier mapping)
+- GIVEN a document the RAG/Luna parser cannot process
+- WHEN parsing errors or yields no usable fields
+- THEN the owner is notified and no inventory write occurs
+
+#### Scenario: Partial extraction flagged
+
+- GIVEN only some lines parse cleanly
 - WHEN the document is processed
-- THEN the item is linked to that SKU for inventory update
-
-#### Scenario: Item suggests a new SKU
-
-- GIVEN an extracted item has no matching SKU
-- WHEN the document is processed
-- THEN the system proposes a new SKU
-- AND the proposal is presented for owner confirmation
-
-#### Scenario: Ambiguous mapping highlighted
-
-- GIVEN an extracted item maps to multiple possible SKUs
-- WHEN the document is processed
-- THEN the ambiguity is highlighted for the owner to resolve before entry
+- THEN uncertain lines are flagged as unresolved for manual resolution
 
 ### Requirement: Parse supplier price lists
 
@@ -76,25 +69,6 @@ The system MUST parse supplier price-list documents (PDF or Excel) extracting co
 - GIVEN a supplier price-list Excel file is uploaded
 - WHEN the document is processed
 - THEN the same fields are extracted and supplier SKU mappings are stored
-
-### Requirement: Handle OCR failure
-
-The system MUST detect extraction failure and route the document for manual handling rather than silently writing bad data.
-
-#### Scenario: Extraction fails
-
-- GIVEN a document cannot be reliably extracted
-- WHEN the extraction errors or yields no usable fields
-- THEN the owner is notified
-- AND the document is queued for manual entry
-- AND no inventory write occurs
-
-#### Scenario: Partial extraction flagged
-
-- GIVEN only some lines of a document extract cleanly
-- WHEN the document is processed
-- THEN the uncertain lines are flagged
-- AND only confirmed lines are eligible for entry
 
 ### Requirement: Reject illegible handwriting
 

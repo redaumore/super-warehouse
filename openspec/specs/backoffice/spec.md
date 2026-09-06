@@ -8,19 +8,25 @@ Provide a lightweight web interface for the owner to manage supplier master data
 
 ### Requirement: Supplier document ingestion module
 
-The system MUST provide a backoffice module for uploading supplier remito/invoice images or PDFs and confirming extracted data before entry.
+The system MUST provide a backoffice module that selects an active supplier by `business_name` first, uploads a supplier document for RAG/Luna parsing, shows an identified-products review grid with per-line manual RAG product-code search for pending lines, and gates confirmation until all positive-quantity lines are resolved.
 
-#### Scenario: Upload and preview
+#### Scenario: Supplier-first upload and preview
 
 - GIVEN the owner opens the ingestion module
-- WHEN they drop or select a supplier document
-- THEN the extracted item grid (code, description, quantity, supplier cost) is displayed for review
+- WHEN they select a supplier and drop a document
+- THEN the identified-products grid (code, description, quantity, supplier cost) is displayed with resolved and pending lines
 
-#### Scenario: Confirm entry to inventory
+#### Scenario: Manual code search fixes pending lines
 
-- GIVEN a previewed grid of extracted items
-- WHEN the owner clicks "Confirmar e Ingresar a Inventario"
-- THEN the confirmed items are written to inventory and catalog
+- GIVEN pending lines in the review grid
+- WHEN the owner runs a per-line RAG product-code search and selects a match
+- THEN those lines become resolved
+
+#### Scenario: Confirm entry to inventory gated
+
+- GIVEN a grid where every positive-quantity line is resolved
+- WHEN the owner confirms entry
+- THEN stock is written for matched lines with RAG provenance
 
 ### Requirement: Catalog and stock editor
 
