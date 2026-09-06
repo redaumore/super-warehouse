@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from src.backoffice.app import _save_supplier, _supplier_row_selected, _supplier_toggle
+from src.backoffice.app import _save_supplier, _supplier_row_selected, _supplier_toggle, build_app
 from src.backoffice.suppliers import (
     InvalidSupplierDataError,
     create_supplier,
@@ -270,7 +270,7 @@ def test_multiple_suppliers_with_null_cuit_allowed(db_session):
 
 def test_save_supplier_handler_persists_new_row():
     """Guardar un supplier nuevo desde la UI persiste la fila con su código."""
-    message, _, _, _ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
+    message, *_ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
     assert message == "Supplier created (code MSA)"
     with SessionLocal() as session:
         suppliers = session.scalars(select(Supplier)).all()
@@ -279,9 +279,27 @@ def test_save_supplier_handler_persists_new_row():
     assert suppliers[0].status is SupplierStatus.ACTIVO
 
 
+def test_save_supplier_handler_returns_output_arity_matching_wiring():
+    """El retorno calza con los 14 outputs del click (status, grid, state, 11 campos)."""
+    result = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
+    assert len(result) == 14
+    assert result[0] == "Supplier created (code MSA)"
+    assert result[2] == 0
+
+
+def test_save_supplier_wiring_outputs_match_handler_return_arity():
+    """El wiring del click declara 14 outputs y 13 inputs (regresión de la UI)."""
+    demo = build_app()
+    save_fn = next(
+        bf for bf in demo.fns.values() if getattr(bf.fn, "__name__", "") == "_save_supplier"
+    )
+    assert len(save_fn.outputs) == 14
+    assert len(save_fn.inputs) == 13
+
+
 def test_save_supplier_handler_clears_form_after_create():
     """Tras crear sin errores, el handler devuelve el formulario limpio y sin selección."""
-    message, _, form_values, selected_id = _save_supplier(
+    result = _save_supplier(
         0,
         "Distribuidora Sur",
         "DIS",
@@ -295,9 +313,10 @@ def test_save_supplier_handler_clears_form_after_create():
         10.0,
         "30 días",
     )
-    assert message == "Supplier created (code DIS)"
+    assert result[0] == "Supplier created (code DIS)"
+    selected_id, *form_values = result[2:]
     assert selected_id == 0
-    assert form_values == ("", "", "", "", "", "", "", "", "", 0.0, "")
+    assert tuple(form_values) == ("", "", "", "", "", "", "", "", "", 0.0, "")
 
 
 def test_save_supplier_handler_keeps_form_after_update():
@@ -306,11 +325,24 @@ def test_save_supplier_handler_keeps_form_after_update():
         supplier = create_supplier(session, business_name="Mayorista SA", code="MSA")
         session.commit()
         supplier_id = supplier.id
-    message, _, form_values, selected_id = _save_supplier(
+    result = _save_supplier(
         supplier_id, "Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, ""
     )
-    assert message == "Supplier saved"
-    assert form_values == ("Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, "")
+    assert result[0] == "Supplier saved"
+    selected_id, *form_values = result[2:]
+    assert tuple(form_values) == (
+        "Mayorista SA Renovada",
+        "MSA",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        0.0,
+        "",
+    )
     assert selected_id == supplier_id
     with SessionLocal() as session:
         assert session.get(Supplier, supplier_id).business_name == "Mayorista SA Renovada"
@@ -318,11 +350,22 @@ def test_save_supplier_handler_keeps_form_after_update():
 
 def test_save_supplier_handler_keeps_form_on_error():
     """Un alta con datos inválidos devuelve el error y deja el formulario como estaba."""
-    message, _, form_values, selected_id = _save_supplier(
-        0, "Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, ""
+    result = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, "")
+    assert result[0].startswith("Error:")
+    selected_id, *form_values = result[2:]
+    assert tuple(form_values) == (
+        "Mayorista SA",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "not-an-email",
+        "",
+        "",
+        0.0,
+        "",
     )
-    assert message.startswith("Error:")
-    assert form_values == ("Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, "")
     assert selected_id == 0
 
 

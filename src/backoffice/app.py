@@ -425,10 +425,12 @@ def _save_supplier(
 ) -> tuple[str, list[list[object]], tuple[object, ...], int]:
     """Save (create or update) a supplier and return the form state to render.
 
-    Returns ``(message, grid, form_values, selected_id)``. A successful create
-    clears the form and resets the selection to 0 so the next save is a new
-    supplier; a successful update or a validation error echoes the submitted
-    values back so the form stays as the user left it.
+    Returns ``(message, grid, selected_id, *form_values)`` matching the
+    ``supplier_save.click`` outputs (status, grid, state, then the 11 form
+    fields in wiring order). A successful create clears the form and resets
+    the selection to 0 so the next save is a new supplier; a successful update
+    or a validation error echoes the submitted values back so the form stays
+    as the user left it.
     """
     submitted = (
         business_name,
@@ -486,10 +488,10 @@ def _save_supplier(
             return (
                 f"Error: {exc}",
                 _suppliers_grid("", status_filter),
-                submitted,
                 current_id,
+                *submitted,
             )
-    return message, _suppliers_grid("", status_filter), form_values, selected_id
+    return message, _suppliers_grid("", status_filter), selected_id, *form_values
 
 
 def _supplier_toggle(supplier_id: object) -> str:
