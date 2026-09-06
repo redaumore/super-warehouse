@@ -21,6 +21,9 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.backoffice.app import (
+    _adoption_confirm,
+    _adoption_row_selected,
+    _adoption_search,
     _catalog_edit,
     _catalog_grid,
     _ingest_confirm,
@@ -80,6 +83,7 @@ from src.db.models import (
     SupplierPurchaseOrderState,
 )
 from src.db.session import SessionLocal
+from src.integrations.rag import RagProduct, RagProductError
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.purchasing.accumulate import accumulate_need
@@ -104,6 +108,7 @@ def test_build_app_creates_tabs_with_expected_labels():
         "Orders/Monitor",
         "Purchase Orders",
         "Ingestion",
+        "Adoption (RAG)",
         "Suppliers",
         "Customer Orders",
         "Settings",
@@ -1046,4 +1051,126 @@ def test_order_row_selected_deselection_returns_cleared_state(evt):
         "Seleccioná un pedido.",
         order_state_diagram(""),
         [],
+    )
+
+
+# ------------------------------------------------ adoption tab (RAG search + adopt)
+
+_RAG_PRODUCT = RagProduct(
+    sku="AT-5044",
+    name="Tornillo Autoperforante 8x1",
+    provider="Mercado Mayorista",
+    brand="Tornimax",
+    price=125.5,
+    currency="ARS",
+    source_file="catalogo_amx.pdf",
+    page=12,
+    codigo_proveedor="MSA",
+    node_id="node-1",
+    fragment_id=3,
+    categoria="Fijaciones",
+)
+
+
+class _FakeEmbedder:
+    """Fixed 1536-dim vectors — the adoption use case only checks the dims."""
+
+    def embed(self, texts):
+        return [[0.1] * 1536 for _ in texts]
+
+
+def test_build_app_adoption_tab_has_search_and_adopt_flow():
+    """El tab Adoption (RAG) expone la búsqueda, la grilla y el botón de adoptar."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Adoption (RAG)")
+    labels = _all_labels(tab)
+    assert "Buscar en RAG" in labels
+    assert "Resultados RAG" in labels
+    assert "Adoptar seleccionado" in labels
+    assert "Stock inicial" in labels
+
+
+def test_app_adoption_search_maps_rows_and_state():
+    """La búsqueda RAG renderiza las filas y conserva los resultados crudos."""
+    client = SimpleNamespace(query=lambda text: (_RAG_PRODUCT,))
+    rows, results, message = _adoption_search(client, "tornillo")  # type: ignore[arg-type]
+    assert rows == [
+        ["AT-5044", "Tornillo Autoperforante 8x1", "Tornimax", "Fijaciones", 125.5, "ARS"]
+    ]
+    assert results == (_RAG_PRODUCT,)
+    assert "1 resultado(s)" in message
+
+
+def test_app_adoption_search_empty_results_returns_message():
+    """Sin resultados del RAG se muestra un mensaje y no hay filas."""
+    client = SimpleNamespace(query=lambda text: ())
+    rows, results, message = _adoption_search(client, "inexistente")  # type: ignore[arg-type]
+    assert rows == []
+    assert results == ()
+    assert "Sin resultados" in message
+
+
+def test_app_adoption_search_surfaces_rag_unavailability():
+    """Un fallo del RAG se muestra en el estado sin romper el handler."""
+
+    def boom(text: str):
+        raise RagProductError("rag down")
+
+    client = SimpleNamespace(query=boom)
+    rows, results, message = _adoption_search(client, "tornillo")  # type: ignore[arg-type]
+    assert rows == []
+    assert results == ()
+    assert message.startswith("Error: RAG no disponible")
+
+
+def test_app_adoption_row_selected_maps_index():
+    """El click en una fila mapea al índice del resultado crudo."""
+    evt = SimpleNamespace(selected=True, index=[2])
+    assert _adoption_row_selected(evt) == 2  # type: ignore[arg-type]
+    deselect = SimpleNamespace(selected=False, index=[0])
+    assert _adoption_row_selected(deselect) is None  # type: ignore[arg-type]
+
+
+def test_app_adoption_confirm_adopts_selected_product(shop_ctx):
+    """Adoptar el producto seleccionado crea el SKU con stock y provenance."""
+    shop_ctx["session"].commit()
+    message = _adoption_confirm((_RAG_PRODUCT,), 0, 1, _FakeEmbedder())
+    assert message == "Adoptado: RAG-MSA-AT-5044"
+    with SessionLocal() as session:
+        product = session.scalar(
+            select(Catalogo).where(Catalogo.codigo_interno == "RAG-MSA-AT-5044")
+        )
+    assert product is not None
+    assert product.stock_disponible == 1
+    assert product.origen["rag"]["node_id"] == "node-1"
+
+
+def test_app_adoption_confirm_surfaces_sku_collision(shop_ctx):
+    """Adoptar el mismo producto dos veces avisa que el SKU ya existe."""
+    shop_ctx["session"].commit()
+    assert _adoption_confirm((_RAG_PRODUCT,), 0, 1, _FakeEmbedder()).startswith("Adoptado")
+    message = _adoption_confirm((_RAG_PRODUCT,), 0, 1, _FakeEmbedder())
+    assert "ya existe un producto con ese código" in message
+
+
+def test_app_adoption_confirm_rejects_non_positive_stock(shop_ctx):
+    """Un stock inicial no positivo se rechaza con mensaje de validación."""
+    shop_ctx["session"].commit()
+    for stock in (0, -2):
+        message = _adoption_confirm((_RAG_PRODUCT,), 0, stock, _FakeEmbedder())
+        assert "el stock inicial debe ser mayor que cero" in message
+    with SessionLocal() as session:
+        assert (
+            session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "RAG-MSA-AT-5044"))
+            is None
+        )
+
+
+def test_app_adoption_confirm_requires_selection(shop_ctx):
+    """Sin búsqueda previa o sin fila seleccionada no se adopta nada."""
+    shop_ctx["session"].commit()
+    assert _adoption_confirm((), 0, 1, _FakeEmbedder()) == "Buscá productos en el RAG primero."
+    assert (
+        _adoption_confirm((_RAG_PRODUCT,), None, 1, _FakeEmbedder())
+        == "Seleccioná un producto de la grilla."
     )

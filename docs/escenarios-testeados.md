@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 407, agrupados en 33 dominios.
+**Total de escenarios:** 416, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -35,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 45
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 54
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 4
@@ -608,6 +608,15 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El tab ya no tiene el input Order ID ni el botón de detalle; hay grilla de líneas. _(`test_app_customer_orders_tab_selects_rows_without_order_id_input`)_
 - Clicking a row yields the selected id, legal actions, diagram and frozen lines. _(`test_order_row_selected_returns_state_label_diagram_and_lines`)_
 - Deselecting a row (or an event without a row) clears the whole panel. _(`test_order_row_selected_deselection_returns_cleared_state`)_
+- El tab Adoption (RAG) expone la búsqueda, la grilla y el botón de adoptar. _(`test_build_app_adoption_tab_has_search_and_adopt_flow`)_
+- La búsqueda RAG renderiza las filas y conserva los resultados crudos. _(`test_app_adoption_search_maps_rows_and_state`)_
+- Sin resultados del RAG se muestra un mensaje y no hay filas. _(`test_app_adoption_search_empty_results_returns_message`)_
+- Un fallo del RAG se muestra en el estado sin romper el handler. _(`test_app_adoption_search_surfaces_rag_unavailability`)_
+- El click en una fila mapea al índice del resultado crudo. _(`test_app_adoption_row_selected_maps_index`)_
+- Adoptar el producto seleccionado crea el SKU con stock y provenance. _(`test_app_adoption_confirm_adopts_selected_product`)_
+- Adoptar el mismo producto dos veces avisa que el SKU ya existe. _(`test_app_adoption_confirm_surfaces_sku_collision`)_
+- Un stock inicial no positivo se rechaza con mensaje de validación. _(`test_app_adoption_confirm_rejects_non_positive_stock`)_
+- Sin búsqueda previa o sin fila seleccionada no se adopta nada. _(`test_app_adoption_confirm_requires_selection`)_
 
 ## Feature flags por fase
 
