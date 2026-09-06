@@ -12,7 +12,8 @@ from app.api.v1.endpoints import (
     catalogs,
     query,
     jobs,
-    evaluate
+    evaluate,
+    ingestion
 )
 
 api_v1_router = APIRouter(prefix="/api/v1")
@@ -22,3 +23,4 @@ api_v1_router.include_router(catalogs.router, tags=["Catalogs & Ingestion"])
 api_v1_router.include_router(query.router, tags=["RAG Query"])
 api_v1_router.include_router(jobs.router, tags=["Async Jobs"])
 api_v1_router.include_router(evaluate.router, tags=["Evaluation"])
+api_v1_router.include_router(ingestion.router, tags=["Ingestion"])
