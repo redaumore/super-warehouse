@@ -163,6 +163,7 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     # Campos base primitivos
     base_fields = [
         ("archivo_origen", product.get("archivo_origen")),
+        ("documento_id", product.get("documento_id")),
         ("codigo", product.get("codigo") or product.get("sku_compuesto")),
         ("codigo_orig", product.get("codigo_orig")),
         ("sku_compuesto", product.get("sku_compuesto")),
@@ -207,7 +208,11 @@ def build_metadata(product: Dict[str, Any]) -> Dict[str, Any]:
     return metadata
 
 
-def process_product(product: Dict[str, Any], encoder: Any) -> Optional[Dict[str, Any]]:
+def process_product(
+    product: Dict[str, Any],
+    encoder: Any,
+    codigo_proveedor: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Transforma un producto individual en un Nodo RAG estructurado.
     """
@@ -215,7 +220,12 @@ def process_product(product: Dict[str, Any], encoder: Any) -> Optional[Dict[str,
     if not codigo:
         raise ValueError("El producto no contiene un 'codigo' válido.")
 
-    node_id = f"node_prod_{codigo}"
+    # El node_id incluye el código de proveedor para evitar colisiones entre
+    # proveedores que comparten el mismo código de producto. Usa el código del
+    # producto si viene, o el resuelto por run_pipeline como fallback.
+    prov = clean_str(product.get("codigo_proveedor")) or codigo_proveedor
+    prov_norm = (prov or "PROV").strip().upper()[:3]
+    node_id = f"node_prod_{prov_norm}_{codigo}"
     text_to_embed = build_text_to_embed(product)
     text_length_char = len(text_to_embed)
     text_length_tokens = count_tokens(text_to_embed, encoder)
@@ -234,7 +244,8 @@ def run_pipeline(
     input_path: str,
     output_path: Optional[str] = None,
     encoding_name: str = "cl100k_base",
-    codigo_proveedor: Optional[str] = None
+    codigo_proveedor: Optional[str] = None,
+    documento_id: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], str]:
     """
     Ejecuta el pipeline completo de ingesta, transformación y persistencia.
@@ -274,6 +285,13 @@ def run_pipeline(
     elif isinstance(data, list):
         products_flat = data
 
+    # Inyectar el documento_id declarado por el operador en cada producto para
+    # que build_metadata lo incluya en los metadatos del nodo (misma vía que archivo_origen).
+    if documento_id:
+        for prod in products_flat:
+            if isinstance(prod, dict) and not prod.get("documento_id"):
+                prod["documento_id"] = documento_id
+
     if not products_flat:
         logger.warning("No se encontraron productos para procesar en el archivo de entrada.")
         nodes = []
@@ -285,7 +303,7 @@ def run_pipeline(
 
         for idx, prod in enumerate(products_flat):
             try:
-                node = process_product(prod, encoder)
+                node = process_product(prod, encoder, codigo_proveedor=codigo_proveedor)
                 if node:
                     nodes.append(node)
             except Exception as e:

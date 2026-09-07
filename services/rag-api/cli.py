@@ -79,6 +79,8 @@ EJEMPLOS DE USO:
     ingest_parser.add_argument("--skip-pages", type=str, default=None, help="Páginas o rangos a omitir (ej: '1-2,4').")
     ingest_parser.add_argument("--no-vision", action="store_true", help="Desactivar visión multimodal (usar solo texto).")
     ingest_parser.add_argument("--recreate-table", action="store_true", help="Elimina y recrea la tabla antes de ingestar.")
+    ingest_parser.add_argument("--documento-id", dest="documento_id", type=str, default=None, help="Identidad lógica del documento/lista declarada por el operador (ej: 'LISTA GENERAL').")
+    ingest_parser.add_argument("--delete-scope", dest="delete_scope", type=str, choices=["proveedor", "documento"], default="proveedor", help="Alcance del borrado previo: 'proveedor' (total) o 'documento' (incremental).")
     ingest_parser.add_argument("--table", "-t", type=str, default=settings.DEFAULT_TABLE_NAME, help="Tabla destino en PostgreSQL.")
     ingest_parser.add_argument("--output-dir", type=str, default=None, help="Directorio de destino de JSONs intermediarios.")
     ingest_parser.add_argument("--json", "-j", action="store_true", help="Formato de salida JSON.")
@@ -139,7 +141,9 @@ EJEMPLOS DE USO:
             skip_pages=getattr(args, "skip_pages", None),
             use_vision=not getattr(args, "no_vision", False),
             recreate_table=getattr(args, "recreate_table", False),
-            output_dir=getattr(args, "output_dir", None)
+            output_dir=getattr(args, "output_dir", None),
+            documento_id=getattr(args, "documento_id", None),
+            delete_scope=getattr(args, "delete_scope", "proveedor")
         )
 
         if getattr(args, "json", False):

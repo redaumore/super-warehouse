@@ -113,6 +113,7 @@ class PgVectorManager:
                     moneda VARCHAR(16),
                     pagina_origen INT,
                     archivo_origen VARCHAR(256),
+                    documento_id VARCHAR(128),
                     es_tabla BOOLEAN DEFAULT FALSE,
                     text_content TEXT NOT NULL,
                     metadata JSONB NOT NULL,
@@ -124,6 +125,9 @@ class PgVectorManager:
 
                 # Migración no destructiva para columnas nuevas en tablas preexistentes
                 cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS archivo_origen VARCHAR(256);").format(
+                    sql.Identifier(self.table_name)
+                ))
+                cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS documento_id VARCHAR(128);").format(
                     sql.Identifier(self.table_name)
                 ))
 
@@ -164,6 +168,113 @@ class PgVectorManager:
                 logger.info(f"[✓] Se eliminaron {deleted} registros previos del proveedor '{clean_cod}'.")
                 return deleted
 
+    def delete_records_by_document(self, codigo_proveedor: str, documento_id: str) -> int:
+        """
+        Elimina de forma incremental los registros del documento declarado
+        (documento_id) para un proveedor específico, sin afectar los registros
+        de otros documentos del mismo proveedor. Nunca elimina filas cuyo
+        documento_id es NULL (datos legacy previos a la migración).
+        """
+        if not codigo_proveedor or not documento_id:
+            logger.warning("delete_records_by_document requiere codigo_proveedor y documento_id. 0 registros eliminados.")
+            return 0
+
+        clean_cod = str(codigo_proveedor).strip().upper()[:3]
+        # Normalizar documento_id igual que en la ingesta: strip, mayúsculas, colapsar espacios internos
+        clean_doc = " ".join(str(documento_id).split()).upper()
+        logger.info(
+            f"Limpiando registros previos del documento '{clean_doc}' del proveedor '{clean_cod}' en tabla '{self.table_name}'..."
+        )
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Comprobar si la tabla existe
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables WHERE table_name = %s;",
+                    (self.table_name,)
+                )
+                if not cur.fetchone():
+                    logger.info(f"La tabla '{self.table_name}' no existe todavía. 0 registros eliminados.")
+                    return 0
+
+                # Borrado acotado: SIEMPRE por proveedor + documento_id (nunca filas NULL)
+                cur.execute(
+                    sql.SQL(
+                        "DELETE FROM {} "
+                        "WHERE (UPPER(codigo_proveedor) = UPPER(%s) OR codigo_proveedor = %s) "
+                        "AND documento_id = %s;"
+                    ).format(
+                        sql.Identifier(self.table_name)
+                    ),
+                    (clean_cod, clean_cod, clean_doc)
+                )
+                deleted = cur.rowcount
+                logger.info(
+                    f"[✓] Se eliminaron {deleted} registros previos del documento '{clean_doc}' del proveedor '{clean_cod}'."
+                )
+                return deleted
+
+    # -------------------------------------------------------------------------
+    # 2bis. Listado de Documentos por Proveedor
+    # -------------------------------------------------------------------------
+    def list_documents(self, codigo_proveedor: str) -> List[Dict[str, Any]]:
+        """
+        Lista los documentos (documento_id) ya indexados para un proveedor.
+
+        Devuelve un dict por cada documento_id distinto (se excluyen las filas
+        legacy con documento_id NULL) con el total de productos, el último
+        archivo de origen y la fecha de última actualización (ISO 8601).
+        Se usa para alimentar el dropdown de documentos en la UI de ingesta.
+        Un proveedor desconocido (o sin documentos) devuelve una lista vacía.
+        """
+        if not codigo_proveedor:
+            return []
+
+        clean_cod = str(codigo_proveedor).strip().upper()[:3]
+        logger.info(
+            f"Listando documentos indexados del proveedor '{clean_cod}' en tabla '{self.table_name}'..."
+        )
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Comprobar si la tabla existe
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables WHERE table_name = %s;",
+                    (self.table_name,)
+                )
+                if not cur.fetchone():
+                    logger.info(f"La tabla '{self.table_name}' no existe todavía. 0 documentos listados.")
+                    return []
+
+                cur.execute(
+                    sql.SQL("""
+                        SELECT
+                            documento_id,
+                            COUNT(*) AS total_productos,
+                            MAX(archivo_origen) AS ultimo_archivo,
+                            MAX(created_at) AS actualizado_en
+                        FROM {}
+                        WHERE (UPPER(codigo_proveedor) = UPPER(%s) OR codigo_proveedor = %s)
+                          AND documento_id IS NOT NULL
+                        GROUP BY documento_id
+                        ORDER BY documento_id;
+                    """).format(sql.Identifier(self.table_name)),
+                    (clean_cod, clean_cod)
+                )
+                rows = cur.fetchall()
+
+        documents = [
+            {
+                "documento_id": str(row[0]),
+                "total_productos": int(row[1]),
+                "ultimo_archivo": row[2],
+                "actualizado_en": row[3].isoformat() if row[3] is not None else None,
+            }
+            for row in rows
+        ]
+        logger.info(f"[✓] Se listaron {len(documents)} documento(s) del proveedor '{clean_cod}'.")
+        return documents
+
     # -------------------------------------------------------------------------
     # 3. Ingesta Masiva Transaccional (Batch DML Upsert)
     # -------------------------------------------------------------------------
@@ -182,11 +293,11 @@ class PgVectorManager:
         INSERT INTO {} (
             node_id, codigo_producto, codigo_orig, nombre_proveedor, codigo_proveedor,
             marca, categoria_padre, categoria, subcategoria, precio, moneda,
-            pagina_origen, archivo_origen, es_tabla, text_content, metadata, embedding
+            pagina_origen, archivo_origen, documento_id, es_tabla, text_content, metadata, embedding
         ) VALUES (
             %(node_id)s, %(codigo_producto)s, %(codigo_orig)s, %(nombre_proveedor)s, %(codigo_proveedor)s,
             %(marca)s, %(categoria_padre)s, %(categoria)s, %(subcategoria)s, %(precio)s, %(moneda)s,
-            %(pagina_origen)s, %(archivo_origen)s, %(es_tabla)s, %(text_content)s, %(metadata)s, %(embedding)s
+            %(pagina_origen)s, %(archivo_origen)s, %(documento_id)s, %(es_tabla)s, %(text_content)s, %(metadata)s, %(embedding)s
         )
         ON CONFLICT (node_id) DO UPDATE SET
             codigo_producto = EXCLUDED.codigo_producto,
@@ -201,6 +312,7 @@ class PgVectorManager:
             moneda = EXCLUDED.moneda,
             pagina_origen = EXCLUDED.pagina_origen,
             archivo_origen = EXCLUDED.archivo_origen,
+            documento_id = EXCLUDED.documento_id,
             es_tabla = EXCLUDED.es_tabla,
             text_content = EXCLUDED.text_content,
             metadata = EXCLUDED.metadata,
@@ -210,9 +322,14 @@ class PgVectorManager:
         total_inserted = 0
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Asegurar que la columna archivo_origen exista si la tabla ya fue creada previamente
+                # Asegurar que las columnas nuevas existan si la tabla ya fue creada previamente
                 cur.execute(
                     sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS archivo_origen VARCHAR(256);").format(
+                        sql.Identifier(self.table_name)
+                    )
+                )
+                cur.execute(
+                    sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS documento_id VARCHAR(128);").format(
                         sql.Identifier(self.table_name)
                     )
                 )
@@ -263,6 +380,7 @@ class PgVectorManager:
                         "moneda": meta.get("moneda"),
                         "pagina_origen": pagina_val,
                         "archivo_origen": meta.get("archivo_origen"),
+                        "documento_id": meta.get("documento_id"),
                         "es_tabla": bool(meta.get("es_tabla", False)),
                         "text_content": rec.get("text_content") or rec.get("text_to_embed", ""),
                         "metadata": meta_json,

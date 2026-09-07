@@ -46,6 +46,26 @@ from app.core.evaluation.evaluator import (
 logger = logging.getLogger("RAG_Orchestrator")
 
 
+def _normalize_documento_id(documento_id: Optional[str]) -> Optional[str]:
+    """
+    Normaliza documento_id igual que codigo_proveedor (strip, mayúsculas, colapsar
+    espacios internos). No se deriva del nombre de archivo ni del contenido (ambos
+    volátiles mes a mes).
+
+    Si el operador no declara un valor (None/vacío), aplica el default
+    ``settings.DEFAULT_DOCUMENTO_ID`` ("LISTA GENERAL"): toda fila indexada queda
+    etiquetada, sin NULL documento_id. Este es el ÚNICO lugar donde se aplica el
+    default — HTTP Form/JSON y la CLI mantienen sus valores None/ausentes.
+    Devuelve None solo si ni el operador ni el setting proveen un valor (fallback
+    defensivo para ``delete_scope='documento'``).
+    """
+    raw = " ".join(str(documento_id).split()).upper() if documento_id and str(documento_id).strip() else ""
+    if not raw:
+        default = (settings.DEFAULT_DOCUMENTO_ID or "").strip()
+        raw = " ".join(default.split()).upper()
+    return raw or None
+
+
 # ============================================================================
 # 1. ENTIDADES TIPADAS
 # ============================================================================
@@ -136,11 +156,27 @@ class RAGOrchestrator:
         output_dir: Optional[str] = None,
         db_url: Optional[str] = None,
         batch_size: int = 100,
-        skip_qa: bool = False
+        skip_qa: bool = False,
+        documento_id: Optional[str] = None,
+        delete_scope: str = "proveedor"
     ) -> IngestionResult:
         """
         Ejecuta el pipeline de ingesta batch de punta a punta:
         Fase 0 (Extracción PDF) -> Fase 1 (Chunking) -> Fase 2 (Embeddings MRL) -> Fase 3 (Indexación HNSW pgvector).
+
+        documento_id: identidad lógica del documento/lista declarada por el operador
+        (ej: "LISTA GENERAL"). Un catálogo de proveedor puede dividirse en varios
+        PDFs; todos los archivos del mismo documento comparten este identificador.
+        Se normaliza (strip, mayúsculas, colapsar espacios internos) igual que codigo_proveedor.
+        Si no se declara, se aplica el default "LISTA GENERAL" (settings.DEFAULT_DOCUMENTO_ID)
+        para AMBOS scopes de borrado: toda fila queda etiquetada, sin NULL documento_id.
+
+        delete_scope: alcance del borrado previo.
+        - "proveedor" (default): elimina TODOS los productos del proveedor antes de insertar (reemplazo total).
+        - "documento": ingesta incremental; elimina solo las filas del proveedor cuyo documento_id coincida.
+          El ValueError por documento ausente queda solo como fallback defensivo (dispara únicamente
+          si settings.DEFAULT_DOCUMENTO_ID está vacío; con el default vigente la ingesta incremental
+          sin documento_id no corta: se etiqueta con "LISTA GENERAL").
         """
         t0 = time.perf_counter()
         luna_m = luna_model or settings.DEFAULT_LUNA_MODEL
@@ -148,12 +184,27 @@ class RAGOrchestrator:
         emb_dim = embedding_dimensions or settings.DEFAULT_EMBEDDING_DIM
         out_directory = output_dir or str(settings.ARTIFACTS_DIR)
 
+        cod_prov = (codigo_proveedor or "PRO").strip().upper()[:3]
+        # Normalizar documento_id (con default "LISTA GENERAL" si no se declara) y
+        # resolver el alcance de borrado ANTES del header de logs.
+        declared_doc = bool(documento_id and str(documento_id).strip())
+        doc_id_norm = _normalize_documento_id(documento_id)
+        if not declared_doc and doc_id_norm:
+            logger.info(f"documento_id no declarado: se aplica el default '{doc_id_norm}'.")
+        scope = (delete_scope or "proveedor").strip().lower()
+        # Valores desconocidos se tratan como "proveedor" (comportamiento default)
+        if scope not in ("proveedor", "documento"):
+            logger.warning(f"delete_scope desconocido: '{delete_scope}'. Se usará 'proveedor' (reemplazo total).")
+            scope = "proveedor"
+
         logger.info("=" * 80)
         logger.info(f"[Orchestrator] INICIANDO PIPELINE DE INGESTA INTEGRAL")
         logger.info(f"Archivo PDF:        {pdf_path}")
         logger.info(f"Tabla Destino:      {self.table_name}")
         logger.info(f"Proveedor:          {nombre_proveedor} (Código: {codigo_proveedor})")
         logger.info(f"Recrear Tabla:      {recreate_table}")
+        logger.info(f"Documento ID:       {doc_id_norm or '(no declarado)'}")
+        logger.info(f"Alcance Borrado:    {scope}")
         logger.info("=" * 80)
 
         if not os.path.exists(pdf_path):
@@ -175,7 +226,6 @@ class RAGOrchestrator:
                 error=error_msg
             )
 
-        cod_prov = (codigo_proveedor or "PRO").strip().upper()[:3]
         os.makedirs(out_directory, exist_ok=True)
         output_files: Dict[str, str] = {}
 
@@ -221,7 +271,8 @@ class RAGOrchestrator:
                 input_path=fase_0_json_path,
                 output_path=fase_1_out,
                 encoding_name="cl100k_base",
-                codigo_proveedor=cod_prov
+                codigo_proveedor=cod_prov,
+                documento_id=doc_id_norm
             )
             output_files["fase_1_nodes"] = fase_1_json_path
             total_nodes = len(nodes)
@@ -255,10 +306,31 @@ class RAGOrchestrator:
             manager = PgVectorManager(db_url=effective_db_url, table_name=self.table_name, dimension=dimension)
             manager.init_schema(recreate=recreate_table)
 
-            # Limpieza previa de productos existentes del proveedor
+            # Limpieza previa según alcance de borrado declarado
             if not recreate_table and cod_prov:
-                deleted_prev = manager.delete_records_by_provider(codigo_proveedor=cod_prov)
-                logger.info(f"Limpieza previa de productos: {deleted_prev} registros anteriores eliminados para proveedor '{cod_prov}'.")
+                if scope == "documento":
+                    if not doc_id_norm:
+                        # Fallback defensivo: solo se alcanza si el operador no declaró
+                        # documento_id Y settings.DEFAULT_DOCUMENTO_ID está vacío. Con el
+                        # default vigente ("LISTA GENERAL") la ingesta incremental sin
+                        # documento no corta: las filas se etiquetan con el default.
+                        error_msg = (
+                            "delete_scope='documento' requiere documento_id declarado. "
+                            "No se puede ejecutar la ingesta incremental sin identidad de documento."
+                        )
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                    deleted_prev = manager.delete_records_by_document(
+                        codigo_proveedor=cod_prov,
+                        documento_id=doc_id_norm
+                    )
+                    logger.info(
+                        f"Limpieza previa incremental: {deleted_prev} registros anteriores eliminados "
+                        f"para el documento '{doc_id_norm}' del proveedor '{cod_prov}'."
+                    )
+                else:
+                    deleted_prev = manager.delete_records_by_provider(codigo_proveedor=cod_prov)
+                    logger.info(f"Limpieza previa de productos: {deleted_prev} registros anteriores eliminados para proveedor '{cod_prov}'.")
 
             manager.ingest_records(records, batch_size=batch_size)
             manager.create_indexes()

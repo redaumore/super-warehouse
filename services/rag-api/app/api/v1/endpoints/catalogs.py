@@ -18,6 +18,7 @@ from fastapi import (
     BackgroundTasks,
     File,
     Form,
+    Query,
     UploadFile,
     HTTPException,
     status
@@ -28,10 +29,13 @@ from app.config import settings
 from app.api.schemas.catalog import (
     CatalogItem,
     CatalogListResponse,
-    IngestPathRequest
+    IngestPathRequest,
+    ProviderDocumentSummary,
+    ProviderDocumentsResponse
 )
 from app.api.schemas.job import JobStatusResponse
 from app.services.job_manager import job_manager
+from app.core.ingestion.vector_store import PgVectorManager
 from app.core.orchestrator import RAGOrchestrator
 
 router = APIRouter()
@@ -56,7 +60,9 @@ def _run_background_ingestion(job_id: str, params: Dict[str, Any]) -> None:
             skip_pages=params.get("skip_pages"),
             use_vision=not params.get("no_vision", False),
             recreate_table=params.get("recreate_table", False),
-            output_dir=params.get("output_dir", str(settings.ARTIFACTS_DIR))
+            output_dir=params.get("output_dir", str(settings.ARTIFACTS_DIR)),
+            documento_id=params.get("documento_id"),
+            delete_scope=params.get("delete_scope", "proveedor")
         )
 
         if res.status == "SUCCESS":
@@ -140,6 +146,52 @@ def list_catalogs(table_name: str = settings.DEFAULT_TABLE_NAME) -> CatalogListR
         )
 
 
+@router.get(
+    "/catalogs/documents",
+    response_model=ProviderDocumentsResponse,
+    summary="Listar documentos indexados de un proveedor"
+)
+def list_provider_documents(
+    codigo_proveedor: str = Query(
+        ...,
+        min_length=1,
+        description="Código del proveedor (ej: 'MSA')"
+    ),
+    table_name: str = settings.DEFAULT_TABLE_NAME
+) -> ProviderDocumentsResponse:
+    """Retorna los documentos (documento_id) ya indexados para el proveedor.
+
+    Se alimenta el dropdown "Documento / lista" de la UI de ingesta: operador
+    elige un documento conocido o declara uno nuevo. Un proveedor desconocido
+    (o sin documentos indexados) responde 200 con ``documentos: []`` — no 404,
+    para que la UI lo trate como dropdown vacío y no como error.
+    """
+    try:
+        manager = PgVectorManager(
+            db_url=settings.get_db_url(),
+            table_name=table_name
+        )
+        rows = manager.list_documents(codigo_proveedor)
+        return ProviderDocumentsResponse(
+            codigo_proveedor=codigo_proveedor,
+            documentos=[
+                ProviderDocumentSummary(
+                    documento_id=row["documento_id"],
+                    total_productos=row["total_productos"],
+                    ultimo_archivo=row["ultimo_archivo"],
+                    actualizado_en=row["actualizado_en"]
+                )
+                for row in rows
+            ]
+        )
+    except Exception as e:
+        logger.error(f"Error listando documentos del proveedor '{codigo_proveedor}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al consultar los documentos del proveedor: {str(e)}"
+        )
+
+
 @router.post("/catalogs/ingest-path", response_model=JobStatusResponse, summary="Ingestar catálogo desde ruta del servidor")
 def ingest_catalog_by_path(
     req: IngestPathRequest,
@@ -184,10 +236,19 @@ async def ingest_catalog_by_upload(
     skip_pages: Optional[str] = Form(None, description="Páginas a omitir (ej: '1-2,4')"),
     no_vision: bool = Form(False, description="Desactivar visión multimodal"),
     recreate_table: bool = Form(False, description="Recrear tabla eliminando datos anteriores"),
+    documento_id: Optional[str] = Form(None, description="Identidad lógica del documento/lista declarada por el operador (ej: 'LISTA GENERAL'). Si se omite, el orquestador aplica el default 'LISTA GENERAL'"),
+    delete_scope: str = Form(
+        "proveedor",
+        description="Alcance del borrado previo: 'proveedor' (reemplazo total del proveedor) o 'documento' (incremental, solo este documento)"
+    ),
     table_name: str = Form(settings.DEFAULT_TABLE_NAME, description="Tabla destino en PostgreSQL"),
     sync: bool = Form(False, description="Ejecutar de forma síncrona bloqueante")
 ) -> Any:
-    """Recibe un archivo PDF multipart/form-data y ejecuta la ingesta."""
+    """Recibe un archivo PDF multipart/form-data y ejecuta la ingesta.
+
+    ``documento_id`` ausente no deja filas sin etiquetar: el orquestador aplica
+    el default "LISTA GENERAL" (settings.DEFAULT_DOCUMENTO_ID) en ambos scopes.
+    """
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -220,6 +281,8 @@ async def ingest_catalog_by_upload(
         "skip_pages": skip_pages,
         "no_vision": no_vision,
         "recreate_table": recreate_table,
+        "documento_id": documento_id,
+        "delete_scope": delete_scope,
         "table_name": table_name,
         "output_dir": str(settings.ARTIFACTS_DIR)
     }

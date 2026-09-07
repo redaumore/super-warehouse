@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     
     # Modelos y parámetros por defecto
     DEFAULT_TABLE_NAME: str = "catalogo_productos_rag"
+    # Identidad lógica de documento aplicada por el orquestador cuando el operador
+    # no declara documento_id: toda fila indexada queda etiquetada (sin NULLs).
+    DEFAULT_DOCUMENTO_ID: str = "LISTA GENERAL"
     DEFAULT_LUNA_MODEL: str = "gpt-5.6-luna"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
     DEFAULT_EMBEDDING_DIM: int = 256
