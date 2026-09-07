@@ -34,6 +34,7 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "mypy>=1.8",
+    "import-linter>=2.0",
 ]
 
 [build-system]
@@ -61,3 +62,40 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 extraPaths = ["."]
+
+# Modular-monolith boundary enforcement (Phase 0).
+# Layers, highest first; lower layers must not import higher ones.
+# Siblings within a layer are separated by ':' (non-independent), so same-layer
+# imports are unrestricted here — per-module neighbor rules come in later phases.
+[tool.importlinter]
+# pricing/purchasing/sourcing/supplier/barcode are namespace packages (no __init__.py)
+# and grimp does not discover them on its own; they must be listed as roots explicitly.
+root_packages = ["src", "src.pricing", "src.purchasing", "src.sourcing", "src.supplier", "src.barcode"]
+
+[[tool.importlinter.contracts]]
+name = "modular monolith layers"
+type = "layers"
+layers = [
+    # L3 interface
+    "src.pipeline : src.api : src.backoffice : src.scheduler : src.barcode",
+    # L2 adapters
+    "src.integrations",
+    # L1 domain
+    "src.agents : src.orchestrator : src.sourcing : src.purchasing : src.supplier : src.pricing : src.order_lifecycle : src.channels",
+    # L0 foundation
+    "src.db : src.observability : src.features : src.config : src.tz",
+]
+
+# KNOWN VIOLATIONS — temporary debt, to be removed in later phases (phase-1+ cycle fixes).
+# Grouped by the higher offending layer. Each entry is an import that exists today.
+ignore_imports = [
+    # L1 -> L3 (cycle debt: agents <-> backoffice)
+    "src.agents.customer -> src.backoffice.clients",
+    # L1 -> L2 (agents using adapters directly)
+    "src.agents.dispatch -> src.integrations.sheets",
+    "src.agents.product_search -> src.integrations.rag",
+    "src.agents.customer -> src.integrations.rag",
+    "src.orchestrator.approval -> src.integrations.sheets",
+    "src.supplier.rag_searcher -> src.integrations.rag",
+    "src.sourcing.draft_order -> src.integrations.rag",
+]

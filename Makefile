@@ -1,4 +1,4 @@
-.PHONY: install db-up db-down db-logs migrate migrate-new test run run-adoption backoffice lint format typecheck test-docs check-test-docs
+.PHONY: install db-up db-down db-logs migrate migrate-new test run run-adoption backoffice lint lint-boundaries format typecheck test-docs check-test-docs
 
 PY := .venv/bin/python
 
@@ -43,6 +43,10 @@ backoffice:
 # Quality
 lint:
 	$(PY) -m ruff check src tests
+
+# Modular-monolith layer boundaries (import-linter; config in pyproject.toml).
+lint-boundaries:
+	.venv/bin/lint-imports
 
 # Living test documentation: regenerate docs/escenarios-testeados.md from docstrings.
 test-docs:
