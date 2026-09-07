@@ -1542,6 +1542,11 @@ class _FakeCatalogRag:
         proveedor_id=None,
         documento_id=None,
         delete_scope="proveedor",
+        start_page=1,
+        max_pages=None,
+        skip_pages=None,
+        no_vision=False,
+        marca=None,
     ):
         self.ingest_calls.append(
             {
@@ -1552,6 +1557,11 @@ class _FakeCatalogRag:
                 "proveedor_id": proveedor_id,
                 "documento_id": documento_id,
                 "delete_scope": delete_scope,
+                "start_page": start_page,
+                "max_pages": max_pages,
+                "skip_pages": skip_pages,
+                "no_vision": no_vision,
+                "marca": marca,
             }
         )
         if self.ingest_error:
@@ -1638,6 +1648,100 @@ def test_app_catalog_ingest_surfaces_rag_unavailability(shop_ctx, tmp_path):
     assert job_id is None
     assert message.startswith("Error: RAG no disponible")
     assert rag.ingest_calls  # the attempt happened; the launch failed
+
+
+def test_app_catalog_ingest_defaults_are_neutral(shop_ctx, tmp_path):
+    """Sin opciones avanzadas, el handler pasa los defaults neutros al cliente."""
+    shop_ctx["session"].commit()
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    _catalog_ingest(
+        rag,
+        SimpleNamespace(path=str(pdf)),
+        1,
+        None,
+        False,
+        None,  # blank Gradio Number for start_page
+        None,
+        None,
+        False,
+        None,
+    )
+    assert rag.ingest_calls
+    call = rag.ingest_calls[0]
+    assert call["start_page"] == 1
+    assert call["max_pages"] is None
+    assert call["skip_pages"] is None
+    assert call["no_vision"] is False
+    assert call["marca"] is None
+
+
+def test_app_catalog_ingest_rejects_invalid_skip_pages(tmp_path):
+    """Un formato inválido de Páginas a saltar se bloquea antes de llamar a la API."""
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    for bad in ("1,,x", "abc", "1-2,", "-3"):
+        rag = _FakeCatalogRag(job_id="job-abc")
+        job_id, message = _catalog_ingest(
+            rag, SimpleNamespace(path=str(pdf)), 1, None, False, None, None, bad, False, None
+        )
+        assert job_id is None, bad
+        assert "Páginas a saltar" in message, bad
+        assert not rag.ingest_calls  # the API was never called
+
+
+def test_app_catalog_ingest_rejects_reversed_skip_range(tmp_path):
+    """Un rango invertido ('4-2') se rechaza antes de llamar a la API."""
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, message = _catalog_ingest(
+        rag, SimpleNamespace(path=str(pdf)), 1, None, False, None, None, "1,4-2", False, None
+    )
+    assert job_id is None
+    assert "no puede ser mayor" in message
+    assert not rag.ingest_calls  # the API was never called
+
+
+def test_app_catalog_ingest_passes_advanced_options_through(shop_ctx, tmp_path):
+    """Las opciones avanzadas válidas viajan al cliente (marca normalizada)."""
+    shop_ctx["session"].commit()
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, _message = _catalog_ingest(
+        rag,
+        SimpleNamespace(path=str(pdf)),
+        1,
+        None,
+        False,
+        3,  # start_page
+        5,  # max_pages
+        " 1-2,4 ",  # skip_pages (trimmed by the handler)
+        True,  # no_vision
+        "  BULON  ",  # marca (stripped by the handler)
+    )
+    assert job_id == "job-abc"
+    call = rag.ingest_calls[0]
+    assert call["start_page"] == 3
+    assert call["max_pages"] == 5
+    assert call["skip_pages"] == "1-2,4"
+    assert call["no_vision"] is True
+    assert call["marca"] == "BULON"
+
+
+def test_app_catalog_ingest_rejects_invalid_start_page(tmp_path):
+    """Una Página inicial menor a 1 se rechaza antes de llamar a la API."""
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, message = _catalog_ingest(
+        rag, SimpleNamespace(path=str(pdf)), 1, None, False, 0, None, None, False, None
+    )
+    assert job_id is None
+    assert "Página inicial" in message
+    assert not rag.ingest_calls  # the API was never called
 
 
 def test_app_catalog_job_status_without_job_prompts_first_launch():

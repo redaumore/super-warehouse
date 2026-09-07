@@ -494,6 +494,11 @@ class RagProductClient:
         proveedor_id: str | None = None,
         documento_id: str | None = None,
         delete_scope: str = "proveedor",
+        start_page: int = 1,
+        max_pages: int | None = None,
+        skip_pages: str | None = None,
+        no_vision: bool = False,
+        marca: str | None = None,
     ) -> str:
         """Upload a supplier catalog PDF for async ingestion (``sync=false``).
 
@@ -521,6 +526,23 @@ class RagProductClient:
         ("LISTA GENERAL") for both scopes, so every indexed row ends up tagged
         (no NULL ``documento_id`` going forward); this client keeps sending
         ``documento_id`` only when the caller supplies one.
+
+        Optional page-windowing / extraction knobs mirror the backend's form
+        fields and follow the same omission pattern as ``proveedor_id``/
+        ``documento_id``: they are only sent when non-default, so the
+        multipart payload stays minimal.
+
+        - ``start_page``: 1-indexed page where ingestion begins (omitted
+          when 1).
+        - ``max_pages``: cap on how many pages to process; ``None`` means
+          no limit (omitted).
+        - ``skip_pages``: pages/ranges to skip, e.g. ``"1-2,4"``. The
+          backend parses this leniently and silently ignores invalid
+          tokens (omitted when empty/whitespace).
+        - ``no_vision``: disable multimodal extraction, text-only
+          processing (omitted when ``False``).
+        - ``marca``: force this brand on every extracted product
+          (omitted when empty/whitespace).
         """
         if not filename or not content:
             raise ValueError("filename and content are required for catalog ingestion")
@@ -536,6 +558,18 @@ class RagProductClient:
             data["documento_id"] = clean_documento_id
         if delete_scope and delete_scope != "proveedor":
             data["delete_scope"] = delete_scope
+        if start_page and start_page != 1:
+            data["start_page"] = str(start_page)
+        if max_pages:
+            data["max_pages"] = str(max_pages)
+        clean_skip_pages = (skip_pages or "").strip()
+        if clean_skip_pages:
+            data["skip_pages"] = clean_skip_pages
+        if no_vision:
+            data["no_vision"] = "true"
+        clean_marca = (marca or "").strip()
+        if clean_marca:
+            data["marca"] = clean_marca
         started = time.perf_counter()
         try:
             response = self._holder.client.post(

@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 472, agrupados en 33 dominios.
+**Total de escenarios:** 479, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,7 +17,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 45
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 47
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -35,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 82
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 87
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 6
@@ -293,6 +293,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El timeout del cliente proviene de rag_timeout_seconds (src/config.py:73). _(`test_rag_client_timeout_bounded_by_settings`)_
 - Un 202 con job_id devuelve el id; el multipart lleva proveedor y sync=false. _(`test_ingest_catalog_202_returns_job_id_and_sends_multipart`)_
 - Sin proveedor_id el form no incluye el campo (opcional en el servicio). _(`test_ingest_catalog_omits_proveedor_id_when_absent`)_
+- Las opciones avanzadas seteadas viajan como campos multipart al servicio. _(`test_ingest_catalog_sends_advanced_options_when_set`)_
+- Sin opciones avanzadas el form no incluye ninguno de esos campos. _(`test_ingest_catalog_omits_advanced_options_by_default`)_
 - Un HTTP 500 del ingest-file se convierte en RagProductError. _(`test_ingest_catalog_http_error_raises_domain_error`)_
 - Un error de conexión al subir el PDF se convierte en RagProductError. _(`test_ingest_catalog_connect_error_raises_domain_error`)_
 - Faltar filename/content es un error de uso, no de transporte. _(`test_ingest_catalog_requires_filename_and_content`)_
@@ -660,6 +662,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La ingesta incremental sin Documento / lista declarado no llama al RAG. _(`test_app_catalog_ingest_incremental_requires_documento_id`)_
 - La ingesta incremental envía documento_id y delete_scope='documento'. _(`test_app_catalog_ingest_incremental_passes_documento_scope`)_
 - Un fallo del RAG muestra el error y no lanza ningún job. _(`test_app_catalog_ingest_surfaces_rag_unavailability`)_
+- Sin opciones avanzadas, el handler pasa los defaults neutros al cliente. _(`test_app_catalog_ingest_defaults_are_neutral`)_
+- Un formato inválido de Páginas a saltar se bloquea antes de llamar a la API. _(`test_app_catalog_ingest_rejects_invalid_skip_pages`)_
+- Un rango invertido ('4-2') se rechaza antes de llamar a la API. _(`test_app_catalog_ingest_rejects_reversed_skip_range`)_
+- Las opciones avanzadas válidas viajan al cliente (marca normalizada). _(`test_app_catalog_ingest_passes_advanced_options_through`)_
+- Una Página inicial menor a 1 se rechaza antes de llamar a la API. _(`test_app_catalog_ingest_rejects_invalid_start_page`)_
 - Sin job lanzado se lo indica en lugar de consultar al RAG. _(`test_app_catalog_job_status_without_job_prompts_first_launch`)_
 - PENDING/RUNNING se muestran como en proceso con el mensaje del servicio. _(`test_app_catalog_job_status_running_shows_progress`)_
 - COMPLETED muestra el resumen que trae el payload del job. _(`test_app_catalog_job_status_completed_shows_result_summary`)_

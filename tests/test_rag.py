@@ -622,6 +622,56 @@ def test_ingest_catalog_omits_proveedor_id_when_absent():
     assert not seen["has_proveedor_id"]
 
 
+def test_ingest_catalog_sends_advanced_options_when_set():
+    """Las opciones avanzadas seteadas viajan como campos multipart al servicio."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode("utf-8", errors="replace")
+        seen["start_page"] = 'name="start_page"\r\n\r\n3' in body
+        seen["max_pages"] = 'name="max_pages"\r\n\r\n5' in body
+        seen["skip_pages"] = 'name="skip_pages"\r\n\r\n1-2,4' in body
+        seen["no_vision"] = 'name="no_vision"\r\n\r\ntrue' in body
+        seen["marca"] = 'name="marca"\r\n\r\nBULON' in body
+        return httpx.Response(202, json=_job_payload())
+
+    client = _client(handler)
+    job_id = client.ingest_catalog(
+        filename="catalogo.pdf",
+        content=b"%PDF-fake",
+        codigo_proveedor="MSA",
+        nombre_proveedor="Mayorista SA",
+        start_page=3,
+        max_pages=5,
+        skip_pages=" 1-2,4 ",
+        no_vision=True,
+        marca=" BULON ",
+    )
+    assert job_id == "job-123"
+    assert all(seen.values()), seen
+
+
+def test_ingest_catalog_omits_advanced_options_by_default():
+    """Sin opciones avanzadas el form no incluye ninguno de esos campos."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode("utf-8", errors="replace")
+        for field in ("start_page", "max_pages", "skip_pages", "no_vision", "marca"):
+            seen[field] = field in body
+        return httpx.Response(202, json=_job_payload())
+
+    client = _client(handler)
+    job_id = client.ingest_catalog(
+        filename="catalogo.pdf",
+        content=b"%PDF-fake",
+        codigo_proveedor="MSA",
+        nombre_proveedor="Mayorista SA",
+    )
+    assert job_id == "job-123"
+    assert not any(seen.values()), seen
+
+
 def test_ingest_catalog_http_error_raises_domain_error():
     """Un HTTP 500 del ingest-file se convierte en RagProductError."""
     client = _client(lambda request: httpx.Response(500, text="boom"))

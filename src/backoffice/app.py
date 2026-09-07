@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
@@ -431,6 +432,69 @@ def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> s
 
 # ------------------------------------------------ catalog ingest tab (RAG PDF)
 
+_SKIP_PAGES_RE = re.compile(r"^\s*\d+(\s*-\s*\d+)?(\s*,\s*\d+(\s*-\s*\d+)?)*\s*$")
+
+
+def _coerce_page_int(raw: object) -> int | None:
+    """Coerce a Gradio Number input to an int (``None`` when blank/empty).
+
+    Raises ``ValueError`` for non-numeric junk; fractional values truncate
+    via ``float`` because Gradio may deliver ``1.0`` even with precision 0.
+    """
+    if raw is None or str(raw).strip() == "":
+        return None
+    return int(float(str(raw)))
+
+
+def _validate_advanced_ingest_options(
+    start_page: object,
+    max_pages: object,
+    skip_pages: object,
+    marca: object,
+) -> tuple[str, int | None, str | None, str | None] | str:
+    """Validate the advanced ingest form values BEFORE calling the RAG API.
+
+    Returns ``(marca_forzada, max_pages, skip_pages, start_page)`` on success
+    or a friendly Spanish error message for the status textbox on failure
+    (the caller must not launch any job then).
+    """
+    try:
+        clean_start = _coerce_page_int(start_page)
+    except (TypeError, ValueError):
+        return "Error: la Página inicial debe ser un número entero mayor o igual a 1."
+    if clean_start is None:
+        clean_start = 1
+    if clean_start < 1:
+        return "Error: la Página inicial debe ser un número entero mayor o igual a 1."
+    clean_max = None
+    try:
+        clean_max = _coerce_page_int(max_pages)
+    except (TypeError, ValueError):
+        return (
+            "Error: el Máximo de páginas debe ser un número entero mayor o igual a 1 "
+            "(o vacío = sin límite)."
+        )
+    if clean_max is not None and clean_max < 1:
+        return (
+            "Error: el Máximo de páginas debe ser un número entero mayor o igual a 1 "
+            "(o vacío = sin límite)."
+        )
+    clean_skip = str(skip_pages or "").strip()
+    if clean_skip:
+        if not _SKIP_PAGES_RE.match(clean_skip):
+            return (
+                "Error: Páginas a saltar inválidas. Usá el formato '1-2,4': rangos o "
+                "páginas sueltas separadas por coma."
+            )
+        for start_txt, end_txt in re.findall(r"(\d+)\s*-\s*(\d+)", clean_skip):
+            if int(start_txt) > int(end_txt):
+                return (
+                    "Error: Páginas a saltar inválidas. En los rangos, la página inicial "
+                    "no puede ser mayor que la final (ej: '4-2' es inválido)."
+                )
+    clean_marca = str(marca or "").strip()
+    return clean_marca or None, clean_max, clean_skip or None, clean_start
+
 
 def _catalog_ingest(
     client: RagProductClient,
@@ -438,6 +502,11 @@ def _catalog_ingest(
     supplier_id: object,
     documento_id: object,
     incremental: object,
+    start_page: object = None,
+    max_pages: object = None,
+    skip_pages: object = None,
+    no_vision: object = False,
+    marca: object = None,
 ) -> tuple[str | None, str]:
     """Upload the supplier catalog PDF to the RAG async ingestion queue.
 
@@ -448,6 +517,11 @@ def _catalog_ingest(
     supplier catalog may span multiple PDFs. This handler validates supplier +
     file (+ documento_id when incremental) and launches the job; RAG
     unavailability surfaces as an honest error and launches nothing.
+
+    Advanced options (accordion in the tab) thread through to the client:
+    page windowing (``start_page``/``max_pages``/``skip_pages``), text-only
+    extraction (``no_vision``) and forced brand (``marca``). They are
+    validated here so invalid input never reaches the API.
     """
     if upload is None:
         return None, "Subí el PDF del catálogo del proveedor."
@@ -457,6 +531,10 @@ def _catalog_ingest(
             "Error: para la ingesta incremental tenés que declarar el "
             "Documento / lista (ej: 'LISTA GENERAL')."
         )
+    validated = _validate_advanced_ingest_options(start_page, max_pages, skip_pages, marca)
+    if isinstance(validated, str):
+        return None, validated
+    marca_forzada, max_pages_clean, skip_pages_clean, start_page_clean = validated
     with SessionLocal() as session:
         try:
             supplier = ensure_active_supplier(session, int(str(supplier_id)))
@@ -478,6 +556,11 @@ def _catalog_ingest(
             proveedor_id=supplier_pk,
             documento_id=doc_id or None,
             delete_scope="documento" if bool(incremental) else "proveedor",
+            start_page=start_page_clean,
+            max_pages=max_pages_clean,
+            skip_pages=skip_pages_clean,
+            no_vision=bool(no_vision),
+            marca=marca_forzada,
         )
     except RagProductError as exc:
         return None, f"Error: RAG no disponible ({exc})"
@@ -1613,6 +1696,39 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 label="Ingesta incremental (reemplaza solo este documento)",
                 value=False,
             )
+            with gr.Accordion("Opciones avanzadas", open=False):
+                catalog_start_page = gr.Number(
+                    label="Página inicial",
+                    value=1,
+                    precision=0,
+                    minimum=1,
+                    info="Página del PDF donde empieza la ingesta (1-indexed).",
+                )
+                catalog_max_pages = gr.Number(
+                    label="Máximo de páginas",
+                    value=None,
+                    precision=0,
+                    minimum=1,
+                    info="Cantidad máxima de páginas a procesar. Dejálo vacío = sin límite.",
+                )
+                catalog_skip_pages = gr.Textbox(
+                    label="Páginas a saltar",
+                    placeholder="ej: 1-2,4",
+                    info="Rangos o páginas sueltas separadas por coma. Se ignoran del catálogo.",
+                )
+                catalog_no_vision = gr.Checkbox(
+                    label="Solo texto (sin visión)",
+                    value=False,
+                    info=(
+                        "Desactiva la extracción multimodal: el PDF se procesa solo "
+                        "como texto (más rápido, menos precisión en tablas e imágenes)."
+                    ),
+                )
+                catalog_marca = gr.Textbox(
+                    label="Forzar marca",
+                    placeholder="ej: BULON",
+                    info="Vacío = no forzar. Si se indica, se aplica a todos los productos extraídos.",
+                )
             catalog_ingest_btn = gr.Button("Ingestar catálogo", variant="primary")
             catalog_job_state = gr.State(None)
             catalog_ingest_status = gr.Textbox(label="Ingesta", interactive=False)
@@ -1631,6 +1747,11 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     catalog_supplier_selector,
                     catalog_documento_id,
                     catalog_incremental,
+                    catalog_start_page,
+                    catalog_max_pages,
+                    catalog_skip_pages,
+                    catalog_no_vision,
+                    catalog_marca,
                 ],
                 outputs=[catalog_job_state, catalog_ingest_status],
             )
