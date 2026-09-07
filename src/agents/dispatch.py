@@ -19,7 +19,7 @@ Owns the owner-facing decision tools of the pipeline:
   ``RequiresRequoteError`` and rolls back.
 
 Decision parsing is pure; the handler is built with injectable boundaries
-(session factory + ``SheetsWriter`` + optional supplier searcher) so unit
+(session factory + a ``SheetsPort`` writer + optional supplier searcher) so unit
 tests never touch the network. The old ``owner_phone`` push
 (``notify_owner``) is gone — confirmations, cancellations and errors are
 in-chat replies.
@@ -41,9 +41,12 @@ from src.agents.disambiguation import normalize_text
 from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import Order, OrderItem
-from src.integrations.sheets import SheetsWriter
 from src.observability.session_logger import log_session_event
-from src.orchestrator.approval import PendingConversionError, confirm_and_register
+from src.orchestrator.approval import (
+    PendingConversionError,
+    SheetsPort,
+    confirm_and_register,
+)
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ConversationState, SourcingNeedItem
 from src.order_lifecycle.state import (
@@ -221,7 +224,7 @@ def _selection_state_updates(result, order, state: ConversationState) -> Convers
 
 def build_dispatch_handler(
     session_factory: Callable[[], Session],
-    sheets: SheetsWriter,
+    sheets: SheetsPort,
     *,
     searcher: SupplierCatalogSearcher | None = None,
 ) -> Callable[[InboundMessage, ConversationState | None, RoutingDecision], AgentOutcome]:

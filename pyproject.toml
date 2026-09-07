@@ -90,7 +90,6 @@ layers = [
 # Grouped by the higher offending layer. Each entry is an import that exists today.
 ignore_imports = [
     # L1 -> L2 (agents using adapters directly)
-    "src.agents.dispatch -> src.integrations.sheets",
     "src.agents.product_search -> src.integrations.rag",
     "src.agents.customer -> src.integrations.rag",
     "src.supplier.rag_searcher -> src.integrations.rag",
