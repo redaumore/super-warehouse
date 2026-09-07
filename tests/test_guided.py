@@ -23,6 +23,7 @@ from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import _parse_quantity, _yes_no_answer, build_guided_handler
 from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.db.models import (
@@ -163,7 +164,11 @@ def _searcher() -> FakeProductSearcher:
 
 
 def _guided_deps(session):
-    return SourcingDeps(session_factory=lambda: session, searcher=FakeSupplierCatalogSearcher())
+    return SourcingDeps(
+        session_factory=lambda: session,
+        searcher=FakeSupplierCatalogSearcher(),
+        register_client=chat_register_client,
+    )
 
 
 def _guided_handler(session, searcher=None):

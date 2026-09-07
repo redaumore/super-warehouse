@@ -24,6 +24,7 @@ from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import build_guided_handler
 from src.agents.inventory import seed_inventory
 from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.db.models import (
@@ -156,6 +157,7 @@ def _orchestrator(session) -> Orchestrator:
     deps = SourcingDeps(
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(CANDIDATES),
+        register_client=chat_register_client,
     )
     store = ConversationStore(
         rehydrator=lambda sid: rehydrate_conversation(session, sid, searcher=deps.searcher)

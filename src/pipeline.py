@@ -45,6 +45,7 @@ from src.agents.customer import (
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import build_guided_handler
 from src.agents.product_search import PrecedenceProductSearcher, ProductSearcher
+from src.backoffice.clients import chat_register_client
 from src.channels import CHANNELS
 from src.channels.base import InboundMessage
 from src.config import get_settings
@@ -100,6 +101,7 @@ def _sourcing_deps() -> SourcingDeps | None:
         session_factory=SessionLocal,
         searcher=RagSupplierCatalogSearcher(session_factory=SessionLocal, rag_client=rag_client),
         rag_client=rag_client,
+        register_client=chat_register_client,
     )
 
 

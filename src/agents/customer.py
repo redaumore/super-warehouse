@@ -316,9 +316,34 @@ def product_context_note(
     return _local_note(query, result.entries)
 
 
+class ClientRegistrationError(Exception):
+    """The client-registration boundary rejected the given client data.
+
+    Raised by ``SourcingDeps.register_client`` (the backoffice-backed adapter
+    in production) when the commercial name is missing or the phone is invalid
+    or already registered. The message is owner-facing report text.
+    """
+
+
+class ClientRegistrar(Protocol):
+    """Client-registration port the in-chat ``nuevo cliente`` flow talks through.
+
+    Dependency inversion: the Customer agent (L1 domain) must not import the
+    backoffice clients editor (L3 interface), so client registration rides the
+    same seam as the session and the supplier searcher. The composition root
+    injects ``backoffice.clients.chat_register_client``, which assigns the
+    store's default price list and raises ``ClientRegistrationError`` on
+    invalid input.
+    """
+
+    def __call__(
+        self, session: Session, *, nombre_comercial: str, telefono_raw: str
+    ) -> Cliente: ...
+
+
 @dataclass
 class SourcingDeps:
-    """Boundaries the sourcing turn needs (session + supplier searcher).
+    """Boundaries the sourcing turn needs (session, searcher, client registry).
 
     Quotes, cancellations and approvals are in-chat replies, so no notifier or
     owner phone is bridged anymore — the pipeline edge owns the only outbound.
@@ -326,6 +351,7 @@ class SourcingDeps:
 
     session_factory: Callable[[], Session]
     searcher: SupplierCatalogSearcher
+    register_client: ClientRegistrar
     rag_client: RagProductClient | None = None
 
 
@@ -390,17 +416,12 @@ def _handle_create_client(
 ) -> AgentOutcome:
     """Create a client in chat: ``nuevo cliente <nombre> <teléfono>``.
 
-    Reuses ``backoffice.clients.create_client`` with the default (Base) price
-    list. A phone that already belongs to a client reports the existing client
-    instead of creating a duplicate (locked input #2); any other invalid input
-    is reported as an error.
+    Registers through the injected ``SourcingDeps.register_client`` port (the
+    backoffice adapter in production, on the store's default price list). A
+    phone that already belongs to a client reports the existing client instead
+    of creating a duplicate (locked input #2); any other invalid input is
+    reported as an error.
     """
-    from src.backoffice.clients import (
-        InvalidClientDataError,
-        create_client,
-        default_price_list_id,
-    )
-
     with deps.session_factory() as session:
         normalized = normalize_phone(telefono)
         existing = (
@@ -417,13 +438,8 @@ def _handle_create_client(
                 ),
             )
         try:
-            client = create_client(
-                session,
-                nombre_comercial=nombre,
-                telefono_raw=telefono,
-                lista_precios_id=default_price_list_id(session),
-            )
-        except InvalidClientDataError as exc:
+            client = deps.register_client(session, nombre_comercial=nombre, telefono_raw=telefono)
+        except ClientRegistrationError as exc:
             session.rollback()
             return AgentOutcome(
                 state=base,
@@ -697,10 +713,9 @@ def _create_customer_for_draft(
     nombre: str,
     telefono: str,
     rag_client: RagProductClient | None,
+    register_client: ClientRegistrar,
 ) -> AgentOutcome:
     """Create or reuse a client, then attach the waiting draft immediately."""
-    from src.backoffice.clients import InvalidClientDataError, create_client, default_price_list_id
-
     normalized = normalize_phone(telefono)
     if normalized is None:
         return AgentOutcome(
@@ -709,13 +724,8 @@ def _create_customer_for_draft(
     customer = session.scalar(select(Cliente).where(Cliente.telefono_norm == normalized))
     if customer is None:
         try:
-            customer = create_client(
-                session,
-                nombre_comercial=nombre,
-                telefono_raw=telefono,
-                lista_precios_id=default_price_list_id(session),
-            )
-        except InvalidClientDataError as exc:
+            customer = register_client(session, nombre_comercial=nombre, telefono_raw=telefono)
+        except ClientRegistrationError as exc:
             session.rollback()
             return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
     return persist_finalized_draft(session, customer, base, rag_client)
@@ -801,7 +811,9 @@ def _run_finalize_turn(
     finalize_name = parse_finalize(text, base.draft_items)
     with deps.session_factory() as session:
         if create is not None and not base.customer_disambiguation_pending:
-            return _create_customer_for_draft(session, base, *create, rag_client)
+            return _create_customer_for_draft(
+                session, base, *create, rag_client, deps.register_client
+            )
         if base.customer_disambiguation_pending:
             candidate = parse_customer_pick(text, base.customer_candidates)
             if candidate is None:

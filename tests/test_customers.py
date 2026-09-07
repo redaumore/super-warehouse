@@ -26,7 +26,11 @@ from src.agents.customers import (
     resolve_customer_name,
 )
 from src.agents.inventory import seed_inventory
-from src.backoffice.clients import InvalidClientDataError, default_price_list_id
+from src.backoffice.clients import (
+    InvalidClientDataError,
+    chat_register_client,
+    default_price_list_id,
+)
 from src.channels.base import InboundMessage
 from src.config import get_settings
 from src.db.models import (
@@ -307,7 +311,11 @@ def shop_with_catalog(shop):
 
 
 def _handler(session):
-    deps = SourcingDeps(session_factory=lambda: session, searcher=FakeSupplierCatalogSearcher())
+    deps = SourcingDeps(
+        session_factory=lambda: session,
+        searcher=FakeSupplierCatalogSearcher(),
+        register_client=chat_register_client,
+    )
     return build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
 
 

@@ -89,8 +89,6 @@ layers = [
 # KNOWN VIOLATIONS — temporary debt, to be removed in later phases (phase-1+ cycle fixes).
 # Grouped by the higher offending layer. Each entry is an import that exists today.
 ignore_imports = [
-    # L1 -> L3 (cycle debt: agents <-> backoffice)
-    "src.agents.customer -> src.backoffice.clients",
     # L1 -> L2 (agents using adapters directly)
     "src.agents.dispatch -> src.integrations.sheets",
     "src.agents.product_search -> src.integrations.rag",

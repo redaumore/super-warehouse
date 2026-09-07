@@ -16,6 +16,7 @@ from src.agents.customer import (
     build_handler,
 )
 from src.agents.product_search import ProductEntry, ProductSource
+from src.backoffice.clients import chat_register_client
 from src.backoffice.customer_orders import set_default_margin
 from src.channels.base import InboundMessage
 from src.config import get_settings
@@ -133,6 +134,7 @@ def _handler(session):
     deps = SourcingDeps(
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
+        register_client=chat_register_client,
     )
     return build_handler(FakeResponder(), sourcing=deps)
 
@@ -362,6 +364,7 @@ def test_finalize_rag_without_price_falls_back_to_endpoint_lookup(shop):
         session_factory=lambda: shop,
         searcher=FakeSupplierCatalogSearcher(),
         rag_client=rag_client,
+        register_client=chat_register_client,
     )
     handler = build_handler(FakeResponder(), sourcing=deps)
     state = ConversationState(

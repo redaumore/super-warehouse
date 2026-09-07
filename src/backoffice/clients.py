@@ -13,7 +13,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.customer import normalize_phone
+from src.agents.customer import ClientRegistrationError, normalize_phone
 from src.db.models import Cliente, ListaPrecios
 
 _CENT = Decimal("0.01")
@@ -96,6 +96,26 @@ def create_client(
     session.add(client)
     session.flush()
     return client
+
+
+def chat_register_client(session: Session, *, nombre_comercial: str, telefono_raw: str) -> Cliente:
+    """Chat-facing adapter for the agent's ``ClientRegistrar`` port.
+
+    Dependency inversion: the Customer agent (L1 domain) must not import this
+    L3 module, so the pipeline composition root injects this adapter through
+    ``SourcingDeps.register_client``. It resolves the store's default price
+    list, reuses ``create_client``, and translates ``InvalidClientDataError``
+    into the port's error type (same owner-facing message).
+    """
+    try:
+        return create_client(
+            session,
+            nombre_comercial=nombre_comercial,
+            telefono_raw=telefono_raw,
+            lista_precios_id=default_price_list_id(session),
+        )
+    except InvalidClientDataError as exc:
+        raise ClientRegistrationError(str(exc)) from exc
 
 
 def update_client(
