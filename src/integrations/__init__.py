@@ -1,10 +1,10 @@
 """Integrations: real external-service adapters (OpenAI, Google Sheets).
 
 Submodule exports are loaded lazily on first access: eager re-exports here
-would create an import cycle, because ``src.orchestrator.approval`` imports
-``src.integrations.sheets`` while ``src.agents.customer`` — imported by
-``src.integrations.openai`` — is still initializing via ``src.orchestrator``.
-The public names remain the same (see ``__all__``).
+would tie this adapter package's import order to the domain graph, because
+``src.integrations.openai`` imports ``src.agents.customer``, which is
+initialized as part of the ``src.orchestrator`` package chain. The public
+names remain the same (see ``__all__``).
 """
 
 from __future__ import annotations

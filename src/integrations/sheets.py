@@ -13,7 +13,6 @@ from the service-account credentials file in settings.
 
 from __future__ import annotations
 
-import enum
 import logging
 from datetime import datetime
 from typing import Any
@@ -22,17 +21,15 @@ import gspread
 from gspread.utils import ValueInputOption
 
 from src.config import Settings, get_settings
+from src.orchestrator.approval import SheetsWriteStatus
 from src.tz import now_buenos_aires, to_buenos_aires
 
 logger = logging.getLogger(__name__)
 
-
-class SheetsWriteStatus(str, enum.Enum):
-    """Outcome of registering one order row in the spreadsheet."""
-
-    APPENDED = "APPENDED"
-    QUARANTINED = "QUARANTINED"
-    SKIPPED = "SKIPPED"  # no write attempted (e.g. a Case C confirm cancelled the order)
+# The write-status enum is domain-owned by the confirm ceremony's registration
+# port (src.orchestrator.approval.SheetsPort); this L2 adapter re-exports it so
+# adapter users (monitor, tests) keep importing the same name from here.
+__all__ = ["SheetsWriteStatus", "SheetsWriter"]
 
 
 class SheetsWriter:

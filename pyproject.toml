@@ -93,7 +93,6 @@ ignore_imports = [
     "src.agents.dispatch -> src.integrations.sheets",
     "src.agents.product_search -> src.integrations.rag",
     "src.agents.customer -> src.integrations.rag",
-    "src.orchestrator.approval -> src.integrations.sheets",
     "src.supplier.rag_searcher -> src.integrations.rag",
     "src.sourcing.draft_order -> src.integrations.rag",
 ]

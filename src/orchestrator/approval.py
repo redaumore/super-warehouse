@@ -27,10 +27,12 @@ the ``ConfirmResult`` / the caller's reply.
 
 from __future__ import annotations
 
+import enum
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Protocol
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -45,7 +47,6 @@ from src.db.models import (
     Supplier,
     SupplierStatus,
 )
-from src.integrations.sheets import SheetsWriter, SheetsWriteStatus
 from src.observability.session_logger import log_session_event
 from src.orchestrator.session import ResolvedItem
 from src.order_lifecycle.state import (
@@ -63,6 +64,40 @@ _CENT = Decimal("0.01")
 
 class PendingConversionError(Exception):
     """An order cannot be confirmed while one or more prices lack conversion."""
+
+
+class SheetsWriteStatus(str, enum.Enum):
+    """Outcome of registering one order row in the spreadsheet.
+
+    Domain-owned vocabulary of the confirm ceremony's registration port: the
+    ceremony (L1 domain) must not import the Sheets adapter (L2 integrations),
+    so the enum lives here and ``src.integrations.sheets`` re-exports it —
+    adapter, port and callers share one type identity.
+    """
+
+    APPENDED = "APPENDED"
+    QUARANTINED = "QUARANTINED"
+    SKIPPED = "SKIPPED"  # no write attempted (e.g. a Case C confirm cancelled the order)
+
+
+class SheetsPort(Protocol):
+    """Append-only order-registration port the confirm ceremony talks through.
+
+    Dependency inversion: ``confirm_and_register`` (L1 domain) must not import
+    the ``SheetsWriter`` adapter (L2 integrations), so the writer is injected
+    by the composition root (through the DISPATCH handler) against this narrow
+    port. The production adapter quarantines failed rows instead of raising —
+    the ceremony tolerates a quarantine (the order stays CONFIRMED).
+    """
+
+    def append_order_row(
+        self,
+        order_id: int,
+        *,
+        customer_name: str | None = None,
+        total: str | None = None,
+        items_summary: str = "",
+    ) -> SheetsWriteStatus: ...
 
 
 @dataclass(frozen=True)
@@ -329,7 +364,7 @@ def confirm_and_register(
     session: Session,
     order: Order,
     *,
-    sheets: SheetsWriter,
+    sheets: SheetsPort,
     searcher: SupplierCatalogSearcher | None = None,
     customer_name: str | None = None,
     actor: str = "owner",
