@@ -16,11 +16,13 @@ import pytest
 from src.config import Settings
 from src.integrations.rag import (
     DocumentLine,
+    RagDocumentSummary,
     RagPrice,
     RagProduct,
     RagProductClient,
     RagProductError,
     RagProductNotConfigured,
+    RagProviderDocuments,
     normalize_rag_sku,
 )
 
@@ -735,3 +737,87 @@ def test_get_job_missing_status_raises_domain_error():
     client = _client(lambda request: httpx.Response(200, json={"job_id": "job-123"}))
     with pytest.raises(RagProductError, match="no status"):
         client.get_job("job-123")
+
+
+# ------------------------------------------------------------------ documents list
+
+
+def _documents_payload(**overrides) -> dict:
+    base = {
+        "codigo_proveedor": "MSA",
+        "documentos": [
+            {
+                "documento_id": "LISTA GENERAL",
+                "total_productos": 42,
+                "ultimo_archivo": "catalogo-mayorista.pdf",
+                "actualizado_en": "2026-01-01T00:00:00+00:00",
+            },
+            {"documento_id": "OFERTAS", "total_productos": 7},
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_list_documents_200_maps_typed_documents():
+    """Un 200 mapea los documentos tipados; el query param viaja en la URL."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert (
+            str(request.url)
+            == "http://rag.test/api/v1/catalogs/documents?codigo_proveedor=MSA"
+        )
+        return httpx.Response(200, json=_documents_payload())
+
+    client = _client(handler)
+    result = client.list_documents("MSA")
+    assert result == RagProviderDocuments(
+        codigo_proveedor="MSA",
+        documents=(
+            RagDocumentSummary(
+                documento_id="LISTA GENERAL",
+                total_productos=42,
+                ultimo_archivo="catalogo-mayorista.pdf",
+                actualizado_en="2026-01-01T00:00:00+00:00",
+            ),
+            RagDocumentSummary(documento_id="OFERTAS", total_productos=7),
+        ),
+    )
+
+
+def test_list_documents_unknown_provider_maps_to_empty_tuple():
+    """Proveedor desconocido: 200 con lista vacía → tupla vacía, no error."""
+    client = _client(
+        lambda request: httpx.Response(
+            200, json={"codigo_proveedor": "ZZZ", "documentos": []}
+        )
+    )
+    result = client.list_documents("ZZZ")
+    assert result.documents == ()
+
+
+def test_list_documents_requires_codigo_proveedor():
+    """Un codigo_proveedor vacío es un error de uso, no de transporte."""
+    client = _client(lambda request: httpx.Response(200, json=_documents_payload()))
+    with pytest.raises(ValueError):
+        client.list_documents("   ")
+
+
+def test_list_documents_http_and_transport_errors_raise_domain_error():
+    """Un HTTP 500 y un fallo de transporte son RagProductError."""
+    http_500 = _client(lambda request: httpx.Response(500, text="boom"))
+    with pytest.raises(RagProductError, match="HTTP 500"):
+        http_500.list_documents("MSA")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    with pytest.raises(RagProductError, match="connection refused"):
+        _client(handler).list_documents("MSA")
+
+
+def test_list_documents_invalid_payload_raises_domain_error():
+    """Un 200 sin lista ``documentos`` se convierte en RagProductError."""
+    client = _client(lambda request: httpx.Response(200, json={"codigo_proveedor": "MSA"}))
+    with pytest.raises(RagProductError, match="invalid payload"):
+        client.list_documents("MSA")

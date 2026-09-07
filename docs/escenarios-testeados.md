@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 459, agrupados en 33 dominios.
+**Total de escenarios:** 464, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -17,7 +17,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
 - [Ciclo de vida del pedido](#ciclo-de-vida-del-pedido) — 32
-- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 40
+- [Integración con RAG de catálogo de proveedores](#integración-con-rag-de-catálogo-de-proveedores) — 45
 - [Búsqueda de producto (precedencia local → RAG)](#búsqueda-de-producto-precedencia-local-rag) — 12
 - [Percepción (voz e imagen)](#percepción-voz-e-imagen) — 9
 - [Integración con OpenAI](#integración-con-openai) — 9
@@ -302,6 +302,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Un job_id vacío es un error de uso, no de transporte. _(`test_get_job_requires_job_id`)_
 - Un 404 (job desconocido) y un fallo de transporte son RagProductError. _(`test_get_job_unknown_id_and_transport_errors_raise_domain_error`)_
 - Un 200 sin status se convierte en RagProductError. _(`test_get_job_missing_status_raises_domain_error`)_
+- Un 200 mapea los documentos tipados; el query param viaja en la URL. _(`test_list_documents_200_maps_typed_documents`)_
+- Proveedor desconocido: 200 con lista vacía → tupla vacía, no error. _(`test_list_documents_unknown_provider_maps_to_empty_tuple`)_
+- Un codigo_proveedor vacío es un error de uso, no de transporte. _(`test_list_documents_requires_codigo_proveedor`)_
+- Un HTTP 500 y un fallo de transporte son RagProductError. _(`test_list_documents_http_and_transport_errors_raise_domain_error`)_
+- Un 200 sin lista ``documentos`` se convierte en RagProductError. _(`test_list_documents_invalid_payload_raises_domain_error`)_
 
 ## Búsqueda de producto (precedencia local → RAG)
 

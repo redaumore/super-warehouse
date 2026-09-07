@@ -38,6 +38,7 @@ from src.observability.session_logger import log_session_event
 logger = logging.getLogger(__name__)
 
 RAG_CATALOG_INGEST_PATH = "/api/v1/catalogs/ingest-file"
+RAG_CATALOG_DOCUMENTS_PATH = "/api/v1/catalogs/documents"
 RAG_JOB_STATUS_PATH = "/api/v1/jobs/{job_id}"
 
 # Catalog PDFs are big multipart uploads processed by a slow OCR pipeline: the
@@ -155,6 +156,35 @@ class RagJobStatus:
     progress_message: str | None = None
     result: dict[str, Any] | None = None
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class RagDocumentSummary:
+    """One indexed document of a supplier from ``GET /api/v1/catalogs/documents``.
+
+    ``documento_id`` is the operator-declared logical document identity (e.g.
+    ``"LISTA GENERAL"``); ``total_productos`` the indexed row count; and
+    ``ultimo_archivo``/``actualizado_en`` the last source file and update
+    timestamp (ISO 8601) when the service reported them.
+    """
+
+    documento_id: str
+    total_productos: int
+    ultimo_archivo: str | None = None
+    actualizado_en: str | None = None
+
+
+@dataclass(frozen=True)
+class RagProviderDocuments:
+    """The indexed documents of one supplier (``documentos[]`` of the payload).
+
+    An unknown provider maps to an empty ``documents`` tuple — the service
+    answers 200 with an empty list instead of a 404, so the UI treats it as
+    "no documents yet", not as an error.
+    """
+
+    codigo_proveedor: str
+    documents: tuple[RagDocumentSummary, ...] = ()
 
 
 class RagProductError(Exception):
@@ -462,6 +492,8 @@ class RagProductClient:
         codigo_proveedor: str,
         nombre_proveedor: str,
         proveedor_id: str | None = None,
+        documento_id: str | None = None,
+        delete_scope: str = "proveedor",
     ) -> str:
         """Upload a supplier catalog PDF for async ingestion (``sync=false``).
 
@@ -473,8 +505,22 @@ class RagProductClient:
         non-2xx statuses and payloads without a ``job_id`` raise
         ``RagProductError`` (never a raw httpx exception).
 
-        Note: the service replaces every previously indexed row for
-        ``codigo_proveedor`` — the caller must warn the user before calling.
+        Deletion scope (``delete_scope``): a supplier's catalog may be split
+        across multiple PDF files. ``documento_id`` is the logical document
+        identity DECLARED BY THE OPERATOR (e.g. ``"LISTA GENERAL"``) — never
+        derived from filename or content.
+
+        - ``delete_scope="proveedor"`` (default): full replace — the service
+          deletes every previously indexed row for ``codigo_proveedor`` before
+          inserting, wiping other files' products. Callers must warn the user.
+        - ``delete_scope="documento"``: incremental — deletes only rows matching
+          ``codigo_proveedor + documento_id`` so the remaining files of the
+          same document survive the re-ingest.
+
+        When ``documento_id`` is absent the service applies its own default
+        ("LISTA GENERAL") for both scopes, so every indexed row ends up tagged
+        (no NULL ``documento_id`` going forward); this client keeps sending
+        ``documento_id`` only when the caller supplies one.
         """
         if not filename or not content:
             raise ValueError("filename and content are required for catalog ingestion")
@@ -485,6 +531,11 @@ class RagProductClient:
         }
         if proveedor_id:
             data["proveedor_id"] = proveedor_id
+        clean_documento_id = (documento_id or "").strip()
+        if clean_documento_id:
+            data["documento_id"] = clean_documento_id
+        if delete_scope and delete_scope != "proveedor":
+            data["delete_scope"] = delete_scope
         started = time.perf_counter()
         try:
             response = self._holder.client.post(
@@ -575,6 +626,81 @@ class RagProductClient:
             result=result if isinstance(result, dict) else None,
             error=payload.get("error"),
         )
+
+    def list_documents(self, codigo_proveedor: str) -> RagProviderDocuments:
+        """List the indexed documents of ``codigo_proveedor``.
+
+        ``GET /api/v1/catalogs/documents`` returns one entry per distinct
+        ``documento_id`` (legacy rows with a NULL ``documento_id`` are
+        excluded). Feeds the backoffice "Documento / lista" dropdown so the
+        operator picks a known document — or types a brand-new one — instead
+        of free-typing a typo'd ``documento_id`` that would orphan rows. An
+        unknown provider answers 200 with an empty list and maps to an empty
+        ``documents`` tuple (not an error); transport failures, non-200
+        statuses and unparsable payloads raise ``RagProductError``.
+        """
+        clean_code = str(codigo_proveedor or "").strip()
+        if not clean_code:
+            raise ValueError("codigo_proveedor is required to list documents")
+        try:
+            response = self._holder.client.get(
+                RAG_CATALOG_DOCUMENTS_PATH,
+                params={"codigo_proveedor": clean_code},
+            )
+        except httpx.HTTPError as exc:
+            log_session_event(
+                "rag",
+                "documents_error",
+                {"codigo_proveedor": clean_code, "error": str(exc)},
+                level="ERROR",
+            )
+            raise RagProductError(
+                f"rag documents list failed for {clean_code!r}: {exc}"
+            ) from exc
+        if response.status_code != 200:
+            log_session_event(
+                "rag",
+                "documents_error",
+                {"codigo_proveedor": clean_code, "status": response.status_code},
+                level="WARNING",
+            )
+            raise RagProductError(
+                f"rag documents list returned HTTP {response.status_code} for {clean_code!r}"
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RagProductError(
+                f"rag documents list returned non-JSON payload: {exc}"
+            ) from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("documentos"), list):
+            raise RagProductError("rag documents list returned an invalid payload")
+        documents: list[RagDocumentSummary] = []
+        for raw in payload["documentos"]:
+            if not isinstance(raw, dict):
+                continue
+            documento_id = raw.get("documento_id")
+            if not documento_id:
+                continue
+            try:
+                total_productos = int(raw.get("total_productos") or 0)
+            except (TypeError, ValueError):
+                total_productos = 0
+            documents.append(
+                RagDocumentSummary(
+                    documento_id=str(documento_id),
+                    total_productos=total_productos,
+                    ultimo_archivo=raw.get("ultimo_archivo"),
+                    actualizado_en=raw.get("actualizado_en"),
+                )
+            )
+        log_session_event(
+            "rag",
+            "documents_success",
+            {"codigo_proveedor": clean_code, "documents": len(documents)},
+        )
+        logger.info("rag documents list provider=%r count=%d", clean_code, len(documents))
+        return RagProviderDocuments(codigo_proveedor=clean_code, documents=tuple(documents))
 
     def _map_exact_product(self, raw: dict[str, Any]) -> RagProduct:
         """Map one product-route row into a typed ``RagProduct`` with provenance.
