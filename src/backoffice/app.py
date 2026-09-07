@@ -9,6 +9,7 @@ which keeps tests and CI safe.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable, Sequence
 from datetime import datetime
@@ -91,8 +92,16 @@ from src.tz import to_buenos_aires
 
 _SHEETS = SheetsWriter()  # append-only; quarantines internally when unconfigured
 
+logger = logging.getLogger(__name__)
+
 _IVA_CHOICES = [("—", "")] + [(c.value, c.value) for c in IvaCondition]
 _STATUS_CHOICES = ["All"] + [s.value for s in SupplierStatus]
+
+# Default logical document/lista identity for the "Ingesta de catálogo" tab:
+# mirrors the RAG service default (settings.DEFAULT_DOCUMENTO_ID). It pre-fills
+# the "Documento / lista" dropdown and resets it on supplier change, so every
+# ingest ends up tagged (the service applies the same default when absent).
+DEFAULT_DOCUMENTO_ID = "LISTA GENERAL"
 
 
 def _catalog_grid() -> list[list[object]]:
@@ -424,18 +433,30 @@ def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> s
 
 
 def _catalog_ingest(
-    client: RagProductClient, upload: object, supplier_id: object
+    client: RagProductClient,
+    upload: object,
+    supplier_id: object,
+    documento_id: object,
+    incremental: object,
 ) -> tuple[str | None, str]:
     """Upload the supplier catalog PDF to the RAG async ingestion queue.
 
     Returns ``(job_id, status)``: the job id travels in ``gr.State`` so the
-    "Consultar estado" button can poll it. The service replaces ALL previously
-    indexed rows for the supplier's code — the tab warns the user; this handler
-    only validates supplier + file and launches the job. RAG unavailability
-    surfaces as an honest error and launches nothing.
+    "Consultar estado" button can poll it. Two modes: full replace (default)
+    deletes ALL previously indexed rows for the supplier's code; incremental
+    ("documento") deletes only rows of the declared document/lista — a
+    supplier catalog may span multiple PDFs. This handler validates supplier +
+    file (+ documento_id when incremental) and launches the job; RAG
+    unavailability surfaces as an honest error and launches nothing.
     """
     if upload is None:
         return None, "Subí el PDF del catálogo del proveedor."
+    doc_id = str(documento_id or "").strip()
+    if bool(incremental) and not doc_id:
+        return None, (
+            "Error: para la ingesta incremental tenés que declarar el "
+            "Documento / lista (ej: 'LISTA GENERAL')."
+        )
     with SessionLocal() as session:
         try:
             supplier = ensure_active_supplier(session, int(str(supplier_id)))
@@ -455,10 +476,13 @@ def _catalog_ingest(
             codigo_proveedor=supplier_code,
             nombre_proveedor=supplier_name,
             proveedor_id=supplier_pk,
+            documento_id=doc_id or None,
+            delete_scope="documento" if bool(incremental) else "proveedor",
         )
     except RagProductError as exc:
         return None, f"Error: RAG no disponible ({exc})"
-    return job_id, f"Ingesta lanzada (job {job_id}). Consultá el estado."
+    modo = "incremental (documento)" if bool(incremental) else "reemplazo total"
+    return job_id, f"Ingesta lanzada en modo {modo} (job {job_id}). Consultá el estado."
 
 
 def _catalog_job_status(client: RagProductClient, job_id: object) -> str:
@@ -486,6 +510,45 @@ def _catalog_job_status(client: RagProductClient, job_id: object) -> str:
         detail = job.error or "Error desconocido."
         return f"Job {job.job_id}: FAILED. {detail}"
     return f"Job {job.job_id}: {job.status}."
+
+
+def _load_provider_documents(client: RagProductClient, supplier_selection: object) -> gr.Dropdown:
+    """Refresh the "Documento / lista" dropdown with the supplier's known documents.
+
+    Resolves the supplier selection to ``codigo_proveedor`` exactly like
+    ``_catalog_ingest`` (active-supplier lookup by id via
+    ``ensure_active_supplier``) and asks the RAG for the indexed
+    ``documento_id`` values, so the operator picks a known document — or types
+    a brand-new one — instead of free-typing a typo'd id that would leave
+    orphan rows. Every failure mode (unknown/inactive supplier, RAG
+    unavailability, empty provider) degrades gracefully to an empty choices
+    update — never a crash. The value resets to ``DEFAULT_DOCUMENTO_ID``
+    ("LISTA GENERAL") instead of clearing: when it is among the fetched
+    choices the dropdown selects that item; ``allow_custom_value`` covers the
+    rest (a fresh supplier with no indexed documents still shows the default).
+    """
+    try:
+        supplier_pk = int(str(supplier_selection))
+    except (TypeError, ValueError):
+        logger.debug("Dropdown documentos: sin proveedor seleccionado (%r).", supplier_selection)
+        return gr.update(choices=[], value=DEFAULT_DOCUMENTO_ID)
+    with SessionLocal() as session:
+        try:
+            supplier = ensure_active_supplier(session, supplier_pk)
+        except (KeyError, SupplierInactiveError) as exc:
+            logger.warning("Dropdown documentos: proveedor inválido (%s): %s", supplier_pk, exc)
+            return gr.update(choices=[], value=DEFAULT_DOCUMENTO_ID)
+        supplier_code = supplier.code
+    try:
+        response = client.list_documents(supplier_code)
+    except RagProductError as exc:
+        logger.warning("Dropdown documentos: RAG no disponible para %s: %s", supplier_code, exc)
+        return gr.update(choices=[], value=DEFAULT_DOCUMENTO_ID)
+    choices = [doc.documento_id for doc in response.documents]
+    logger.info(
+        "Dropdown documentos: %d documento(s) para el proveedor %s.", len(choices), supplier_code
+    )
+    return gr.update(choices=choices, value=DEFAULT_DOCUMENTO_ID)
 
 
 def _as_index(raw: object) -> int:
@@ -1512,8 +1575,17 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
         with gr.Tab("Ingesta de catálogo"):
             gr.Markdown(
                 "### Ingesta del catálogo PDF del proveedor al índice RAG\n\n"
-                "⚠️ **Atención:** la ingesta **reemplaza TODAS las filas indexadas "
-                "previamente** para el código del proveedor (reemplazo total)."
+                "⚠️ **Atención:** en modo **reemplazo total** (default) la ingesta "
+                "**reemplaza TODAS las filas indexadas previamente** para el código del "
+                "proveedor.\n\n"
+                "Si el catálogo del proveedor está dividido en varios PDFs, usá la "
+                "**ingesta incremental**: declará el mismo Documento / lista en cada "
+                "archivo y solo se reemplazarán las filas de ese documento, preservando "
+                "las de los demás.\n\n"
+                "El campo **Documento / lista** muestra los documentos ya indexados del "
+                "proveedor elegido. Si escribís un nombre nuevo, se declara un documento "
+                "nuevo (usá el mismo valor en cada archivo del mismo documento). "
+                "Si lo dejás vacío, la ingesta usa el default **LISTA GENERAL**."
             )
             catalog_supplier_selector = gr.Dropdown(
                 choices=_active_supplier_choices(),
@@ -1524,14 +1596,42 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _supplier_choices_update, outputs=catalog_supplier_selector
             )
             catalog_upload = gr.File(label="Catálogo PDF", file_types=[".pdf"])
+            catalog_documento_id = gr.Dropdown(
+                label="Documento / lista",
+                value=DEFAULT_DOCUMENTO_ID,
+                allow_custom_value=True,
+                interactive=True,
+                multiselect=False,
+                info=(
+                    "Default: LISTA GENERAL si lo dejás vacío. Documentos ya indexados "
+                    "del proveedor, o un nombre nuevo para declarar un documento. "
+                    "Identidad lógica declarada por vos: usá el mismo valor en cada "
+                    "archivo del mismo documento."
+                ),
+            )
+            catalog_incremental = gr.Checkbox(
+                label="Ingesta incremental (reemplaza solo este documento)",
+                value=False,
+            )
             catalog_ingest_btn = gr.Button("Ingestar catálogo", variant="primary")
             catalog_job_state = gr.State(None)
             catalog_ingest_status = gr.Textbox(label="Ingesta", interactive=False)
             catalog_check_btn = gr.Button("Consultar estado", variant="secondary")
             catalog_job_status = gr.Textbox(label="Estado del job", interactive=False)
+            catalog_supplier_selector.change(
+                _load_provider_documents,
+                inputs=[gr.State(_get_rag_client()), catalog_supplier_selector],
+                outputs=catalog_documento_id,
+            )
             catalog_ingest_btn.click(
                 _catalog_ingest,
-                inputs=[gr.State(_get_rag_client()), catalog_upload, catalog_supplier_selector],
+                inputs=[
+                    gr.State(_get_rag_client()),
+                    catalog_upload,
+                    catalog_supplier_selector,
+                    catalog_documento_id,
+                    catalog_incremental,
+                ],
                 outputs=[catalog_job_state, catalog_ingest_status],
             )
             catalog_check_btn.click(

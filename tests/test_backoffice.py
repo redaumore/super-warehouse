@@ -37,6 +37,7 @@ from src.backoffice.app import (
     _ingest_confirm,
     _ingest_manual_search,
     _ingest_parse,
+    _load_provider_documents,
     _order_row_selected,
     _register_client,
     _save_exchange_rate,
@@ -95,7 +96,13 @@ from src.db.models import (
     SupplierStatus,
 )
 from src.db.session import SessionLocal
-from src.integrations.rag import RagJobStatus, RagProduct, RagProductError
+from src.integrations.rag import (
+    RagDocumentSummary,
+    RagJobStatus,
+    RagProduct,
+    RagProductError,
+    RagProviderDocuments,
+)
 from src.integrations.sheets import SheetsWriter
 from src.orchestrator.approval import PendingConversionError, confirm_and_register
 from src.purchasing.accumulate import accumulate_need
@@ -161,6 +168,8 @@ def test_build_app_catalogo_tab_has_warning_and_flow_components():
     assert "Ingestar catálogo" in labels
     assert "Consultar estado" in labels
     assert "Estado del job" in labels
+    assert "Documento / lista" in labels
+    assert "Ingesta incremental (reemplaza solo este documento)" in labels
     # The destructive-replacement warning is the tab's Markdown copy.
     markdown_values = [c.value for c in tab.children if type(c).__name__ == "Markdown"]
     assert any("reemplaza TODAS las filas indexadas" in (value or "") for value in markdown_values)
@@ -1511,15 +1520,28 @@ class _FakeCatalogRag:
         job: RagJobStatus | None = None,
         ingest_error: str | None = None,
         job_error: str | None = None,
+        documents: RagProviderDocuments | None = None,
+        documents_error: str | None = None,
     ) -> None:
         self.job_id = job_id
         self.job = job
         self.ingest_error = ingest_error
         self.job_error = job_error
+        self.documents = documents
+        self.documents_error = documents_error
         self.ingest_calls: list[dict] = []
+        self.documents_calls: list[str] = []
 
     def ingest_catalog(
-        self, *, filename, content, codigo_proveedor, nombre_proveedor, proveedor_id=None
+        self,
+        *,
+        filename,
+        content,
+        codigo_proveedor,
+        nombre_proveedor,
+        proveedor_id=None,
+        documento_id=None,
+        delete_scope="proveedor",
     ):
         self.ingest_calls.append(
             {
@@ -1528,6 +1550,8 @@ class _FakeCatalogRag:
                 "codigo_proveedor": codigo_proveedor,
                 "nombre_proveedor": nombre_proveedor,
                 "proveedor_id": proveedor_id,
+                "documento_id": documento_id,
+                "delete_scope": delete_scope,
             }
         )
         if self.ingest_error:
@@ -1540,10 +1564,18 @@ class _FakeCatalogRag:
         assert self.job is not None
         return self.job
 
+    def list_documents(self, codigo_proveedor: str) -> RagProviderDocuments:
+        self.documents_calls.append(codigo_proveedor)
+        if self.documents_error:
+            raise RagProductError(self.documents_error)
+        return self.documents or RagProviderDocuments(
+            codigo_proveedor=codigo_proveedor, documents=()
+        )
+
 
 def test_app_catalog_ingest_requires_file():
     """Sin PDF subido no se lanza ninguna ingesta."""
-    job_id, message = _catalog_ingest(_FakeCatalogRag(), None, 1)
+    job_id, message = _catalog_ingest(_FakeCatalogRag(), None, 1, None, False)
     assert job_id is None
     assert "Subí el PDF" in message
 
@@ -1554,16 +1586,46 @@ def test_app_catalog_ingest_launches_job_and_returns_id(shop_ctx, tmp_path):
     pdf = tmp_path / "catalogo-mayorista.pdf"
     pdf.write_bytes(b"%PDF-fake")
     rag = _FakeCatalogRag(job_id="job-abc")
-    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1)
+    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1, None, False)
 
     assert job_id == "job-abc"
-    assert "Ingesta lanzada (job job-abc)" in message
+    assert "Ingesta lanzada en modo reemplazo total (job job-abc)" in message
     call = rag.ingest_calls[0]
     assert call["filename"] == "catalogo-mayorista.pdf"
     assert call["content"] == b"%PDF-fake"
     assert call["codigo_proveedor"] == "MSA"
     assert call["nombre_proveedor"] == "Mayorista SA"
     assert call["proveedor_id"] == "1"
+    assert call["documento_id"] is None
+    assert call["delete_scope"] == "proveedor"
+
+
+def test_app_catalog_ingest_incremental_requires_documento_id(tmp_path):
+    """La ingesta incremental sin Documento / lista declarado no llama al RAG."""
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1, "", True)
+    assert job_id is None
+    assert "Documento / lista" in message
+    assert not rag.ingest_calls  # the API was never called
+
+
+def test_app_catalog_ingest_incremental_passes_documento_scope(shop_ctx, tmp_path):
+    """La ingesta incremental envía documento_id y delete_scope='documento'."""
+    shop_ctx["session"].commit()
+    pdf = tmp_path / "catalogo.pdf"
+    pdf.write_bytes(b"%PDF-fake")
+    rag = _FakeCatalogRag(job_id="job-abc")
+    job_id, message = _catalog_ingest(
+        rag, SimpleNamespace(path=str(pdf)), 1, "  Lista General  ", True
+    )
+
+    assert job_id == "job-abc"
+    assert "modo incremental" in message
+    call = rag.ingest_calls[0]
+    assert call["documento_id"] == "Lista General"  # normalized (strip) by the client
+    assert call["delete_scope"] == "documento"
 
 
 def test_app_catalog_ingest_surfaces_rag_unavailability(shop_ctx, tmp_path):
@@ -1572,7 +1634,7 @@ def test_app_catalog_ingest_surfaces_rag_unavailability(shop_ctx, tmp_path):
     pdf = tmp_path / "catalogo.pdf"
     pdf.write_bytes(b"%PDF-fake")
     rag = _FakeCatalogRag(ingest_error="connection refused")
-    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1)
+    job_id, message = _catalog_ingest(rag, SimpleNamespace(path=str(pdf)), 1, None, False)
     assert job_id is None
     assert message.startswith("Error: RAG no disponible")
     assert rag.ingest_calls  # the attempt happened; the launch failed
@@ -1625,3 +1687,80 @@ def test_app_catalog_job_status_surfaces_rag_unavailability():
     """Un fallo al consultar el job se muestra como error honesto."""
     message = _catalog_job_status(_FakeCatalogRag(job_error="HTTP 404"), "job-123")
     assert message.startswith("Error: RAG no disponible")
+
+
+# ------------------------------------------------ provider documents dropdown
+
+
+def test_build_app_catalog_tab_documento_dropdown_defaults_to_lista_general():
+    """[dropdown default] El dropdown Documento / lista nace con 'LISTA GENERAL'."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Ingesta de catálogo")
+    stack = list(tab.children)
+    dropdowns = []
+    while stack:
+        child = stack.pop()
+        if type(child).__name__ == "Dropdown" and child.label == "Documento / lista":
+            dropdowns.append(child)
+        stack.extend(getattr(child, "children", []) or [])
+    assert len(dropdowns) == 1
+    assert dropdowns[0].value == "LISTA GENERAL"
+
+
+def test_app_load_provider_documents_populates_choices(shop_ctx):
+    """[dropdown R1] Proveedor conocido: el dropdown se llena con sus documento_id."""
+    shop_ctx["session"].commit()
+    rag = _FakeCatalogRag(
+        documents=RagProviderDocuments(
+            codigo_proveedor="MSA",
+            documents=(
+                RagDocumentSummary(documento_id="LISTA GENERAL", total_productos=42),
+                RagDocumentSummary(documento_id="OFERTAS", total_productos=7),
+            ),
+        )
+    )
+    update = _load_provider_documents(rag, 1)
+    assert rag.documents_calls == ["MSA"]  # resolved supplier id → code, like _catalog_ingest
+    assert update["choices"] == ["LISTA GENERAL", "OFERTAS"]
+    # Reset to the default instead of clearing: "LISTA GENERAL" is among the
+    # fetched choices, so the dropdown selects that item.
+    assert update["value"] == "LISTA GENERAL"
+
+
+def test_app_load_provider_documents_surfaces_graceful_empty_update_on_rag_failure(shop_ctx):
+    """[dropdown R1] Un fallo del RAG degrada a un update vacío; nunca crashea la UI."""
+    shop_ctx["session"].commit()
+    rag = _FakeCatalogRag(documents_error="connection refused")
+    update = _load_provider_documents(rag, 1)
+    assert rag.documents_calls == ["MSA"]  # the attempt happened
+    assert update["choices"] == []
+    # Even on failure the value resets to the default (allow_custom_value keeps
+    # it typeable, so the ingest stays tagged).
+    assert update["value"] == "LISTA GENERAL"
+
+
+def test_app_load_provider_documents_empty_provider_returns_empty_update(shop_ctx):
+    """[dropdown R1] Proveedor sin documentos: choices vacíos, sin error."""
+    shop_ctx["session"].commit()
+    rag = _FakeCatalogRag(documents=None)  # fake defaults to an empty documents tuple
+    update = _load_provider_documents(rag, 1)
+    assert update["choices"] == []
+    # Default not among the (empty) choices, but allow_custom_value keeps it selected.
+    assert update["value"] == "LISTA GENERAL"
+
+
+def test_app_load_provider_documents_unknown_supplier_skips_rag_call(shop_ctx):
+    """[dropdown R1] Proveedor desconocido no consulta el RAG y devuelve choices vacíos."""
+    shop_ctx["session"].commit()
+    rag = _FakeCatalogRag()
+    update = _load_provider_documents(rag, 999)
+    assert rag.documents_calls == []
+    assert update["choices"] == []
+
+
+def test_app_load_provider_documents_without_supplier_returns_empty_update():
+    """[dropdown R1] Sin proveedor seleccionado (None) se devuelve un update vacío."""
+    rag = _FakeCatalogRag()
+    update = _load_provider_documents(rag, None)
+    assert rag.documents_calls == []
+    assert update["choices"] == []

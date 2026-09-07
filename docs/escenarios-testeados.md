@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 464, agrupados en 33 dominios.
+**Total de escenarios:** 472, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -35,7 +35,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 74
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 82
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 6
@@ -657,12 +657,20 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Sin búsqueda previa o sin fila seleccionada no se adopta nada. _(`test_app_adoption_confirm_requires_selection`)_
 - Sin PDF subido no se lanza ninguna ingesta. _(`test_app_catalog_ingest_requires_file`)_
 - El upload lanza el job con code/business_name/id y retorna el job_id. _(`test_app_catalog_ingest_launches_job_and_returns_id`)_
+- La ingesta incremental sin Documento / lista declarado no llama al RAG. _(`test_app_catalog_ingest_incremental_requires_documento_id`)_
+- La ingesta incremental envía documento_id y delete_scope='documento'. _(`test_app_catalog_ingest_incremental_passes_documento_scope`)_
 - Un fallo del RAG muestra el error y no lanza ningún job. _(`test_app_catalog_ingest_surfaces_rag_unavailability`)_
 - Sin job lanzado se lo indica en lugar de consultar al RAG. _(`test_app_catalog_job_status_without_job_prompts_first_launch`)_
 - PENDING/RUNNING se muestran como en proceso con el mensaje del servicio. _(`test_app_catalog_job_status_running_shows_progress`)_
 - COMPLETED muestra el resumen que trae el payload del job. _(`test_app_catalog_job_status_completed_shows_result_summary`)_
 - FAILED expone el detalle de error del servicio. _(`test_app_catalog_job_status_failed_shows_error_detail`)_
 - Un fallo al consultar el job se muestra como error honesto. _(`test_app_catalog_job_status_surfaces_rag_unavailability`)_
+- [dropdown default] El dropdown Documento / lista nace con 'LISTA GENERAL'. _(`test_build_app_catalog_tab_documento_dropdown_defaults_to_lista_general`)_
+- [dropdown R1] Proveedor conocido: el dropdown se llena con sus documento_id. _(`test_app_load_provider_documents_populates_choices`)_
+- [dropdown R1] Un fallo del RAG degrada a un update vacío; nunca crashea la UI. _(`test_app_load_provider_documents_surfaces_graceful_empty_update_on_rag_failure`)_
+- [dropdown R1] Proveedor sin documentos: choices vacíos, sin error. _(`test_app_load_provider_documents_empty_provider_returns_empty_update`)_
+- [dropdown R1] Proveedor desconocido no consulta el RAG y devuelve choices vacíos. _(`test_app_load_provider_documents_unknown_supplier_skips_rag_call`)_
+- [dropdown R1] Sin proveedor seleccionado (None) se devuelve un update vacío. _(`test_app_load_provider_documents_without_supplier_returns_empty_update`)_
 
 ## Feature flags por fase
 
