@@ -1146,7 +1146,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             f"Fase 4 habilitada: {cfg.fase4_enabled}. "
             "Los datos van a la base local (Postgres + pgvector)."
         )
-        with gr.Tab("Catalog"):
+        with gr.Tab("Productos"):
             gr.Markdown("### Catálogo y stock")
             catalog_grid = gr.Dataframe(
                 headers=[
@@ -1177,7 +1177,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             catalog_refresh = gr.Button("Refrescar")
             catalog_refresh.click(_catalog_grid, outputs=catalog_grid)
 
-        with gr.Tab("Clients"):
+        with gr.Tab("Clientes"):
             gr.Markdown("### Clientes y listas de precios")
             clients_grid = gr.Dataframe(
                 headers=["ID", "Nombre", "Teléfono", "Lista", "Descuento particular"],
@@ -1211,225 +1211,51 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             client_refresh.click(_clients_grid, outputs=clients_grid)
             client_refresh.click(_price_list_dropdown_choices, None, client_list)
 
-        with gr.Tab("Orders/Monitor"):
-            gr.Markdown("### Pedidos en vivo")
-            orders_grid = gr.Dataframe(
-                headers=["Pedido", "Cliente", "Estado", "Recotizar", "Reservas activas", "Sheets"],
-                datatype=["number", "str", "str", "bool", "number", "bool"],
-                value=_monitor_grid,
-                label="Pedidos",
-            )
-            monitor_refresh = gr.Button("Refrescar")
-            monitor_refresh.click(_monitor_grid, outputs=orders_grid)
-
-        with gr.Tab("Purchase Orders"):
-            gr.Markdown("### Purchase orders to suppliers")
-            po_grid = gr.Dataframe(
-                headers=["PO", "Supplier", "Estado", "Artículos", "Recibido"],
-                datatype=["number", "str", "str", "str", "str"],
-                value=_po_grid,
-                label="Órdenes de compra",
-            )
-            po_refresh = gr.Button("Refrescar")
-            po_refresh.click(_po_grid, outputs=po_grid)
+        with gr.Tab("Proveedores"):
+            gr.Markdown("### Datos maestros de proveedores")
             with gr.Row():
-                po_id = gr.Number(label="PO ID", precision=0, value=1)
-                po_sku = gr.Textbox(label="SKU recibido", placeholder="CLV-001")
-                po_qty = gr.Number(label="Cantidad recibida", precision=0, value=0)
-            with gr.Row():
-                po_send = gr.Button("Send to supplier (OPEN → SENT)")
-                po_receive = gr.Button("Registrar recepción (parcial/total)")
-                po_cancel = gr.Button("Cancelar PO", variant="stop")
-            po_status = gr.Textbox(label="Ejecución", interactive=False)
-            po_send.click(_po_send, inputs=[po_id], outputs=po_status)
-            po_receive.click(_po_receive, inputs=[po_id, po_sku, po_qty], outputs=po_status)
-            po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
-
-        with gr.Tab("Ingestion"):
-            gr.Markdown("### Supplier remito / invoice entry (RAG-backed)")
-            supplier_selector = gr.Dropdown(
-                choices=_active_supplier_choices(),
-                label="Proveedor (activo)",
-            )
-            supplier_refresh = gr.Button("Refrescar", variant="secondary")
-            supplier_refresh.click(_supplier_choices_update, outputs=supplier_selector)
-            upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
-            preview_grid = gr.Dataframe(
-                headers=["Código", "Descripción", "Cantidad", "Costo", "Resolución"],
-                datatype=["str", "str", "number", "str", "str"],
-                label="Revisión (resueltas / pendientes)",
-                interactive=False,
-            )
-            resolved_state = gr.State(())
-            preview_status = gr.Textbox(label="Parse", interactive=False)
-            with gr.Row():
-                pending_line_index = gr.Number(label="Línea pendiente (nº)", precision=0, value=1)
-                manual_query = gr.Textbox(
-                    label="Buscar producto en RAG (código)", scale=3
-                )
-                manual_search_btn = gr.Button("Buscar", variant="secondary")
-            manual_results = gr.Dataframe(
-                headers=["Código", "Nombre", "Marca", "Precio", "node_id"],
-                datatype=["str", "str", "str", "number", "str"],
-                label="Candidatos RAG",
-            )
-            manual_results_state = gr.State(())
-            manual_candidate_index = gr.State(None)
-            manual_status = gr.Textbox(label="Búsqueda manual", interactive=False)
-            assign_btn = gr.Button("Asignar seleccionado a la línea", variant="secondary")
-            confirm_button = gr.Button("Confirmar e Ingresar a Inventario", variant="primary")
-            confirm_status = gr.Textbox(label="Ingreso", interactive=False)
-            upload.upload(
-                _ingest_parse,
-                inputs=[gr.State(_get_rag_client()), upload, supplier_selector],
-                outputs=[preview_grid, resolved_state, preview_status],
-            )
-            manual_search_btn.click(
-                _ingest_manual_search,
-                inputs=[
-                    gr.State(_get_rag_client()),
-                    pending_line_index,
-                    manual_query,
-                    supplier_selector,
-                ],
-                outputs=[manual_results, manual_results_state, manual_status],
-            )
-            manual_results.select(
-                _manual_row_selected,
-                None,
-                [manual_candidate_index],
-            )
-            assign_btn.click(
-                _ingest_assign,
-                inputs=[
-                    resolved_state,
-                    pending_line_index,
-                    manual_candidate_index,
-                    manual_results_state,
-                ],
-                outputs=[resolved_state, preview_grid, manual_status],
-            )
-            confirm_button.click(
-                _ingest_confirm,
-                inputs=[resolved_state, supplier_selector, gr.State(_get_embedder())],
-                outputs=confirm_status,
-            )
-
-        with gr.Tab("Catálogo"):
-            gr.Markdown(
-                "### Ingesta del catálogo PDF del proveedor al índice RAG\n\n"
-                "⚠️ **Atención:** la ingesta **reemplaza TODAS las filas indexadas "
-                "previamente** para el código del proveedor (reemplazo total)."
-            )
-            catalog_supplier_selector = gr.Dropdown(
-                choices=_active_supplier_choices(),
-                label="Proveedor (activo)",
-            )
-            catalog_supplier_refresh = gr.Button("Refrescar", variant="secondary")
-            catalog_supplier_refresh.click(
-                _supplier_choices_update, outputs=catalog_supplier_selector
-            )
-            catalog_upload = gr.File(label="Catálogo PDF", file_types=[".pdf"])
-            catalog_ingest_btn = gr.Button("Ingestar catálogo", variant="primary")
-            catalog_job_state = gr.State(None)
-            catalog_ingest_status = gr.Textbox(label="Ingesta", interactive=False)
-            catalog_check_btn = gr.Button("Consultar estado", variant="secondary")
-            catalog_job_status = gr.Textbox(label="Estado del job", interactive=False)
-            catalog_ingest_btn.click(
-                _catalog_ingest,
-                inputs=[gr.State(_get_rag_client()), catalog_upload, catalog_supplier_selector],
-                outputs=[catalog_job_state, catalog_ingest_status],
-            )
-            catalog_check_btn.click(
-                _catalog_job_status,
-                inputs=[gr.State(_get_rag_client()), catalog_job_state],
-                outputs=catalog_job_status,
-            )
-
-        with gr.Tab("Adoption (RAG)"):
-            gr.Markdown("### Search the supplier RAG catalog and adopt into inventory")
-            adoption_query = gr.Textbox(
-                label="Búsqueda (nombre, código, marca)", placeholder="tornillo autoperforante"
-            )
-            adoption_search_btn = gr.Button("Buscar en RAG", variant="primary")
-            adoption_results = gr.Dataframe(
-                headers=["Código", "Nombre", "Marca", "Categoría", "Precio", "Moneda"],
-                datatype=["str", "str", "str", "str", "number", "str"],
-                label="Resultados RAG",
-            )
-            adoption_results_state = gr.State(())
-            adoption_search_status = gr.Textbox(label="Búsqueda", interactive=False)
-            with gr.Row():
-                adoption_stock = gr.Number(label="Stock inicial", value=1, precision=0)
-                adoption_confirm_btn = gr.Button("Adoptar seleccionado", variant="primary")
-            adoption_confirm_status = gr.Textbox(label="Adopción", interactive=False)
-            adoption_selected_index = gr.State(None)
-            adoption_search_btn.click(
-                _adoption_search,
-                inputs=[gr.State(_get_rag_client()), adoption_query],
-                outputs=[adoption_results, adoption_results_state, adoption_search_status],
-            )
-            adoption_results.select(
-                _adoption_row_selected,
-                None,
-                [adoption_selected_index],
-            )
-            adoption_confirm_btn.click(
-                _adoption_confirm,
-                inputs=[
-                    adoption_results_state,
-                    adoption_selected_index,
-                    adoption_stock,
-                    gr.State(_get_embedder()),
-                ],
-                outputs=[adoption_confirm_status],
-            )
-
-        with gr.Tab("Suppliers"):
-            gr.Markdown("### Supplier master data")
-            with gr.Row():
-                supplier_search = gr.Textbox(label="Search (name, CUIT, code)", scale=3)
+                supplier_search = gr.Textbox(label="Buscar (nombre, CUIT, código)", scale=3)
                 supplier_status_filter = gr.Dropdown(
-                    choices=_STATUS_CHOICES, value="ACTIVO", label="Status", scale=1
+                    choices=_STATUS_CHOICES, value="ACTIVO", label="Estado", scale=1
                 )
             suppliers_grid = gr.Dataframe(
                 headers=[
                     "ID",
-                    "Code",
-                    "Name",
+                    "Código",
+                    "Nombre",
                     "CUIT",
-                    "Contact",
-                    "Phone",
-                    "Margin",
+                    "Contacto",
+                    "Teléfono",
+                    "Margen",
                     "IVA",
-                    "Status",
+                    "Estado",
                 ],
                 datatype=["number", "str", "str", "str", "str", "str", "str", "str", "str"],
                 value=lambda: _suppliers_grid("", "ACTIVO"),
-                label="Suppliers",
+                label="Proveedores",
             )
             supplier_state = gr.State(value=0)
             with gr.Row():
-                supplier_name = gr.Textbox(label="Business name")
+                supplier_name = gr.Textbox(label="Razón social")
                 supplier_code = gr.Textbox(
-                    label="Code (3 chars — suggested from name)", placeholder="ABC"
+                    label="Código (3 letras — sugerido a partir del nombre)", placeholder="ABC"
                 )
                 supplier_cuit = gr.Textbox(label="CUIT", placeholder="30-12345678-1")
             with gr.Row():
-                supplier_contact = gr.Textbox(label="Contact name")
-                supplier_phone = gr.Textbox(label="Phone (E.164)", placeholder="+54 11 4321-5678")
+                supplier_contact = gr.Textbox(label="Nombre de contacto")
+                supplier_phone = gr.Textbox(label="Teléfono (E.164)", placeholder="+54 11 4321-5678")
                 supplier_whatsapp = gr.Textbox(label="WhatsApp", placeholder="+54 9 11 4321-5678")
                 supplier_email = gr.Textbox(label="Email", placeholder="nombre@empresa.com.ar")
             with gr.Row():
-                supplier_address = gr.Textbox(label="Address", scale=2)
-                supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="IVA condition")
-                supplier_margin = gr.Number(label="Default margin %", value=0.0)
-                supplier_terms = gr.Textbox(label="Terms")
-            supplier_status = gr.Textbox(label="Status", interactive=False)
+                supplier_address = gr.Textbox(label="Dirección", scale=2)
+                supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="Condición IVA")
+                supplier_margin = gr.Number(label="Margen por defecto %", value=0.0)
+                supplier_terms = gr.Textbox(label="Condiciones")
+            supplier_status = gr.Textbox(label="Estado", interactive=False)
             with gr.Row():
-                supplier_save = gr.Button("Save supplier", variant="primary")
-                supplier_toggle = gr.Button("Toggle status", variant="stop")
-                supplier_refresh = gr.Button("Refresh")
+                supplier_save = gr.Button("Guardar proveedor", variant="primary")
+                supplier_toggle = gr.Button("Cambiar estado", variant="stop")
+                supplier_refresh = gr.Button("Refrescar")
             supplier_search.change(
                 _suppliers_grid,
                 inputs=[supplier_search, supplier_status_filter],
@@ -1504,50 +1330,50 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 outputs=suppliers_grid,
             )
 
-        with gr.Tab("Customer Orders"):
-            gr.Markdown("### Customer orders and conversion maintenance")
+        with gr.Tab("Pedidos de clientes"):
+            gr.Markdown("### Pedidos de clientes y mantenimiento de conversión")
             customer_orders_grid = gr.Dataframe(
                 headers=[
-                    "Order",
-                    "Customer",
-                    "State",
+                    "Pedido",
+                    "Cliente",
+                    "Estado",
                     "Subtotal (ARS)",
                     "Total (ARS)",
-                    "Pending conversion",
+                    "Conversión pendiente",
                 ],
                 datatype=["number", "str", "str", "str", "str", "bool"],
                 value=_customer_orders_grid,
-                label="Customer Orders",
+                label="Pedidos de clientes",
             )
-            customer_orders_refresh = gr.Button("Refresh orders")
+            customer_orders_refresh = gr.Button("Refrescar pedidos")
             customer_orders_refresh.click(_customer_orders_grid, outputs=customer_orders_grid)
             selected_order_id = gr.State(None)
-            gr.Markdown("### Order state progress")
+            gr.Markdown("### Progreso del estado del pedido")
             order_state_html = gr.HTML(value=order_state_diagram(""))
             customer_order_detail_grid = gr.Dataframe(
                 headers=[
                     "SKU",
-                    "Product Name",
-                    "Quantity",
-                    "Original price",
-                    "Margin %",
-                    "Base price/unit",
-                    "Total / product",
+                    "Nombre producto",
+                    "Cantidad",
+                    "Precio original",
+                    "Margen %",
+                    "Precio base/unit.",
+                    "Total / producto",
                 ],
                 datatype=["str", "str", "number", "str", "str", "str", "str"],
-                label="Order lines",
+                label="Líneas del pedido",
             )
 
-            gr.Markdown("### Fulfillment actions")
-            order_action_status = gr.Textbox(label="Action status", interactive=False)
+            gr.Markdown("### Acciones de preparación y entrega")
+            order_action_status = gr.Textbox(label="Estado de la acción", interactive=False)
             order_action_label = gr.Textbox(
-                label="Legal actions for the selected order", interactive=False
+                label="Acciones disponibles para el pedido seleccionado", interactive=False
             )
             with gr.Row():
-                action_start_picking = gr.Button("Start picking (Confirmed → Picking)")
-                action_complete_picking = gr.Button("Complete picking (Picking → Ready)")
-                action_deliver = gr.Button("Deliver (Ready → Closed)")
-                action_cancel = gr.Button("Cancel order", variant="stop")
+                action_start_picking = gr.Button("Iniciar preparación (Confirmed → Picking)")
+                action_complete_picking = gr.Button("Completar preparación (Picking → Ready)")
+                action_deliver = gr.Button("Entregar (Ready → Closed)")
+                action_cancel = gr.Button("Cancelar pedido", variant="stop")
             customer_orders_grid.select(
                 _order_row_selected,
                 None,
@@ -1579,31 +1405,209 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 outputs=[order_action_status, order_state_html],
             )
 
-        with gr.Tab("Settings"):
-            gr.Markdown("### Exchange rates")
+        with gr.Tab("Monitor de pedidos"):
+            gr.Markdown("### Pedidos en vivo")
+            orders_grid = gr.Dataframe(
+                headers=["Pedido", "Cliente", "Estado", "Recotizar", "Reservas activas", "Sheets"],
+                datatype=["number", "str", "str", "bool", "number", "bool"],
+                value=_monitor_grid,
+                label="Pedidos",
+            )
+            monitor_refresh = gr.Button("Refrescar")
+            monitor_refresh.click(_monitor_grid, outputs=orders_grid)
+
+        with gr.Tab("Órdenes de compra"):
+            gr.Markdown("### Órdenes de compra a proveedores")
+            po_grid = gr.Dataframe(
+                headers=["PO", "Proveedor", "Estado", "Artículos", "Recibido"],
+                datatype=["number", "str", "str", "str", "str"],
+                value=_po_grid,
+                label="Órdenes de compra",
+            )
+            po_refresh = gr.Button("Refrescar")
+            po_refresh.click(_po_grid, outputs=po_grid)
+            with gr.Row():
+                po_id = gr.Number(label="ID de PO", precision=0, value=1)
+                po_sku = gr.Textbox(label="SKU recibido", placeholder="CLV-001")
+                po_qty = gr.Number(label="Cantidad recibida", precision=0, value=0)
+            with gr.Row():
+                po_send = gr.Button("Enviar a proveedor (OPEN → SENT)")
+                po_receive = gr.Button("Registrar recepción (parcial/total)")
+                po_cancel = gr.Button("Cancelar PO", variant="stop")
+            po_status = gr.Textbox(label="Ejecución", interactive=False)
+            po_send.click(_po_send, inputs=[po_id], outputs=po_status)
+            po_receive.click(_po_receive, inputs=[po_id, po_sku, po_qty], outputs=po_status)
+            po_cancel.click(_po_cancel, inputs=[po_id], outputs=po_status)
+
+        with gr.Tab("Ingesta de remitos"):
+            gr.Markdown("### Carga de remito / factura del proveedor (con RAG)")
+            supplier_selector = gr.Dropdown(
+                choices=_active_supplier_choices(),
+                label="Proveedor (activo)",
+            )
+            supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            supplier_refresh.click(_supplier_choices_update, outputs=supplier_selector)
+            upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
+            preview_grid = gr.Dataframe(
+                headers=["Código", "Descripción", "Cantidad", "Costo", "Resolución"],
+                datatype=["str", "str", "number", "str", "str"],
+                label="Revisión (resueltas / pendientes)",
+                interactive=False,
+            )
+            resolved_state = gr.State(())
+            preview_status = gr.Textbox(label="Análisis", interactive=False)
+            with gr.Row():
+                pending_line_index = gr.Number(label="Línea pendiente (nº)", precision=0, value=1)
+                manual_query = gr.Textbox(
+                    label="Buscar producto en RAG (código)", scale=3
+                )
+                manual_search_btn = gr.Button("Buscar", variant="secondary")
+            manual_results = gr.Dataframe(
+                headers=["Código", "Nombre", "Marca", "Precio", "node_id"],
+                datatype=["str", "str", "str", "number", "str"],
+                label="Candidatos RAG",
+            )
+            manual_results_state = gr.State(())
+            manual_candidate_index = gr.State(None)
+            manual_status = gr.Textbox(label="Búsqueda manual", interactive=False)
+            assign_btn = gr.Button("Asignar seleccionado a la línea", variant="secondary")
+            confirm_button = gr.Button("Confirmar e Ingresar a Inventario", variant="primary")
+            confirm_status = gr.Textbox(label="Ingreso", interactive=False)
+            upload.upload(
+                _ingest_parse,
+                inputs=[gr.State(_get_rag_client()), upload, supplier_selector],
+                outputs=[preview_grid, resolved_state, preview_status],
+            )
+            manual_search_btn.click(
+                _ingest_manual_search,
+                inputs=[
+                    gr.State(_get_rag_client()),
+                    pending_line_index,
+                    manual_query,
+                    supplier_selector,
+                ],
+                outputs=[manual_results, manual_results_state, manual_status],
+            )
+            manual_results.select(
+                _manual_row_selected,
+                None,
+                [manual_candidate_index],
+            )
+            assign_btn.click(
+                _ingest_assign,
+                inputs=[
+                    resolved_state,
+                    pending_line_index,
+                    manual_candidate_index,
+                    manual_results_state,
+                ],
+                outputs=[resolved_state, preview_grid, manual_status],
+            )
+            confirm_button.click(
+                _ingest_confirm,
+                inputs=[resolved_state, supplier_selector, gr.State(_get_embedder())],
+                outputs=confirm_status,
+            )
+
+        with gr.Tab("Ingesta de catálogo"):
+            gr.Markdown(
+                "### Ingesta del catálogo PDF del proveedor al índice RAG\n\n"
+                "⚠️ **Atención:** la ingesta **reemplaza TODAS las filas indexadas "
+                "previamente** para el código del proveedor (reemplazo total)."
+            )
+            catalog_supplier_selector = gr.Dropdown(
+                choices=_active_supplier_choices(),
+                label="Proveedor (activo)",
+            )
+            catalog_supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            catalog_supplier_refresh.click(
+                _supplier_choices_update, outputs=catalog_supplier_selector
+            )
+            catalog_upload = gr.File(label="Catálogo PDF", file_types=[".pdf"])
+            catalog_ingest_btn = gr.Button("Ingestar catálogo", variant="primary")
+            catalog_job_state = gr.State(None)
+            catalog_ingest_status = gr.Textbox(label="Ingesta", interactive=False)
+            catalog_check_btn = gr.Button("Consultar estado", variant="secondary")
+            catalog_job_status = gr.Textbox(label="Estado del job", interactive=False)
+            catalog_ingest_btn.click(
+                _catalog_ingest,
+                inputs=[gr.State(_get_rag_client()), catalog_upload, catalog_supplier_selector],
+                outputs=[catalog_job_state, catalog_ingest_status],
+            )
+            catalog_check_btn.click(
+                _catalog_job_status,
+                inputs=[gr.State(_get_rag_client()), catalog_job_state],
+                outputs=catalog_job_status,
+            )
+
+        with gr.Tab("Adopción desde RAG"):
+            gr.Markdown("### Buscar en el catálogo RAG del proveedor y adoptar al inventario")
+            adoption_query = gr.Textbox(
+                label="Búsqueda (nombre, código, marca)", placeholder="tornillo autoperforante"
+            )
+            adoption_search_btn = gr.Button("Buscar en RAG", variant="primary")
+            adoption_results = gr.Dataframe(
+                headers=["Código", "Nombre", "Marca", "Categoría", "Precio", "Moneda"],
+                datatype=["str", "str", "str", "str", "number", "str"],
+                label="Resultados RAG",
+            )
+            adoption_results_state = gr.State(())
+            adoption_search_status = gr.Textbox(label="Búsqueda", interactive=False)
+            with gr.Row():
+                adoption_stock = gr.Number(label="Stock inicial", value=1, precision=0)
+                adoption_confirm_btn = gr.Button("Adoptar seleccionado", variant="primary")
+            adoption_confirm_status = gr.Textbox(label="Adopción", interactive=False)
+            adoption_selected_index = gr.State(None)
+            adoption_search_btn.click(
+                _adoption_search,
+                inputs=[gr.State(_get_rag_client()), adoption_query],
+                outputs=[adoption_results, adoption_results_state, adoption_search_status],
+            )
+            adoption_results.select(
+                _adoption_row_selected,
+                None,
+                [adoption_selected_index],
+            )
+            adoption_confirm_btn.click(
+                _adoption_confirm,
+                inputs=[
+                    adoption_results_state,
+                    adoption_selected_index,
+                    adoption_stock,
+                    gr.State(_get_embedder()),
+                ],
+                outputs=[adoption_confirm_status],
+            )
+
+        with gr.Tab("Configuración"):
+            gr.Markdown("### Tipos de cambio")
             exchange_rates_grid = gr.Dataframe(
-                headers=["Currency", "Rate to ARS", "Updated", "Editable"],
+                headers=["Moneda", "Cotización a ARS", "Actualizado", "Editable"],
                 datatype=["str", "str", "str", "bool"],
                 value=_exchange_rates_grid,
-                label="Exchange rates (ARS is read-only)",
+                label="Tipos de cambio (solo lectura para ARS)",
                 interactive=False,
             )
             with gr.Row():
-                exchange_currency = gr.Textbox(label="Currency code")
-                exchange_rate = gr.Number(label="Rate to ARS", minimum=0)
-                exchange_save = gr.Button("Save exchange rate", variant="primary")
-            exchange_status = gr.Textbox(label="Exchange-rate status", interactive=False)
+                exchange_currency = gr.Textbox(label="Código de moneda")
+                exchange_rate = gr.Number(label="Cotización a ARS", minimum=0)
+                exchange_save = gr.Button("Guardar cotización", variant="primary")
+            exchange_status = gr.Textbox(label="Estado de tipos de cambio", interactive=False)
             exchange_save.click(
                 _save_exchange_rate,
                 inputs=[exchange_currency, exchange_rate],
                 outputs=[exchange_status, exchange_rates_grid, customer_orders_grid],
             )
 
-            gr.Markdown("### Default RAG margin")
+            gr.Markdown("### Margen RAG por defecto")
             with gr.Row():
-                default_margin = gr.Number(label="Default margin (%)", value=_default_margin_value)
-                default_margin_save = gr.Button("Save default margin")
-            default_margin_status = gr.Textbox(label="Default-margin status", interactive=False)
+                default_margin = gr.Number(
+                    label="Margen por defecto (%)", value=_default_margin_value
+                )
+                default_margin_save = gr.Button("Guardar margen por defecto")
+            default_margin_status = gr.Textbox(
+                label="Estado del margen por defecto", interactive=False
+            )
             default_margin_save.click(
                 _save_default_margin,
                 inputs=default_margin,
@@ -1660,23 +1664,23 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             price_list_refresh.click(_price_lists_grid, None, price_lists_grid)
 
-        with gr.Tab("Sessions"):
-            gr.Markdown("### User Telegram Sessions & Traces")
+        with gr.Tab("Sesiones de Telegram"):
+            gr.Markdown("### Sesiones de Telegram y trazas")
             initial_sessions = list_sessions()
             initial_selected = initial_sessions[0] if initial_sessions else None
             with gr.Row():
                 session_selector = gr.Dropdown(
-                    label="Active / Recent Sessions",
+                    label="Sesiones activas / recientes",
                     choices=initial_sessions,
                     value=initial_selected,
                     interactive=True,
                 )
-                refresh_sessions_btn = gr.Button("Refresh Sessions")
+                refresh_sessions_btn = gr.Button("Refrescar sesiones")
             session_trace_grid = gr.Dataframe(
-                headers=["Time", "Service", "Action", "Level", "Details"],
+                headers=["Hora", "Servicio", "Acción", "Nivel", "Detalles"],
                 datatype=["str", "str", "str", "str", "str"],
                 value=session_events_grid(initial_selected),
-                label="Session Event Trace",
+                label="Trazas de eventos de la sesión",
                 interactive=False,
             )
 

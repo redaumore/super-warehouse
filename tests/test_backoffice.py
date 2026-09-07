@@ -128,24 +128,24 @@ def test_build_app_creates_tabs_with_expected_labels():
     demo = build_app()
     labels = [tab.label for tab in _tabs_block(demo).children]
     assert labels == [
-        "Catalog",
-        "Clients",
-        "Orders/Monitor",
-        "Purchase Orders",
-        "Ingestion",
-        "Catálogo",
-        "Adoption (RAG)",
-        "Suppliers",
-        "Customer Orders",
-        "Settings",
-        "Sessions",
+        "Productos",
+        "Clientes",
+        "Proveedores",
+        "Pedidos de clientes",
+        "Monitor de pedidos",
+        "Órdenes de compra",
+        "Ingesta de remitos",
+        "Ingesta de catálogo",
+        "Adopción desde RAG",
+        "Configuración",
+        "Sesiones de Telegram",
     ]
 
 
 def test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id():
     """La pestaña Ingestion expone el dropdown de proveedor y no un ID numérico."""
     demo = build_app()
-    ingestion_tab = next(tab for tab in _tabs_block(demo).children if tab.label == "Ingestion")
+    ingestion_tab = next(tab for tab in _tabs_block(demo).children if tab.label == "Ingesta de remitos")
     labels = _component_labels(ingestion_tab)
     assert "Proveedor (activo)" in labels
     assert "Supplier ID" not in labels  # no free numeric ID (spec R1)
@@ -154,7 +154,7 @@ def test_build_app_ingestion_tab_has_dropdown_and_no_numeric_id():
 def test_build_app_catalogo_tab_has_warning_and_flow_components():
     """El tab Catálogo warn del reemplazo total y expone el flujo completo."""
     demo = build_app()
-    tab = next(t for t in _tabs_block(demo).children if t.label == "Catálogo")
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Ingesta de catálogo")
     labels = _all_labels(tab)
     assert "Proveedor (activo)" in labels
     assert "Catálogo PDF" in labels
@@ -169,7 +169,7 @@ def test_build_app_catalogo_tab_has_warning_and_flow_components():
 def test_build_app_catalog_tab_has_product_grid():
     """La pestaña Catalog expone la grilla de productos y el botón de guardado."""
     demo = build_app()
-    catalog_tab = next(tab for tab in _tabs_block(demo).children if tab.label == "Catalog")
+    catalog_tab = next(tab for tab in _tabs_block(demo).children if tab.label == "Productos")
     component_labels = {getattr(c, "label", None) for c in catalog_tab.children}
     assert "Productos" in component_labels
 
@@ -1107,12 +1107,12 @@ def test_order_state_diagram_unknown_estado_renders_all_uncolored(estado):
 def test_app_customer_orders_tab_has_state_progress_diagram():
     """The Customer Orders tab renders the order state progress diagram."""
     demo = build_app()
-    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Pedidos de clientes")
     html_components = [c for c in tab.children if type(c).__name__ == "HTML"]
     assert len(html_components) == 1
     assert 'data-state="DRAFT"' in (html_components[0].value or "")
     markdown_values = [c.value for c in tab.children if type(c).__name__ == "Markdown"]
-    assert any("Order state progress" in (value or "") for value in markdown_values)
+    assert any("Progreso del estado del pedido" in (value or "") for value in markdown_values)
 
 
 def _committed_order(session, *, estado: OrderEstado) -> Order:
@@ -1270,26 +1270,26 @@ def _all_labels(block) -> set[object]:
 def test_app_customer_orders_tab_has_fulfillment_buttons():
     """El tab Customer Orders expone las cuatro acciones de cumplimiento."""
     demo = build_app()
-    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Pedidos de clientes")
     labels = _all_labels(tab)
-    assert "Start picking (Confirmed → Picking)" in labels
-    assert "Complete picking (Picking → Ready)" in labels
-    assert "Deliver (Ready → Closed)" in labels
-    assert "Cancel order" in labels
-    assert "Legal actions for the selected order" in labels
+    assert "Iniciar preparación (Confirmed → Picking)" in labels
+    assert "Completar preparación (Picking → Ready)" in labels
+    assert "Entregar (Ready → Closed)" in labels
+    assert "Cancelar pedido" in labels
+    assert "Acciones disponibles para el pedido seleccionado" in labels
 
 
 def test_app_customer_orders_tab_selects_rows_without_order_id_input():
     """El tab ya no tiene el input Order ID ni el botón de detalle; hay grilla de líneas."""
     demo = build_app()
-    tab = next(t for t in _tabs_block(demo).children if t.label == "Customer Orders")
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Pedidos de clientes")
     labels = _all_labels(tab)
     assert "Order ID" not in labels
     assert "Show line detail" not in labels
     # The detail grid, diagram and action buttons remain.
-    assert "Order lines" in labels
-    assert "Legal actions for the selected order" in labels
-    assert "Start picking (Confirmed → Picking)" in labels
+    assert "Líneas del pedido" in labels
+    assert "Acciones disponibles para el pedido seleccionado" in labels
+    assert "Iniciar preparación (Confirmed → Picking)" in labels
 
 
 def test_order_row_selected_returns_state_label_diagram_and_lines(shop_ctx):
@@ -1406,7 +1406,7 @@ class _FakeEmbedder:
 def test_build_app_adoption_tab_has_search_and_adopt_flow():
     """El tab Adoption (RAG) expone la búsqueda, la grilla y el botón de adoptar."""
     demo = build_app()
-    tab = next(t for t in _tabs_block(demo).children if t.label == "Adoption (RAG)")
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Adopción desde RAG")
     labels = _all_labels(tab)
     assert "Buscar en RAG" in labels
     assert "Resultados RAG" in labels
