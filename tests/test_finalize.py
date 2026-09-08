@@ -15,7 +15,6 @@ from src.agents.customer import (
     SourcingDeps,
     build_handler,
 )
-from src.agents.product_search import ProductEntry, ProductSource
 from src.backoffice.clients import chat_register_client
 from src.backoffice.customer_orders import set_default_margin
 from src.channels.base import InboundMessage
@@ -32,8 +31,13 @@ from src.db.models import (
     Supplier,
 )
 from src.integrations.rag import RagPrice
-from src.orchestrator.router import AgentName, RoutingDecision
-from src.orchestrator.session import ConversationState
+from src.shared.contracts import (
+    AgentName,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    RoutingDecision,
+)
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 

@@ -22,7 +22,7 @@ from openai import OpenAI
 from src.agents.customer import CustomerResponder, ResponderError, ResponderNotConfigured
 from src.agents.perception import TranscriptionResult, VisionResult
 from src.config import Settings, get_settings
-from src.orchestrator.session import ChatMessage
+from src.shared.contracts import ChatMessage
 
 logger = logging.getLogger(__name__)
 

@@ -10,6 +10,10 @@ the RAG (the chain never raises on either leg — failures surface as the
 (``LOCAL | RAG | NONE | ERROR``) so the Customer agent can render an honest,
 source-aware note.
 
+The pure contract types (``ProductSource``, ``ProductEntry``) live in
+``src.shared.contracts``; this module re-exports them for backwards
+compatibility and owns the search chain, the ports and the parsers.
+
 ``parse_product_add`` implements the order-building intent parser: natural
 phrases such as "agregalo", "sumá 5 de eso" or "agregale 2" resolve to the
 last displayed product (index 0) with the given quantity, and "el 2" resolves
@@ -24,7 +28,6 @@ falling through to the LLM.
 
 from __future__ import annotations
 
-import enum
 import logging
 import re
 from collections.abc import Sequence
@@ -34,36 +37,23 @@ from typing import Protocol
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.agents.disambiguation import SearchCandidate, normalize_text
+from src.shared.contracts import ProductEntry, ProductSource
+
+__all__ = [
+    "PrecedenceProductSearcher",
+    "ProductEntry",
+    "ProductSearchResult",
+    "ProductSearcher",
+    "ProductSource",
+    "RagCatalogPort",
+    "is_finalize",
+    "parse_finalize",
+    "parse_product_add",
+    "parse_product_remove",
+]
 from src.supplier.rag_catalog import RagPrice, RagProduct, RagProductError
 
 logger = logging.getLogger(__name__)
-
-
-class ProductSource(str, enum.Enum):
-    """Where the product-query results came from."""
-
-    LOCAL = "LOCAL"
-    RAG = "RAG"
-    NONE = "NONE"
-    ERROR = "ERROR"
-
-
-@dataclass(frozen=True)
-class ProductEntry:
-    """One product-query result entry, source-labeled, ready for note rendering."""
-
-    sku: str
-    name: str
-    source: ProductSource
-    provider: str | None = None
-    brand: str | None = None
-    price: float | None = None
-    currency: str | None = None
-    unit: str | None = None
-    specs: str | None = None
-    source_file: str | None = None
-    page: int | None = None
-    codigo_proveedor: str | None = None
 
 
 @dataclass(frozen=True)

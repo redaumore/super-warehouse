@@ -59,13 +59,9 @@ from src.observability.session_logger import (
     set_current_session_id,
 )
 from src.orchestrator.owner import is_owner_sender, rejection_reply
-from src.orchestrator.router import (
-    AgentName,
-    AgentOutcome,
-    Orchestrator,
-    RoutingDecision,
-)
-from src.orchestrator.session import ConversationState, ConversationStore, rehydrate_conversation
+from src.orchestrator.router import Orchestrator
+from src.orchestrator.session import ConversationStore, rehydrate_conversation
+from src.shared.contracts import AgentName, AgentOutcome, ConversationState, RoutingDecision
 from src.sourcing.case_b import build_sourcing_handler
 from src.supplier.rag_searcher import RagSupplierCatalogSearcher
 

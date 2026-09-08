@@ -21,7 +21,7 @@ from sqlalchemy.exc import OperationalError
 from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.inventory import seed_inventory
-from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.agents.product_search import ProductSearchResult
 from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
 from src.config import Settings, get_settings
@@ -37,6 +37,7 @@ from src.db.models import (
 from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.owner import rejection_reply
 from src.pipeline import build_orchestrator, handle_inbound
+from src.shared.contracts import ProductEntry, ProductSource
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_WHATSAPP = "+5491100000000"

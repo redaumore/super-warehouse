@@ -15,21 +15,22 @@ customer-name menu. Because the in-memory store expires after 30 minutes,
 ``rehydrate_conversation`` rebuilds the OWNER's state from the database (latest
 open Order across all customers + its SourcingNeed rows) — the DB is the source
 of truth for the multi-turn flows, so they survive the TTL.
+
+The pure state types (``ConversationState``, ``ResolvedItem``,
+``SourcingNeedItem``, ``ChatMessage``) live in ``src.shared.contracts``; this
+module re-exports them for backwards compatibility and keeps the I/O side:
+the TTL-backed store and the DB rehydration.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.product_search import ProductEntry
 from src.db.models import (
-    Cliente,
     Order,
     OrderEstado,
     SourcingNeed,
@@ -37,76 +38,25 @@ from src.db.models import (
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
-from src.supplier.searcher import SupplierCandidate, SupplierCatalogSearcher
+from src.shared.contracts import (
+    ChatMessage,
+    ConversationState,
+    ResolvedItem,
+    SourcingNeedItem,
+    SupplierCandidate,
+    SupplierCatalogSearcher,
+)
 
-
-@dataclass(frozen=True)
-class ResolvedItem:
-    """One order line resolved to a catalog SKU, carried between agents."""
-
-    sku: str
-    cantidad: int
-    description: str | None = None
-
-
-@dataclass(frozen=True)
-class SourcingNeedItem:
-    """One missing item of a Case B order, recoverable from the DB."""
-
-    sku: str
-    missing_quantity: int
-    supplier_id: int | None = None
-    need_id: int | None = None
-    po_item_id: int | None = None
-
-
-@dataclass(frozen=True)
-class ChatMessage:
-    """One conversational turn (role ∈ {"system", "user", "assistant"})."""
-
-    role: str
-    content: str
-
-
-@dataclass
-class ConversationState:
-    """Context for one sender's order, preserved across pipeline steps."""
-
-    sender_id: str
-    session_id: str | None = None
-    customer_id: int | None = None
-    order_id: int | None = None
-    items: tuple[ResolvedItem, ...] = ()
-    awaiting_decision: bool = False
-    history: tuple[ChatMessage, ...] = ()  # multi-turn chat log shared by agents
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    # Sourcing axis (added by the order-sourcing workflow).
-    sourcing_selection_pending: bool = False  # awaiting the owner's supplier choice
-    sourcing_needs: tuple[SourcingNeedItem, ...] = ()
-    sourcing_candidates: tuple[SupplierCandidate, ...] = ()
-    # Owner pivot axis: customer-name disambiguation (numbered menu pick).
-    customer_disambiguation_pending: bool = False  # awaiting the owner's client pick
-    customer_candidates: tuple[Cliente, ...] = ()  # the numbered menu options
-    # Product-query axis (rag-product-query change): the last displayed results
-    # (referenced by "el 2"-style add intents) and the order-building draft
-    # accumulation across queries (local + RAG entries, added by the add-intent
-    # short-circuit; draft-only, never persisted to the DB).
-    product_options: tuple[ProductEntry, ...] = ()
-    draft_items: tuple[tuple[ProductEntry, int], ...] = ()
-    # Guided (scripted) order-creation flow: the question the conversation is
-    # waiting on ("ask_client" | "ask_product" | "ask_quantity" | "ask_more"),
-    # the numbered product options shown for a pick, and the product already
-    # chosen that still needs its quantity. Draft-only bookkeeping: never
-    # rehydrated from the DB (an expired guided flow just restarts with the
-    # session-reset trigger).
-    guided_step: str | None = None
-    guided_product_options: tuple[ProductEntry, ...] = ()
-    guided_product: ProductEntry | None = None
-
-    def with_updates(self, **changes: Any) -> ConversationState:
-        """Return a copy with the given fields replaced and the clock touched."""
-        changes["updated_at"] = datetime.now(UTC)
-        return replace(self, **changes)
+__all__ = [
+    "ChatMessage",
+    "ConversationState",
+    "ConversationStore",
+    "ResolvedItem",
+    "SourcingNeedItem",
+    "SupplierCandidate",
+    "SupplierCatalogSearcher",
+    "rehydrate_conversation",
+]
 
 
 class ConversationStore:

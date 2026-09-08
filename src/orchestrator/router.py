@@ -24,7 +24,6 @@ step loses the order's identity.
 
 from __future__ import annotations
 
-import enum
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
@@ -33,37 +32,23 @@ from src.agents.commands import GUIDED_ASK_CLIENT, is_session_reset
 from src.agents.product_search import parse_product_remove
 from src.channels.base import InboundMessage
 from src.observability.session_logger import generate_session_id, get_current_session_id
-from src.orchestrator.session import ConversationState, ConversationStore
+from src.orchestrator.session import ConversationStore
+from src.shared.contracts import (
+    AgentName,
+    AgentOutcome,
+    ConversationState,
+    RoutingDecision,
+)
 
-
-class AgentName(str, enum.Enum):
-    """The specialized agents of the pipeline (per the spec)."""
-
-    PERCEPTION = "perception"
-    CUSTOMER = "customer"
-    DISAMBIGUATION = "disambiguation"
-    INVENTORY = "inventory"
-    SALES = "sales"
-    DISPATCH = "dispatch"
-    SOURCING = "sourcing"
-    GUIDED = "guided"
-
-
-@dataclass(frozen=True)
-class RoutingDecision:
-    """Where one inbound message goes and what kind of media it carries."""
-
-    agent: AgentName
-    media_kind: str | None = None  # "voice" | "image" for the perception agent
-    context_loaded: bool = False
-
-
-@dataclass(frozen=True)
-class AgentOutcome:
-    """Result of one agent turn; a handler may omit the reply (pipeline falls back to its skeleton echo)."""
-
-    state: ConversationState | None = None
-    reply: str | None = None
+__all__ = [
+    "AgentHandler",
+    "AgentName",
+    "AgentOutcome",
+    "Orchestrator",
+    "RoutingDecision",
+    "TurnResult",
+    "route_message",
+]
 
 
 class AgentHandler(Protocol):

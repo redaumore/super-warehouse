@@ -39,7 +39,7 @@ from src.db.models import (
     ListaPrecios,
     Supplier,
 )
-from src.orchestrator.router import AgentName, RoutingDecision
+from src.shared.contracts import AgentName, RoutingDecision
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"

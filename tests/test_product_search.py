@@ -18,8 +18,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.agents.disambiguation import SearchCandidate
 from src.agents.product_search import (
     PrecedenceProductSearcher,
-    ProductEntry,
-    ProductSource,
     is_finalize,
     parse_finalize,
     parse_product_add,
@@ -27,6 +25,7 @@ from src.agents.product_search import (
 )
 from src.config import Settings
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
+from src.shared.contracts import ProductEntry, ProductSource
 
 
 def _entry(sku: str = "SKU-001", name: str = "Tarugo Fischer 8mm") -> ProductEntry:

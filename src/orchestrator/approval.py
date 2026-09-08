@@ -48,14 +48,13 @@ from src.db.models import (
     SupplierStatus,
 )
 from src.observability.session_logger import log_session_event
-from src.orchestrator.session import ResolvedItem
 from src.order_lifecycle.state import (
     cancel_order,
     confirm_order,
 )
 from src.pricing.order_pricing import line_subtotal
+from src.shared.contracts import ResolvedItem, SupplierCatalogSearcher
 from src.sourcing.classify import MissingItem, SourcingCase, classify_case
-from src.supplier.searcher import SupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
 

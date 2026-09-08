@@ -15,7 +15,8 @@ from src.orchestrator.router import (
     TurnResult,
     route_message,
 )
-from src.orchestrator.session import ConversationState, ConversationStore, ResolvedItem
+from src.orchestrator.session import ConversationStore
+from src.shared.contracts import ConversationState, ResolvedItem
 
 __all__ = [
     "AgentName",

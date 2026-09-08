@@ -23,7 +23,7 @@ from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import build_guided_handler
 from src.agents.inventory import seed_inventory
-from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.agents.product_search import ProductSearchResult
 from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
 from src.config import get_settings
@@ -40,10 +40,16 @@ from src.db.models import (
     SupplierPurchaseOrderItem,
     SupplierPurchaseOrderState,
 )
-from src.orchestrator.router import AgentName, Orchestrator
+from src.orchestrator.router import Orchestrator
 from src.orchestrator.session import ConversationStore, rehydrate_conversation
+from src.shared.contracts import (
+    AgentName,
+    ProductEntry,
+    ProductSource,
+    SupplierCandidate,
+)
 from src.sourcing.case_b import build_sourcing_handler
-from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"
 CUSTOMER_NAME = "Ferretería Don Juan"

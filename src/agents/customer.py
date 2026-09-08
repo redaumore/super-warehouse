@@ -62,10 +62,8 @@ from src.agents.disambiguation import (
     search_catalog,
 )
 from src.agents.product_search import (
-    ProductEntry,
     ProductSearcher,
     ProductSearchResult,
-    ProductSource,
     RagCatalogPort,
     is_finalize,
     parse_finalize,
@@ -75,8 +73,6 @@ from src.agents.product_search import (
 from src.channels.base import InboundMessage
 from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, OrderEstado, Supplier
 from src.db.session import SessionLocal
-from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem
 from src.order_lifecycle.state import remove_draft_item
 from src.pricing.order_pricing import (
     MarginSource,
@@ -88,9 +84,18 @@ from src.pricing.order_pricing import (
     line_subtotal,
     pending_order,
 )
+from src.shared.contracts import (
+    AgentOutcome,
+    ChatMessage,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    ResolvedItem,
+    RoutingDecision,
+    SupplierCatalogSearcher,
+)
 from src.sourcing.classify import MissingItem
 from src.sourcing.draft_order import persist_draft_order
-from src.supplier.searcher import SupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
 

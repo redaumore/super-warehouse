@@ -26,16 +26,16 @@ from src.db.models import (
     Supplier,
 )
 from src.orchestrator.session import (
-    ConversationState,
     ConversationStore,
     rehydrate_conversation,
 )
+from src.shared.contracts import ConversationState, SupplierCandidate
 from src.sourcing.persistence import (
     record_supplier_selection,
     sourcing_needs_for_order,
     upsert_sourcing_need,
 )
-from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 
 def _postgres_up() -> bool:

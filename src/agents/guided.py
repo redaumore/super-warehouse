@@ -38,11 +38,16 @@ from src.agents.customers import (
     resolve_customer_name,
 )
 from src.agents.disambiguation import normalize_text
-from src.agents.product_search import ProductEntry, ProductSearcher, ProductSource
+from src.agents.product_search import ProductSearcher
 from src.channels.base import InboundMessage
 from src.db.models import Cliente
-from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ConversationState
+from src.shared.contracts import (
+    AgentOutcome,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    RoutingDecision,
+)
 
 # Pragmatic sí/no matching over the normalized (lowercase, accent-free,
 # punctuation-free) answer. "dale" accepts another product; "listo"/

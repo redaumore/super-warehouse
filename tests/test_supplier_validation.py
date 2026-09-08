@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+from src.shared.contracts import SupplierCandidate
+from src.supplier.searcher import FakeSupplierCatalogSearcher
 from src.supplier.validation import (
     CodeCollisionError,
     normalize_e164_phone,

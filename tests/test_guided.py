@@ -22,7 +22,7 @@ from src.agents.commands import GUIDED_ASK_CLIENT, GUIDED_ASK_MORE, GUIDED_ASK_P
 from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import _parse_quantity, _yes_no_answer, build_guided_handler
-from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.agents.product_search import ProductSearchResult
 from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
 from src.config import get_settings
@@ -36,9 +36,14 @@ from src.db.models import (
     Supplier,
 )
 from src.integrations.sheets import SheetsWriteStatus
-from src.orchestrator.router import AgentName, RoutingDecision
-from src.orchestrator.session import ConversationState
 from src.pipeline import build_orchestrator
+from src.shared.contracts import (
+    AgentName,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    RoutingDecision,
+)
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 from tests.test_customer import FakeProductSearcher
 

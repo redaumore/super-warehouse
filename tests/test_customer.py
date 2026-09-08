@@ -30,15 +30,19 @@ from src.agents.customer import (
     format_added_to_order_reply,
 )
 from src.agents.product_search import (
-    ProductEntry,
     ProductSearchResult,
-    ProductSource,
 )
 from src.channels.base import InboundMessage
 from src.config import Settings
 from src.integrations.openai import OpenAIResponder
-from src.orchestrator.router import AgentName, RoutingDecision
-from src.orchestrator.session import ChatMessage, ConversationState
+from src.shared.contracts import (
+    AgentName,
+    ChatMessage,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    RoutingDecision,
+)
 
 SENDER = "+5491155551234"
 

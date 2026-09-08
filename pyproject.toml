@@ -82,6 +82,6 @@ layers = [
     "src.integrations",
     # L1 domain
     "src.agents : src.orchestrator : src.sourcing : src.purchasing : src.supplier : src.pricing : src.order_lifecycle : src.channels",
-    # L0 foundation
-    "src.db : src.observability : src.features : src.config : src.tz",
+    # L0 foundation (src.shared holds the pure cross-module contract types)
+    "src.shared : src.db : src.observability : src.features : src.config : src.tz",
 ]

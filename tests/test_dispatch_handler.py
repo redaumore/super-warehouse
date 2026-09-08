@@ -37,9 +37,8 @@ from src.db.models import (
     SupplierPurchaseOrderState,
 )
 from src.integrations.sheets import SheetsWriteStatus
-from src.orchestrator.router import AgentOutcome
-from src.orchestrator.session import ConversationState
 from src.purchasing.accumulate import accumulate_need
+from src.shared.contracts import AgentOutcome, ConversationState
 from src.sourcing.persistence import upsert_sourcing_need
 
 OWNER_SENDER = "+5491100000000"

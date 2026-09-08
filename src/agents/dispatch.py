@@ -47,14 +47,18 @@ from src.orchestrator.approval import (
     SheetsPort,
     confirm_and_register,
 )
-from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ConversationState, SourcingNeedItem
 from src.order_lifecycle.state import (
     InvalidTransitionError,
     RequiresRequoteError,
     cancel_order,
 )
-from src.supplier.searcher import SupplierCatalogSearcher
+from src.shared.contracts import (
+    AgentOutcome,
+    ConversationState,
+    RoutingDecision,
+    SourcingNeedItem,
+    SupplierCatalogSearcher,
+)
 
 _CENT = Decimal("0.01")
 

@@ -24,12 +24,15 @@ from sqlalchemy.orm import Session
 
 from src.channels.base import InboundMessage
 from src.db.models import Order, OrderEstado, SourcingState, SupplierPurchaseOrder
-from src.orchestrator.router import AgentOutcome, RoutingDecision
-from src.orchestrator.session import ConversationState
 from src.order_lifecycle.state import confirm_order
 from src.purchasing.accumulate import accumulate_need
+from src.shared.contracts import (
+    AgentOutcome,
+    ConversationState,
+    RoutingDecision,
+    SupplierCandidate,
+)
 from src.sourcing.persistence import sourcing_needs_for_order
-from src.supplier.searcher import SupplierCandidate
 
 _NUMBER_RE = re.compile(r"\d+")
 

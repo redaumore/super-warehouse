@@ -7,11 +7,10 @@ unknown SKU treated as missing, and empty orders never classified.
 
 from __future__ import annotations
 
-from src.orchestrator.session import ResolvedItem
+from src.shared.contracts import ResolvedItem, SupplierCandidate
 from src.sourcing.classify import SourcingCase, classify_case
 from src.supplier.searcher import (
     FakeSupplierCatalogSearcher,
-    SupplierCandidate,
 )
 
 

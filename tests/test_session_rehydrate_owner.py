@@ -29,11 +29,11 @@ from src.db.models import (
     Supplier,
 )
 from src.orchestrator.session import (
-    ConversationState,
     ConversationStore,
     rehydrate_conversation,
 )
-from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+from src.shared.contracts import ConversationState, SupplierCandidate
+from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"
 

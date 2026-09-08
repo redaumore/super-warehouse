@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from src.config import get_settings
 from src.db.models import Supplier, SupplierStatus
 from src.integrations.rag import RagProduct, RagProductError
-from src.orchestrator.session import ResolvedItem
+from src.shared.contracts import ResolvedItem
 from src.sourcing.classify import SourcingCase, classify_case
 from src.supplier.rag_searcher import RagSupplierCatalogSearcher
 

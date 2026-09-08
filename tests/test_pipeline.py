@@ -15,11 +15,10 @@ from unittest.mock import patch
 import pytest
 
 from src.agents.customer import CustomerResponder
-from src.agents.product_search import ProductEntry, ProductSearchResult, ProductSource
+from src.agents.product_search import ProductSearchResult
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName
-from src.orchestrator.session import ChatMessage
 from src.pipeline import build_orchestrator, handle_inbound
+from src.shared.contracts import AgentName, ChatMessage, ProductEntry, ProductSource
 from tests.test_customer import FakeProductSearcher
 
 

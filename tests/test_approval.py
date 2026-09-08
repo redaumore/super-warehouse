@@ -421,7 +421,8 @@ def test_confirm_case_c_without_unmapped_codes_keeps_plain_reply(order_ctx):
 
 def test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt(order_ctx):
     """Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B)."""
-    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+    from src.shared.contracts import SupplierCandidate
+    from src.supplier.searcher import FakeSupplierCatalogSearcher
 
     item = order_ctx["session"].scalar(
         select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
@@ -598,7 +599,8 @@ def test_confirm_mixed_local_stock_and_rag_completes_with_po(order_ctx):
 
 def test_confirm_mixed_local_short_with_candidates_prompts_only_local(order_ctx):
     """Mixto Case B: el prompt lista SOLO el LOCAL faltante; el RAG ya está auto-sourced."""
-    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+    from src.shared.contracts import SupplierCandidate
+    from src.supplier.searcher import FakeSupplierCatalogSearcher
 
     session, order = order_ctx["session"], order_ctx["order"]
     session.add(
@@ -641,7 +643,8 @@ def test_confirm_mixed_local_short_with_candidates_prompts_only_local(order_ctx)
 
 def test_confirm_unresolved_rag_falls_back_to_selection_prompt(rag_ctx):
     """RAG sin supplier resoluble + candidates → entra al prompt como los LOCAL."""
-    from src.supplier.searcher import FakeSupplierCatalogSearcher, SupplierCandidate
+    from src.shared.contracts import SupplierCandidate
+    from src.supplier.searcher import FakeSupplierCatalogSearcher
 
     session, order = rag_ctx["session"], rag_ctx["order"]
     unresolved = session.scalar(

@@ -8,8 +8,8 @@ keep their precedence rules (awaiting-decision replies go to Dispatch first).
 from __future__ import annotations
 
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName, route_message
-from src.orchestrator.session import ConversationState
+from src.orchestrator.router import route_message
+from src.shared.contracts import AgentName, ConversationState
 
 
 def _message(

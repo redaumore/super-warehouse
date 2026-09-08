@@ -18,10 +18,17 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from src.agents.commands import GUIDED_ASK_CLIENT, RESET_SESSION, is_session_reset
-from src.agents.product_search import ProductEntry, ProductSource
 from src.channels.base import InboundMessage
-from src.orchestrator.router import AgentName, AgentOutcome, Orchestrator, route_message
-from src.orchestrator.session import ConversationState, ConversationStore, ResolvedItem
+from src.orchestrator.router import Orchestrator, route_message
+from src.orchestrator.session import ConversationStore
+from src.shared.contracts import (
+    AgentName,
+    AgentOutcome,
+    ConversationState,
+    ProductEntry,
+    ProductSource,
+    ResolvedItem,
+)
 
 
 def _message(

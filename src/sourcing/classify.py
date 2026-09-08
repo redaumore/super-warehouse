@@ -17,8 +17,7 @@ import enum
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.orchestrator.session import ResolvedItem
-from src.supplier.searcher import SupplierCandidate, SupplierCatalogSearcher
+from src.shared.contracts import ResolvedItem, SupplierCandidate, SupplierCatalogSearcher
 
 
 class SourcingCase(str, enum.Enum):
