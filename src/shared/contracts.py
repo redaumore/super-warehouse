@@ -6,6 +6,7 @@ across same-layer module edges:
 
 - ``ProductSource``/``ProductEntry`` ← ``src.agents.product_search``
 - ``SupplierCandidate``/``SupplierCatalogSearcher`` ← ``src.supplier.searcher``
+- ``MissingItem`` ← ``src.sourcing.classify``
 - ``ResolvedItem``/``SourcingNeedItem``/``ChatMessage``/``ConversationState``
   ← ``src.orchestrator.session``
 - ``AgentName``/``RoutingDecision``/``AgentOutcome`` ← ``src.orchestrator.router``
@@ -67,6 +68,17 @@ class SupplierCandidate:
     description: str
     available_quantity: int | None = None
     status: str = "ACTIVO"
+
+
+@dataclass(frozen=True)
+class MissingItem:
+    """One item whose requested quantity exceeds the available stock."""
+
+    sku: str
+    description: str | None
+    requested: int
+    missing_quantity: int
+    candidates: tuple[SupplierCandidate, ...] = ()
 
 
 class SupplierCatalogSearcher(Protocol):

@@ -9,6 +9,9 @@ Pure decision over each item's availability and the supplier searcher:
 
 An item unknown to the catalog/inventory (no inventory row → zero on hand) is
 treated as missing and reported — never silently dropped.
+
+``MissingItem`` lives in ``src.shared.contracts``; this module re-exports it
+for backwards compatibility (moved verbatim, identity preserved).
 """
 
 from __future__ import annotations
@@ -17,7 +20,15 @@ import enum
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.shared.contracts import ResolvedItem, SupplierCandidate, SupplierCatalogSearcher
+from src.shared.contracts import MissingItem, ResolvedItem, SupplierCatalogSearcher
+
+__all__ = [
+    "Availability",
+    "MissingItem",
+    "SourcingCase",
+    "SourcingDecision",
+    "classify_case",
+]
 
 
 class SourcingCase(str, enum.Enum):
@@ -26,17 +37,6 @@ class SourcingCase(str, enum.Enum):
     A = "A"
     B = "B"
     C = "C"
-
-
-@dataclass(frozen=True)
-class MissingItem:
-    """One item whose requested quantity exceeds the available stock."""
-
-    sku: str
-    description: str | None
-    requested: int
-    missing_quantity: int
-    candidates: tuple[SupplierCandidate, ...] = ()
 
 
 @dataclass(frozen=True)

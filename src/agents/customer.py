@@ -85,6 +85,7 @@ from src.shared.contracts import (
     AgentOutcome,
     ChatMessage,
     ConversationState,
+    MissingItem,
     ProductEntry,
     ProductSource,
     ResolvedItem,
@@ -92,7 +93,6 @@ from src.shared.contracts import (
     SupplierCatalogSearcher,
 )
 from src.shared.text_normalization import normalize_phone, normalize_text
-from src.sourcing.classify import MissingItem
 
 logger = logging.getLogger(__name__)
 

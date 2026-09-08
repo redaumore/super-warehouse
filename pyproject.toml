@@ -85,3 +85,37 @@ layers = [
     # L0 foundation (src.shared holds the pure cross-module contract types)
     "src.shared : src.db : src.observability : src.features : src.config : src.tz",
 ]
+
+# Per-module neighbor rules (Phase 2, PR 4): forbidden same-layer imports.
+# The orchestrator is the composition root — it imports agents/sourcing/supplier
+# in the legal direction — so domain modules must not reach back into it or
+# into each other except the reserved I/O edges ignored below.
+[[tool.importlinter.contracts]]
+name = "agents forbidden neighbors"
+type = "forbidden"
+source_modules = ["src.agents"]
+forbidden_modules = ["src.orchestrator", "src.sourcing"]
+# Neighbor rules govern DIRECT imports: agents compose through permitted edges
+# (e.g. order_lifecycle -> purchasing -> sourcing) without importing the
+# neighbor directly. Sourcing/supplier contracts keep strict indirect checking.
+allow_indirect_imports = true
+ignore_imports = [
+    # reserved: becomes a LangGraph node connection (confirm ceremony)
+    "src.agents.dispatch -> src.orchestrator.approval",
+]
+
+[[tool.importlinter.contracts]]
+name = "sourcing forbidden neighbors"
+type = "forbidden"
+source_modules = ["src.sourcing"]
+forbidden_modules = ["src.orchestrator", "src.agents"]
+
+[[tool.importlinter.contracts]]
+name = "supplier forbidden neighbors (leaf domain)"
+type = "forbidden"
+source_modules = ["src.supplier"]
+forbidden_modules = ["src.agents", "src.orchestrator", "src.sourcing"]
+ignore_imports = [
+    # reserved: becomes a LangGraph node connection (vision I/O)
+    "src.supplier.ocr -> src.agents.perception",
+]
