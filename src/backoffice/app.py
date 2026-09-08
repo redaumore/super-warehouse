@@ -34,7 +34,7 @@ from src.backoffice.adoption import (
     SupplierUnknownError,
     adopt_product,
 )
-from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
+from src.backoffice.catalog import list_products, search_rag_products, update_margin, update_price, update_stock
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.customer_orders import (
     cancel_order_action,
@@ -120,6 +120,43 @@ def _catalog_grid() -> list[list[object]]:
         ]
         for r in rows
     ]
+
+
+def _rag_search(
+    proveedor: str, marca: str, categoria: str, codigo: str, texto: str, limit: float | None
+) -> tuple[list[list[object]], str]:
+    """Consulta el catálogo RAG con filtros SQL directos (sin LLM)."""
+    try:
+        with SessionLocal() as session:
+            rows = search_rag_products(
+                session,
+                codigo_proveedor=proveedor,
+                marca=marca,
+                categoria=categoria,
+                codigo=codigo,
+                texto=texto,
+                limit=int(limit) if limit else 100,
+            )
+    except ValueError as exc:
+        return [], f"Error: {exc}"
+    if not rows:
+        return [], "Sin resultados para los filtros indicados."
+    grid = [
+        [
+            r["codigo"],
+            r["codigo_orig"],
+            r["proveedor"],
+            r["marca"],
+            r["categoria"],
+            r["subcategoria"],
+            r["precio"],
+            r["moneda"],
+            r["pagina"],
+            r["archivo"],
+        ]
+        for r in rows
+    ]
+    return grid, f"{len(rows)} producto(s) encontrado(s)."
 
 
 def _clients_grid() -> list[list[object]]:
@@ -1322,6 +1359,53 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             catalog_refresh = gr.Button("Refrescar")
             catalog_refresh.click(_catalog_grid, outputs=catalog_grid)
+
+            gr.Markdown("### Consulta catálogo RAG (proveedores)")
+            with gr.Row():
+                ragf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
+                ragf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
+                ragf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
+                ragf_codigo = gr.Textbox(label="Código", placeholder="483-8")
+            ragf_texto = gr.Textbox(
+                label="Texto en descripción (substring)",
+                placeholder="monocomando de cocina",
+            )
+            with gr.Row():
+                rag_search_btn = gr.Button("Buscar en RAG", variant="primary")
+                ragf_limit = gr.Number(label="Máx. resultados", value=100, precision=0)
+            rag_grid = gr.Dataframe(
+                headers=[
+                    "Código",
+                    "Cód. orig",
+                    "Proveedor",
+                    "Marca",
+                    "Categoría",
+                    "Subcategoría",
+                    "Precio",
+                    "Moneda",
+                    "Pág.",
+                    "Archivo",
+                ],
+                datatype=[
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                    "str",
+                    "number",
+                    "str",
+                    "number",
+                    "str",
+                ],
+                label="Resultados RAG (Productos)",
+            )
+            rag_status = gr.Textbox(label="Estado RAG", interactive=False)
+            rag_search_btn.click(
+                _rag_search,
+                inputs=[ragf_proveedor, ragf_marca, ragf_categoria, ragf_codigo, ragf_texto, ragf_limit],
+                outputs=[rag_grid, rag_status],
+            )
 
         with gr.Tab("Clientes"):
             gr.Markdown("### Clientes y listas de precios")
