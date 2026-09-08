@@ -278,13 +278,49 @@ class PgVectorManager:
     # -------------------------------------------------------------------------
     # 3. Ingesta Masiva Transaccional (Batch DML Upsert)
     # -------------------------------------------------------------------------
+    @staticmethod
+    def describe_duplicate_node_ids(records: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+        """
+        Agrupa por node_id los identificadores legibles (codigo + página) de cada registro.
+
+        Devuelve solo los node_id con más de un registro. Un node_id duplicado colapsa
+        en una única fila por el upsert ON CONFLICT (node_id) DO UPDATE, lo que rompe
+        la paridad de registros del QA suite de forma silenciosa (N esperados vs N-1).
+        """
+        seen: Dict[str, List[str]] = {}
+        for rec in records:
+            node_id = rec.get("node_id")
+            if not node_id:
+                continue
+            meta = rec.get("metadata", {}) or {}
+            codigo = meta.get("codigo") or meta.get("codigo_producto") or "?"
+            pagina = meta.get("pagina") or meta.get("pagina_origen") or "?"
+            seen.setdefault(str(node_id), []).append(f"codigo '{codigo}' (página {pagina})")
+        return {node_id: descs for node_id, descs in seen.items() if len(descs) > 1}
+
     def ingest_records(self, records: List[Dict[str, Any]], batch_size: int = 100) -> int:
         """
         Inserta de forma idempotente (upsert) lotes de nodos vectorizados.
+        Falla antes de abrir conexión si hay node_ids duplicados, nombrando
+        los códigos y páginas en conflicto.
         """
         if not records:
             logger.warning("No hay registros para ingestar.")
             return 0
+
+        duplicates = self.describe_duplicate_node_ids(records)
+        if duplicates:
+            detail = "; ".join(
+                f"node_id '{node_id}' -> {', '.join(descs)}"
+                for node_id, descs in duplicates.items()
+            )
+            error_msg = (
+                "Fallo de paridad preventivo: se detectaron node_ids duplicados en los registros a ingestar "
+                f"({len(records)} registros; el upsert ON CONFLICT (node_id) colapsaría duplicados en una fila). "
+                f"Duplicados: {detail}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         logger.info(f"Iniciando ingesta masiva de {len(records)} nodos (Batch size: {batch_size})...")
         t_start = time.time()
