@@ -66,6 +66,7 @@ from src.agents.product_search import (
     ProductSearcher,
     ProductSearchResult,
     ProductSource,
+    RagCatalogPort,
     is_finalize,
     parse_finalize,
     parse_product_add,
@@ -74,7 +75,6 @@ from src.agents.product_search import (
 from src.channels.base import InboundMessage
 from src.db.models import AppSetting, Catalogo, Cliente, ExchangeRate, Order, OrderEstado, Supplier
 from src.db.session import SessionLocal
-from src.integrations.rag import RagProductClient
 from src.orchestrator.router import AgentOutcome, RoutingDecision
 from src.orchestrator.session import ChatMessage, ConversationState, ResolvedItem
 from src.order_lifecycle.state import remove_draft_item
@@ -352,7 +352,7 @@ class SourcingDeps:
     session_factory: Callable[[], Session]
     searcher: SupplierCatalogSearcher
     register_client: ClientRegistrar
-    rag_client: RagProductClient | None = None
+    rag_client: RagCatalogPort | None = None
 
 
 def format_case_b_reply(order: Order, missing: tuple[MissingItem, ...]) -> str:
@@ -489,7 +489,7 @@ def _supplier_margin_source(session: Session) -> Callable[[str | None], Decimal 
 
 
 def _rag_price(
-    entry: ProductEntry, rag_client: RagProductClient | None
+    entry: ProductEntry, rag_client: RagCatalogPort | None
 ) -> tuple[float | Decimal, str | None]:
     """Use the displayed RAG price, falling back to the sibling service."""
     if entry.price is not None:
@@ -505,7 +505,7 @@ def _rag_price(
 def _draft_pricing_lines(
     session: Session,
     base: ConversationState,
-    rag_client: RagProductClient | None,
+    rag_client: RagCatalogPort | None,
 ) -> tuple[PricingLine, ...]:
     """Enrich draft entries with local cost or RAG fallback price data."""
     lines: list[PricingLine] = []
@@ -565,7 +565,7 @@ def _price_draft(
     session: Session,
     customer: Cliente,
     base: ConversationState,
-    rag_client: RagProductClient | None,
+    rag_client: RagCatalogPort | None,
 ) -> PricedOrder:
     """Price a draft or produce its pending-conversion snapshot."""
     lines = _draft_pricing_lines(session, base, rag_client)
@@ -650,7 +650,7 @@ def persist_finalized_draft(
     session: Session,
     customer: Cliente,
     base: ConversationState,
-    rag_client: RagProductClient | None,
+    rag_client: RagCatalogPort | None,
 ) -> AgentOutcome:
     """Price, persist, and reserve a draft for a resolved customer (quote step).
 
@@ -712,7 +712,7 @@ def _create_customer_for_draft(
     base: ConversationState,
     nombre: str,
     telefono: str,
-    rag_client: RagProductClient | None,
+    rag_client: RagCatalogPort | None,
     register_client: ClientRegistrar,
 ) -> AgentOutcome:
     """Create or reuse a client, then attach the waiting draft immediately."""

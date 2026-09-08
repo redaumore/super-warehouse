@@ -34,6 +34,32 @@ import httpx
 
 from src.config import Settings, get_settings
 from src.observability.session_logger import log_session_event
+from src.supplier.rag_catalog import (
+    RagPrice,
+    RagProduct,
+    RagProductError,
+    normalize_rag_sku,
+)
+
+# Domain vocabulary re-exports: RagProduct/RagPrice/RagProductError and
+# normalize_rag_sku are owned by src.supplier.rag_catalog (L1); the adapter
+# re-exports them so L2/L3 consumers and tests keep one shared definition.
+__all__ = [
+    "RAG_CATALOG_DOCUMENTS_PATH",
+    "RAG_CATALOG_INGEST_PATH",
+    "RAG_INGEST_TIMEOUT_FACTOR",
+    "RAG_JOB_STATUS_PATH",
+    "DocumentLine",
+    "RagDocumentSummary",
+    "RagJobStatus",
+    "RagPrice",
+    "RagProduct",
+    "RagProductClient",
+    "RagProductError",
+    "RagProductNotConfigured",
+    "RagProviderDocuments",
+    "normalize_rag_sku",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -46,46 +72,6 @@ RAG_JOB_STATUS_PATH = "/api/v1/jobs/{job_id}"
 # ``rag_timeout_seconds`` (the job itself runs async server-side, so only the
 # upload+accept round-trip is bounded here).
 RAG_INGEST_TIMEOUT_FACTOR = 20.0
-
-
-def normalize_rag_sku(codigo: str, provider: str) -> str:
-    """Collapse a duplicated ``{provider}-`` prefix in a RAG ``codigo``.
-
-    The RAG concatenates ``codigo_proveedor`` + ``codigo_orig`` and has been
-    observed emitting double prefixes (``AMX-AMX-AT-5044``). Display must not
-    trust the raw ``codigo``: this collapses every repeated leading
-    ``{provider}-`` pair down to a single prefix and leaves already-clean codes
-    untouched (no-double case).
-    """
-    if not provider:
-        return codigo
-    prefix = f"{provider}-"
-    double = prefix * 2
-    while codigo.startswith(double):
-        codigo = codigo[len(prefix) :]
-    return codigo
-
-
-@dataclass(frozen=True)
-class RagProduct:
-    """One typed product result from ``structured_json.productos[]``."""
-
-    sku: str
-    name: str
-    provider: str | None = None
-    brand: str | None = None
-    price: float | None = None
-    currency: str | None = None
-    unit: str | None = None
-    specs: str | None = None
-    source_file: str | None = None
-    page: int | None = None
-    codigo_proveedor: str | None = None
-    node_id: str | None = None
-    fragment_id: int | None = None
-    categoria_padre: str | None = None
-    categoria: str | None = None
-    subcategoria: str | None = None
 
 
 def _as_fragment_id(value: Any) -> int | None:
@@ -114,14 +100,6 @@ def _fragment_to_chunk_map(context_chunks: list[dict[str, Any]]) -> dict[int, di
         if fragment_id is not None:
             mapping[fragment_id] = chunk
     return mapping
-
-
-@dataclass(frozen=True)
-class RagPrice:
-    """Price snapshot returned by the RAG product lookup endpoint."""
-
-    price: float | None
-    currency: str | None
 
 
 @dataclass(frozen=True)
@@ -185,10 +163,6 @@ class RagProviderDocuments:
 
     codigo_proveedor: str
     documents: tuple[RagDocumentSummary, ...] = ()
-
-
-class RagProductError(Exception):
-    """The RAG query failed (transport, status, or unparsable payload)."""
 
 
 class RagProductNotConfigured(RagProductError):

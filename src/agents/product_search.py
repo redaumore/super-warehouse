@@ -34,7 +34,7 @@ from typing import Protocol
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.agents.disambiguation import SearchCandidate, normalize_text
-from src.integrations.rag import RagProduct, RagProductClient, RagProductError
+from src.supplier.rag_catalog import RagPrice, RagProduct, RagProductError
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,26 @@ class ProductSearcher(Protocol):
         ...
 
 
+class RagCatalogPort(Protocol):
+    """Supplier-catalog RAG boundary the sourcing flows talk through.
+
+    Dependency inversion: the agents (L1) must not import the ``httpx``
+    adapter (L2), so the live client handle rides a structural port owned here
+    and the composition root injects ``RagProductClient`` (which satisfies it
+    structurally). ``query`` serves the product-query chain;
+    ``price_lookup`` serves the draft-pricing finalize step in the Customer
+    agent (``SourcingDeps.rag_client``) — one port, two narrow uses.
+    """
+
+    def query(self, text: str) -> tuple[RagProduct, ...]:
+        """Query the RAG for ``text``; empty tuple means "not in catalogs"."""
+        ...
+
+    def price_lookup(self, sku: str, codigo_proveedor: str | None = None) -> RagPrice | None:
+        """Look up one supplier offer price by SKU; ``None`` when absent."""
+        ...
+
+
 class PrecedenceProductSearcher:
     """Local-first → RAG-fallback chain behind the ``ProductSearcher`` seam.
 
@@ -104,7 +124,7 @@ class PrecedenceProductSearcher:
     def __init__(
         self,
         local: LocalSearcher,
-        client: RagProductClient,
+        client: RagCatalogPort,
         *,
         floor: float = 0.65,
     ) -> None:

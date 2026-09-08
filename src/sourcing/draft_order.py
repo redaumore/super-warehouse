@@ -17,9 +17,9 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from src.db.models import Cliente, Order, OrderEstado, OrderItem, SourcingState
-from src.integrations.rag import normalize_rag_sku
 from src.observability.session_logger import log_session_event
 from src.pricing.order_pricing import PricedLine, PricedOrder
+from src.supplier.rag_catalog import normalize_rag_sku
 
 
 def _source_value(source: str | object) -> str:

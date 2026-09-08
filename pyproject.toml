@@ -85,13 +85,3 @@ layers = [
     # L0 foundation
     "src.db : src.observability : src.features : src.config : src.tz",
 ]
-
-# KNOWN VIOLATIONS — temporary debt, to be removed in later phases (phase-1+ cycle fixes).
-# Grouped by the higher offending layer. Each entry is an import that exists today.
-ignore_imports = [
-    # L1 -> L2 (agents using adapters directly)
-    "src.agents.product_search -> src.integrations.rag",
-    "src.agents.customer -> src.integrations.rag",
-    "src.supplier.rag_searcher -> src.integrations.rag",
-    "src.sourcing.draft_order -> src.integrations.rag",
-]

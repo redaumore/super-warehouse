@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.models import Supplier, SupplierStatus
-from src.integrations.rag import RagProduct, RagProductError
+from src.supplier.rag_catalog import RagProduct, RagProductError
 from src.supplier.searcher import SupplierCandidate
 
 logger = logging.getLogger(__name__)
