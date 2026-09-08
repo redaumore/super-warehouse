@@ -13,8 +13,8 @@ local-development path (useful for tests); production always pins both keys.
 
 from __future__ import annotations
 
-from src.agents.customer import normalize_phone
 from src.config import Settings
+from src.shared.text_normalization import normalize_phone
 
 
 def _owner_chat_id(settings: Settings) -> str:

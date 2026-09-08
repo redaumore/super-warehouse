@@ -36,8 +36,9 @@ from typing import Protocol
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.agents.disambiguation import SearchCandidate, normalize_text
+from src.agents.disambiguation import SearchCandidate
 from src.shared.contracts import ProductEntry, ProductSource
+from src.shared.text_normalization import normalize_text
 
 __all__ = [
     "PrecedenceProductSearcher",

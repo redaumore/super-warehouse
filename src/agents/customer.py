@@ -35,9 +35,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol, TypedDict
 
-import phonenumbers
-from phonenumbers import PhoneNumber, PhoneNumberFormat
-from phonenumbers.phonenumberutil import NumberParseException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -58,7 +55,6 @@ from src.agents.customers import (
 )
 from src.agents.disambiguation import (
     SearchCandidate,
-    normalize_text,
     search_catalog,
 )
 from src.agents.product_search import (
@@ -94,12 +90,11 @@ from src.shared.contracts import (
     RoutingDecision,
     SupplierCatalogSearcher,
 )
+from src.shared.text_normalization import normalize_phone, normalize_text
 from src.sourcing.classify import MissingItem
 from src.sourcing.draft_order import persist_draft_order
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_REGION = "AR"
 
 # Fallback reply when the LLM responder is unavailable: the guided flow is the
 # only order path, so the fallback points at its session-reset trigger.
@@ -157,35 +152,6 @@ def format_added_to_order_reply(entry: ProductEntry, qty: int) -> str:
             price_text = f"{price_text}/{entry.unit}"
         price_part = f" ({price_text})"
     return ADDED_TO_ORDER_REPLY.format(name=entry.name, qty=qty, price=price_part)
-
-
-def _to_whatsapp_e164(number: PhoneNumber) -> str:
-    """Render an Argentine number in WhatsApp mobile form (+54 9 …).
-
-    WhatsApp customers always reach the store from a mobile line, so a national
-    number without the trunk prefix ``9`` (e.g. ``11 5555 1234``) is completed
-    to ``+54 9 11 5555 1234``. This keeps every variant of the same number
-    converging on one canonical form. Landline rendering is out of MVP scope.
-    """
-    e164 = phonenumbers.format_number(number, PhoneNumberFormat.E164)
-    if number.country_code == 54 and not str(number.national_number).startswith("9"):
-        return f"+549{number.national_number}"
-    return e164
-
-
-def normalize_phone(raw: str, *, region: str = _DEFAULT_REGION) -> str | None:
-    """Normalize a phone string to canonical E.164; ``None`` when unparseable.
-
-    ``region`` is the default region for numbers without an explicit country
-    code (the store's home country).
-    """
-    try:
-        number = phonenumbers.parse(raw, region)
-    except NumberParseException:
-        return None
-    if not phonenumbers.is_valid_number(number):
-        return None
-    return _to_whatsapp_e164(number)
 
 
 class ResponderError(Exception):

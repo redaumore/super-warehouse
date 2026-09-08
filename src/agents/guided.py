@@ -37,7 +37,6 @@ from src.agents.customers import (
     parse_customer_pick,
     resolve_customer_name,
 )
-from src.agents.disambiguation import normalize_text
 from src.agents.product_search import ProductSearcher
 from src.channels.base import InboundMessage
 from src.db.models import Cliente
@@ -48,6 +47,7 @@ from src.shared.contracts import (
     ProductSource,
     RoutingDecision,
 )
+from src.shared.text_normalization import normalize_text
 
 # Pragmatic sí/no matching over the normalized (lowercase, accent-free,
 # punctuation-free) answer. "dale" accepts another product; "listo"/

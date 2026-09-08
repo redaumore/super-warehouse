@@ -30,9 +30,9 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.disambiguation import normalize_text
 from src.agents.perception import VisionAnalyzer, analyze_image
 from src.db.models import Catalogo, SupplierSkuMapping
+from src.shared.text_normalization import normalize_text
 
 DEFAULT_DOC_PROMPT = (
     "Extract the line items of this supplier document (remito, invoice or price "

@@ -31,7 +31,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.disambiguation import normalize_text
 from src.backoffice.adoption import (
     Embedder,
     EmbeddingUnavailableError,
@@ -42,6 +41,7 @@ from src.backoffice.adoption import (
 from src.db.models import Catalogo, Inventory, StockAdjustment
 from src.integrations.rag import DocumentLine, RagProduct, RagProductClient
 from src.pricing.engine import compute_base
+from src.shared.text_normalization import normalize_text
 from src.supplier.guards import ensure_active_supplier
 
 _CENT = Decimal("0.01")

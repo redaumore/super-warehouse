@@ -13,8 +13,9 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.customer import ClientRegistrationError, normalize_phone
+from src.agents.customer import ClientRegistrationError
 from src.db.models import Cliente, ListaPrecios
+from src.shared.text_normalization import normalize_phone
 
 _CENT = Decimal("0.01")
 

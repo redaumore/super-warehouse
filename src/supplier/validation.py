@@ -5,7 +5,7 @@ Focused, dependency-light functions shared by the backoffice CRUD module
 
 - ``validate_cuit`` — Argentine CUIT mod-11 verifier (weights 5,4,3,2,7,6,5,4,3,2).
 - ``normalize_e164_phone`` — strict E.164 via ``phonenumbers`` (does NOT insert
-  the WhatsApp ``9``; distinct from ``src.agents.customer.normalize_phone``).
+  the WhatsApp ``9``; distinct from ``src.shared.text_normalization.normalize_phone``).
 - ``normalize_whatsapp`` — the WhatsApp form (``+54 9``), consistent with the
   customer channel.
 - ``validate_email`` — RFC 5322 via ``email_validator`` (no deliverability
@@ -32,8 +32,8 @@ from phonenumbers import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.customer import normalize_phone
 from src.db.models import Supplier
+from src.shared.text_normalization import normalize_phone
 
 _CUIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
 _CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

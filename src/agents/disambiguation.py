@@ -22,8 +22,6 @@ from __future__ import annotations
 
 import enum
 import math
-import re
-import unicodedata
 from dataclasses import dataclass
 
 from rapidfuzz import fuzz
@@ -32,8 +30,7 @@ from sqlalchemy.orm import Session
 
 from src.config import get_settings
 from src.db.models import Catalogo
-
-_WORD_RE = re.compile(r"[^\w\s]+")
+from src.shared.text_normalization import normalize_text
 
 
 @dataclass(frozen=True)
@@ -60,14 +57,6 @@ class Resolution:
     kind: ResolutionKind
     candidate: SearchCandidate | None = None
     candidates: tuple[SearchCandidate, ...] = ()
-
-
-def normalize_text(text: str) -> str:
-    """Lowercase, strip accents and punctuation, collapse whitespace."""
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = _WORD_RE.sub(" ", text).lower()
-    return " ".join(text.split())
 
 
 def _fuzzy_score(query: str, candidate: str) -> float:

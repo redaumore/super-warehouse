@@ -24,9 +24,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.disambiguation import normalize_text
 from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier, SupplierStatus
 from src.pricing.engine import compute_base
+from src.shared.text_normalization import normalize_text
 from src.supplier.guards import SupplierInactiveError
 
 _CENT = Decimal("0.01")

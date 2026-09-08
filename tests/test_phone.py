@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.customer import normalize_phone
+from src.shared.text_normalization import normalize_phone
 
 _CANONICAL = "+5491155551234"
 

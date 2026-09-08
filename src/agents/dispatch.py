@@ -37,7 +37,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.agents.disambiguation import normalize_text
 from src.agents.sales import Quote
 from src.channels.base import InboundMessage
 from src.db.models import Order, OrderItem
@@ -59,6 +58,7 @@ from src.shared.contracts import (
     SourcingNeedItem,
     SupplierCatalogSearcher,
 )
+from src.shared.text_normalization import normalize_text
 
 _CENT = Decimal("0.01")
 
