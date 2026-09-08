@@ -44,6 +44,7 @@ from src.shared.contracts import (
     ProductSource,
     RoutingDecision,
 )
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 from tests.test_customer import FakeProductSearcher
 
@@ -173,6 +174,7 @@ def _guided_deps(session):
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
 
 

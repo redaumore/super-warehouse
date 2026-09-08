@@ -38,6 +38,7 @@ from src.shared.contracts import (
     ProductSource,
     RoutingDecision,
 )
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 
@@ -139,6 +140,7 @@ def _handler(session):
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
     return build_handler(FakeResponder(), sourcing=deps)
 
@@ -369,6 +371,7 @@ def test_finalize_rag_without_price_falls_back_to_endpoint_lookup(shop):
         searcher=FakeSupplierCatalogSearcher(),
         rag_client=rag_client,
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
     handler = build_handler(FakeResponder(), sourcing=deps)
     state = ConversationState(

@@ -312,7 +312,9 @@ def _finalize_guided_draft(
                 guided_step="ask_client", guided_product=None, guided_product_options=()
             )
             return AgentOutcome(state=restarted, reply=GUIDED_ASK_CLIENT)
-        outcome = persist_finalized_draft(session, customer, base, rag_client)
+        outcome = persist_finalized_draft(
+            session, customer, base, rag_client, sourcing.persist_draft
+        )
         assert outcome.state is not None
         closed = outcome.state.with_updates(
             guided_step=None, guided_product=None, guided_product_options=()

@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Protocol, TypedDict
 
@@ -92,7 +93,6 @@ from src.shared.contracts import (
 )
 from src.shared.text_normalization import normalize_phone, normalize_text
 from src.sourcing.classify import MissingItem
-from src.sourcing.draft_order import persist_draft_order
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +312,24 @@ class ClientRegistrar(Protocol):
     ) -> Cliente: ...
 
 
+class DraftOrderPersister(Protocol):
+    """Draft-persistence port the quote step talks through.
+
+    Dependency inversion: persisting the priced ``Order`` is sourcing's job
+    (``sourcing.draft_order``), not the agents domain's, so the composition
+    root injects the adapter through the same seam as the session, the
+    supplier searcher and the client registrar.
+    """
+
+    def __call__(
+        self,
+        session: Session,
+        customer: Cliente,
+        priced: PricedOrder,
+        delivery_date: date | None = None,
+    ) -> Order: ...
+
+
 @dataclass
 class SourcingDeps:
     """Boundaries the sourcing turn needs (session, searcher, client registry).
@@ -323,6 +341,7 @@ class SourcingDeps:
     session_factory: Callable[[], Session]
     searcher: SupplierCatalogSearcher
     register_client: ClientRegistrar
+    persist_draft: DraftOrderPersister
     rag_client: RagCatalogPort | None = None
 
 
@@ -622,6 +641,7 @@ def persist_finalized_draft(
     customer: Cliente,
     base: ConversationState,
     rag_client: RagCatalogPort | None,
+    persist_draft: DraftOrderPersister,
 ) -> AgentOutcome:
     """Price, persist, and reserve a draft for a resolved customer (quote step).
 
@@ -649,7 +669,7 @@ def persist_finalized_draft(
             ),
         )
     try:
-        order = persist_draft_order(session, customer, priced)
+        order = persist_draft(session, customer, priced)
         _reserve_quote_lines(session, customer, order, priced)
     except IntegrityError:
         # The single-draft race: another session persisted the DRAFT first.
@@ -685,6 +705,7 @@ def _create_customer_for_draft(
     telefono: str,
     rag_client: RagCatalogPort | None,
     register_client: ClientRegistrar,
+    persist_draft: DraftOrderPersister,
 ) -> AgentOutcome:
     """Create or reuse a client, then attach the waiting draft immediately."""
     normalized = normalize_phone(telefono)
@@ -699,7 +720,7 @@ def _create_customer_for_draft(
         except ClientRegistrationError as exc:
             session.rollback()
             return AgentOutcome(state=base, reply=f"I could not create the customer: {exc}")
-    return persist_finalized_draft(session, customer, base, rag_client)
+    return persist_finalized_draft(session, customer, base, rag_client, persist_draft)
 
 
 def _remove_target_matches(needle: str, name: str | None, sku: str) -> bool:
@@ -783,7 +804,7 @@ def _run_finalize_turn(
     with deps.session_factory() as session:
         if create is not None and not base.customer_disambiguation_pending:
             return _create_customer_for_draft(
-                session, base, *create, rag_client, deps.register_client
+                session, base, *create, rag_client, deps.register_client, deps.persist_draft
             )
         if base.customer_disambiguation_pending:
             candidate = parse_customer_pick(text, base.customer_candidates)
@@ -823,7 +844,7 @@ def _run_finalize_turn(
                 )
             customer = resolution.candidate
         assert customer is not None
-        return persist_finalized_draft(session, customer, base, rag_client)
+        return persist_finalized_draft(session, customer, base, rag_client, deps.persist_draft)
 
 
 def build_handler(

@@ -40,6 +40,7 @@ from src.db.models import (
     Supplier,
 )
 from src.shared.contracts import AgentName, RoutingDecision
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"
@@ -315,6 +316,7 @@ def _handler(session):
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
     return build_handler(FakeResponder(), sourcing=deps)  # type: ignore[arg-type]
 

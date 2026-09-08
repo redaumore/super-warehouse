@@ -38,6 +38,7 @@ from src.integrations.sheets import SheetsWriteStatus
 from src.orchestrator.owner import rejection_reply
 from src.pipeline import build_orchestrator, handle_inbound
 from src.shared.contracts import ProductEntry, ProductSource
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_WHATSAPP = "+5491100000000"
@@ -176,6 +177,7 @@ def _orchestrator(session, sheets):
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(),
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
     return build_orchestrator(
         responder=FakeResponder(),

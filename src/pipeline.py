@@ -63,6 +63,7 @@ from src.orchestrator.router import Orchestrator
 from src.orchestrator.session import ConversationStore, rehydrate_conversation
 from src.shared.contracts import AgentName, AgentOutcome, ConversationState, RoutingDecision
 from src.sourcing.case_b import build_sourcing_handler
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.rag_searcher import RagSupplierCatalogSearcher
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def _sourcing_deps() -> SourcingDeps | None:
         searcher=RagSupplierCatalogSearcher(session_factory=SessionLocal, rag_client=rag_client),
         rag_client=rag_client,
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
 
 

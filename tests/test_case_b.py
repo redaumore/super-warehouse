@@ -49,6 +49,7 @@ from src.shared.contracts import (
     SupplierCandidate,
 )
 from src.sourcing.case_b import build_sourcing_handler
+from src.sourcing.draft_order import persist_draft_order
 from src.supplier.searcher import FakeSupplierCatalogSearcher
 
 OWNER_SENDER = "+5491100000000"
@@ -164,6 +165,7 @@ def _orchestrator(session) -> Orchestrator:
         session_factory=lambda: session,
         searcher=FakeSupplierCatalogSearcher(CANDIDATES),
         register_client=chat_register_client,
+        persist_draft=persist_draft_order,
     )
     store = ConversationStore(
         rehydrator=lambda sid: rehydrate_conversation(session, sid, searcher=deps.searcher)
