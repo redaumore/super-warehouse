@@ -27,9 +27,10 @@ from src.backoffice.app import (
     _ingest_manual_search,
     _ingest_parse,
 )
+from src.backoffice.ingestion import ReceiptLine, ResolvedLine
 from src.barcode.decoder import BarcodeLookupKind, decode_image, lookup_barcode
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier
+from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier, SupplierStatus
 from src.integrations.rag import DocumentLine, RagProduct, RagProductError
 
 
@@ -371,6 +372,45 @@ def test_e2e_document_without_usable_lines_writes_nothing(supplier, tmp_path):
     assert grid == []
     assert state == ()
     assert "No se extrajeron líneas legibles" in message
+
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
+    assert existing.stock_disponible == 50
+    assert session.scalar(select(Inventory)) is None
+    assert session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    ) is None
+
+
+def test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing(supplier, tmp_path):
+    """Proveedor INACTIVO al ingestar → el guard bloquea parse y confirm, nada escrito."""
+    session = supplier["session"]
+    session.get(Supplier, 1).status = SupplierStatus.INACTIVO
+    session.commit()
+
+    rag = FakeRag(
+        parse_lines=(_clavos_line(),),
+        exact={"CLV-PRS-2": (_clavos_product(),)},
+        hybrid=(),
+    )
+    grid, state, message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert grid == []
+    assert state == ()  # guard trips before RAG parse; no lines resolved
+    assert message == "Error: supplier 1 is INACTIVO"
+
+    # A caller bypassing UI gating still hits the guard at confirm time.
+    resolved = (
+        ResolvedLine(
+            receipt=ReceiptLine(
+                codigo_orig="CLV-PRS-2",
+                descripcion="Clavos Paris 2 Pulgadas",
+                cantidad=10,
+                costo=Decimal("100.00"),
+            ),
+            product=_clavos_product(),
+        ),
+    )
+    confirm_message = _ingest_confirm(resolved, 1, _embedder())
+    assert confirm_message == "Error: supplier 1 is INACTIVO"
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
     assert existing.stock_disponible == 50

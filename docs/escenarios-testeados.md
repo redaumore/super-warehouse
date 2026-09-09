@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 483, agrupados en 33 dominios.
+**Total de escenarios:** 484, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -38,7 +38,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 87
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 9
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 10
 - [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
@@ -707,6 +707,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El embedder falla al adoptar → rollback total: ni bump, ni Catálogo, ni ajuste. _(`test_e2e_embedding_failure_rolls_back_full_ingestion`)_
 - Embedding con dimensión inválida → rollback total, nada queda persistido. _(`test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion`)_
 - Documento sin líneas utilizables → mensaje honesto y cero escrituras. _(`test_e2e_document_without_usable_lines_writes_nothing`)_
+- Proveedor INACTIVO al ingestar → el guard bloquea parse y confirm, nada escrito. _(`test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
 
 ## Observabilidad y logs por sesión
