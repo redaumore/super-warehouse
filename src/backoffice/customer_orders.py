@@ -12,7 +12,7 @@ transaction boundary for every other action.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db.models import AppSetting, ExchangeRate, Order, Supplier
+from src.orchestrator.approval import SheetsPort, confirm_and_register
 from src.order_lifecycle.state import (
     cancel_order,
     complete_picking,
@@ -27,6 +28,7 @@ from src.order_lifecycle.state import (
     start_picking,
 )
 from src.pricing.order_pricing import MissingRateError, PricingLine, compute_order
+from src.sourcing.draft_order import create_manual_order
 
 _DEFAULT_MARGIN_KEY = "default_margin_pct"
 _DEFAULT_MARGIN = Decimal(20)
@@ -269,9 +271,11 @@ def _pricing_lines(order: Order) -> tuple[PricingLine, ...]:
 # --------------------------------------------------- fulfillment actions (6.x)
 
 # The fulfillment actions legal for each order state (backoffice spec: only
-# legal next-state actions are shown on the Customer Orders tab).
+# legal next-state actions are shown on the Customer Orders tab). A DRAFT can
+# also be confirmed from the backoffice: the ceremony is the same one the
+# conversation runs (``confirm_and_register``).
 _LEGAL_ACTIONS: dict[str, tuple[str, ...]] = {
-    "DRAFT": ("cancel_order",),
+    "DRAFT": ("confirm_order", "cancel_order"),
     "CONFIRMED": ("start_picking", "cancel_order"),
     "PICKING": ("complete_picking", "cancel_order"),
     "READY_FOR_DELIVERY": ("deliver_order", "cancel_order"),
@@ -283,6 +287,39 @@ _LEGAL_ACTIONS: dict[str, tuple[str, ...]] = {
 def legal_actions(estado: str) -> tuple[str, ...]:
     """The fulfillment actions legal for an order state, in display order."""
     return _LEGAL_ACTIONS.get(str(estado).upper(), ())
+
+
+# ------------------------------------------------- manual creation + confirm
+
+
+def create_manual_order_action(
+    session: Session, customer_id: int, lines: Sequence[tuple[str, int]]
+) -> Order:
+    """Create a manual DRAFT order and commit (po.py pattern).
+
+    Thin backoffice wrapper over the ``create_manual_order`` use case: the
+    validation and pricing live in ``src.sourcing.draft_order``; this wrapper
+    owns the commit so the Gradio handler's short-lived session persists the
+    draft even after the with-block closes.
+    """
+    order = create_manual_order(session, customer_id, lines)
+    session.commit()
+    return order
+
+
+def confirm_order_action(session: Session, order_id: int, *, sheets: SheetsPort) -> str:
+    """Run the Draft → Confirmed ceremony and commit (po.py pattern).
+
+    Reuses the conversation confirm ceremony (``confirm_and_register``)
+    unchanged — re-quote guard, Case A/B/C classification, reservation
+    conversion + stock deduction, Sheets registration — with the backoffice as
+    actor. The confirmation/case text is returned for the UI status box; a
+    Case C cancellation is committed as-is (the order row is the audit trail).
+    """
+    order = _order_or_raise(session, order_id)
+    result = confirm_and_register(session, order, sheets=sheets, actor="backoffice")
+    session.commit()
+    return result.confirmation_text
 
 
 # --------------------------------------------------- state progress diagram

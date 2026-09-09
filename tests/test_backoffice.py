@@ -1040,7 +1040,7 @@ def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
 @pytest.mark.parametrize(
     ("estado", "expected"),
     [
-        ("DRAFT", ("cancel_order",)),
+        ("DRAFT", ("confirm_order", "cancel_order")),
         ("CONFIRMED", ("start_picking", "cancel_order")),
         ("PICKING", ("complete_picking", "cancel_order")),
         ("READY_FOR_DELIVERY", ("deliver_order", "cancel_order")),

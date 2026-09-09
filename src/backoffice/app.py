@@ -15,7 +15,7 @@ import re
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import cast
 
 import gradio as gr
@@ -34,11 +34,19 @@ from src.backoffice.adoption import (
     SupplierUnknownError,
     adopt_product,
 )
-from src.backoffice.catalog import list_products, search_rag_products, update_margin, update_price, update_stock
+from src.backoffice.catalog import (
+    list_products,
+    search_rag_products,
+    update_margin,
+    update_price,
+    update_stock,
+)
 from src.backoffice.clients import create_client, list_clients, list_price_lists
 from src.backoffice.customer_orders import (
     cancel_order_action,
     complete_picking_action,
+    confirm_order_action,
+    create_manual_order_action,
     deliver_order_action,
     get_default_margin,
     legal_actions,
@@ -1228,6 +1236,98 @@ def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
     ]
 
 
+def _manual_lines_view(rows: object) -> list[list[object]]:
+    """Coerce the manual lines state into a fresh [sku, cantidad] row snapshot."""
+    return [list(row) for row in rows] if isinstance(rows, list) else []
+
+
+def _client_dropdown_choices() -> list[tuple[str, int]]:
+    """Client choices for the manual order form: name label, id value."""
+    with SessionLocal() as session:
+        return [
+            (str(row["nombre_comercial"]), int(str(row["customer_id"])))
+            for row in list_clients(session)
+        ]
+
+
+def _manual_order_add_line(
+    rows: object,
+    sku: object,
+    cantidad: object,
+) -> tuple[list[list[object]], list[list[object]], str, float, str]:
+    """Append (or accumulate) a line to the manual-order draft state.
+
+    Returns ``(state_rows, grid_rows, sku_reset, qty_reset, status)``. A
+    repeated SKU accumulates quantity (chat-draft parity); invalid input keeps
+    the lines untouched and explains why in the status box.
+    """
+    current = _manual_lines_view(rows)
+    sku_text = str(sku or "").strip()
+    if not sku_text:
+        return current, _manual_lines_view(current), "", 1.0, "Ingresá el SKU del producto."
+    try:
+        quantity = int(str(cantidad))
+    except ValueError:
+        return current, _manual_lines_view(current), "", 1.0, "Ingresá una cantidad válida."
+    if quantity <= 0:
+        return current, _manual_lines_view(current), "", 1.0, "La cantidad debe ser mayor que cero."
+    for row in current:
+        if str(row[0]) == sku_text:
+            row[1] = int(str(row[1])) + quantity
+            break
+    else:
+        current.append([sku_text, quantity])
+    return (
+        current,
+        _manual_lines_view(current),
+        "",
+        1.0,
+        f"Línea agregada: {quantity} × {sku_text}.",
+    )
+
+
+def _manual_line_selected(evt: gr.SelectData) -> object:
+    """Remember the index of the line selected in the manual-order lines grid."""
+    if getattr(evt, "selected", False) and getattr(evt, "index", None):
+        return int(evt.index[0])
+    return None
+
+
+def _manual_order_remove_line(
+    index: object, rows: object
+) -> tuple[list[list[object]], list[list[object]], str]:
+    """Remove the manual-order line chosen in the lines grid (by stored index)."""
+    current = _manual_lines_view(rows)
+    if index is None:
+        return current, _manual_lines_view(current), "Seleccioná una línea de la grilla primero."
+    position = int(str(index))
+    if position < 0 or position >= len(current):
+        return current, _manual_lines_view(current), "Seleccioná una línea de la grilla primero."
+    removed = current.pop(position)
+    return current, _manual_lines_view(current), f"Línea quitada: {removed[0]}."
+
+
+def _create_manual_order(
+    customer_id: object, rows: object
+) -> tuple[str, list[list[object]], list[list[object]]]:
+    """Create the manual DRAFT order, refresh the orders grid, clear the form.
+
+    Errors (unknown client/SKU, an open draft already existing, ...) surface in
+    the status box and keep the form intact so the owner can fix the input.
+    """
+    lines = [(str(row[0]), int(str(row[1]))) for row in _manual_lines_view(rows) if row]
+    if customer_id is None:
+        return "Seleccioná un cliente.", _customer_orders_grid(), _manual_lines_view(rows)
+    with SessionLocal() as session:
+        try:
+            order = create_manual_order_action(session, int(str(customer_id)), lines)
+            message = f"Pedido #{order.order_id} creado (borrador) — total {order.total} ARS."
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            session.rollback()
+            return f"Error: {exc}", _customer_orders_grid(), _manual_lines_view(rows)
+    return message, _customer_orders_grid(), []
+
+
 def _exchange_rates_grid() -> list[list[object]]:
     """Render the exchange-rate table with ARS marked read-only."""
     with SessionLocal() as session:
@@ -1603,6 +1703,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 action_start_picking = gr.Button("Iniciar preparación (Confirmed → Picking)")
                 action_complete_picking = gr.Button("Completar preparación (Picking → Ready)")
                 action_deliver = gr.Button("Entregar (Ready → Closed)")
+                action_confirm = gr.Button("Confirmar pedido (Draft → Confirmed)", variant="primary")
                 action_cancel = gr.Button("Cancelar pedido", variant="stop")
             customer_orders_grid.select(
                 _order_row_selected,
@@ -1629,10 +1730,62 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 inputs=selected_order_id,
                 outputs=[order_action_status, order_state_html],
             )
+            action_confirm.click(
+                _order_action_with_diagram(partial(confirm_order_action, sheets=_SHEETS)),
+                inputs=selected_order_id,
+                outputs=[order_action_status, order_state_html],
+            )
             action_cancel.click(
                 _order_action_with_diagram(cancel_order_action),
                 inputs=selected_order_id,
                 outputs=[order_action_status, order_state_html],
+            )
+
+            gr.Markdown("### Alta manual de pedido (borrador)")
+            with gr.Row():
+                manual_client = gr.Dropdown(choices=_client_dropdown_choices(), label="Cliente")
+                manual_client_refresh = gr.Button("Refrescar clientes")
+            manual_lines_state = gr.State([])
+            with gr.Row():
+                manual_line_sku = gr.Textbox(label="SKU", placeholder="CLV-001")
+                manual_line_qty = gr.Number(label="Cantidad", precision=0, value=1)
+                manual_add_line = gr.Button("Agregar línea")
+            manual_lines_grid = gr.Dataframe(
+                headers=["SKU", "Cantidad"],
+                datatype=["str", "number"],
+                value=[],
+                label="Líneas del pedido nuevo",
+            )
+            manual_remove_line = gr.Button("Quitar línea seleccionada", variant="stop")
+            manual_create = gr.Button("Crear pedido (borrador)", variant="primary")
+            manual_status = gr.Textbox(label="Estado del alta manual", interactive=False)
+            manual_selected_line = gr.State(None)
+            manual_client_refresh.click(_client_dropdown_choices, None, manual_client)
+            manual_add_line.click(
+                _manual_order_add_line,
+                inputs=[manual_lines_state, manual_line_sku, manual_line_qty],
+                outputs=[
+                    manual_lines_state,
+                    manual_lines_grid,
+                    manual_line_sku,
+                    manual_line_qty,
+                    manual_status,
+                ],
+            )
+            manual_lines_grid.select(
+                _manual_line_selected,
+                None,
+                manual_selected_line,
+            )
+            manual_remove_line.click(
+                _manual_order_remove_line,
+                inputs=[manual_selected_line, manual_lines_state],
+                outputs=[manual_lines_state, manual_lines_grid, manual_status],
+            )
+            manual_create.click(
+                _create_manual_order,
+                inputs=[manual_client, manual_lines_state],
+                outputs=[manual_status, customer_orders_grid, manual_lines_state],
             )
 
         with gr.Tab("Monitor de pedidos"):
