@@ -55,9 +55,11 @@ from src.backoffice.customer_orders import (
     order_detail,
     order_state_diagram,
     recompute_pending_conversion,
+    search_order_products_action,
     set_default_margin,
     set_exchange_rate,
     start_picking_action,
+    update_manual_order_action,
 )
 from src.backoffice.ingestion import (
     ResolvedLine,
@@ -95,6 +97,7 @@ from src.db.session import SessionLocal
 from src.integrations.openai import OpenAIEmbedder
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
 from src.integrations.sheets import SheetsWriter
+from src.sourcing.draft_order import ManualLineInput
 from src.supplier.guards import SupplierInactiveError, ensure_active_supplier
 from src.supplier.validation import suggest_code
 from src.tz import to_buenos_aires
@@ -1237,8 +1240,26 @@ def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
 
 
 def _manual_lines_view(rows: object) -> list[list[object]]:
-    """Coerce the manual lines state into a fresh [sku, cantidad] row snapshot."""
-    return [list(row) for row in rows] if isinstance(rows, list) else []
+    """Coerce the manual lines state into fresh [sku, cantidad, origen] rows.
+
+    Three columns is the canonical shape (source-aware lines); two-column rows
+    from an older saved state default to LOCAL.
+    """
+    view: list[list[object]] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not row:
+            continue
+        source = str(row[2]).strip().upper() if len(row) > 2 else "LOCAL"
+        view.append([row[0], row[1], source])
+    return view
+
+
+def _manual_inputs_view(rows: object) -> list[ManualLineInput]:
+    """Map the manual lines state into source-tagged use-case inputs."""
+    return [
+        ManualLineInput(sku=str(row[0]), cantidad=int(str(row[1])), source=str(row[2]))
+        for row in _manual_lines_view(rows)
+    ]
 
 
 def _client_dropdown_choices() -> list[tuple[str, int]]:
@@ -1250,21 +1271,66 @@ def _client_dropdown_choices() -> list[tuple[str, int]]:
         ]
 
 
+def _manual_product_search(
+    proveedor: str, marca: str, categoria: str, codigo: str, texto: str, limit: float | None
+) -> tuple[list[list[object]], list[dict[str, object]], str]:
+    """Search LOCAL inventory + RAG catalog for the manual order form (no LLM).
+
+    LOCAL hits come first and carry their stock; the same article may appear
+    once per source — the owner picks which line completes the order.
+    """
+    try:
+        with SessionLocal() as session:
+            hits = search_order_products_action(
+                session,
+                proveedor=str(proveedor or ""),
+                marca=str(marca or ""),
+                categoria=str(categoria or ""),
+                codigo=str(codigo or ""),
+                texto=str(texto or ""),
+                limit=int(limit) if limit else 100,
+            )
+    except ValueError as exc:
+        return [], [], f"Error: {exc}"
+    if not hits:
+        return [], [], "Sin resultados para los filtros indicados."
+    grid = [
+        [
+            hit["source"],
+            hit["sku"],
+            hit["name"],
+            hit["marca"] or "—",
+            hit["categoria"] or "—",
+            hit["supplier"] or "—",
+            hit["price"],
+            hit["moneda"] or "—",
+            hit["stock"] if hit["stock"] is not None else "",
+        ]
+        for hit in hits
+    ]
+    return grid, hits, f"{len(hits)} producto(s) encontrado(s) — LOCAL primero, RAG después."
+
+
 def _manual_order_add_line(
     rows: object,
     sku: object,
     cantidad: object,
+    source: object,
 ) -> tuple[list[list[object]], list[list[object]], str, float, str]:
-    """Append (or accumulate) a line to the manual-order draft state.
+    """Append (or accumulate) a source-tagged line to the manual-order state.
 
-    Returns ``(state_rows, grid_rows, sku_reset, qty_reset, status)``. A
-    repeated SKU accumulates quantity (chat-draft parity); invalid input keeps
-    the lines untouched and explains why in the status box.
+    Returns ``(state_rows, grid_rows, sku_reset, qty_reset, status)``. Lines
+    accumulate per (SKU, origen): the same SKU may hold one LOCAL and one RAG
+    line at once (stock + RAG remainder); invalid input keeps the lines
+    untouched and explains why in the status box.
     """
     current = _manual_lines_view(rows)
     sku_text = str(sku or "").strip()
+    source_text = str(source or "LOCAL").strip().upper()
     if not sku_text:
         return current, _manual_lines_view(current), "", 1.0, "Ingresá el SKU del producto."
+    if source_text not in ("LOCAL", "RAG"):
+        return current, _manual_lines_view(current), "", 1.0, "El origen debe ser LOCAL o RAG."
     try:
         quantity = int(str(cantidad))
     except ValueError:
@@ -1272,18 +1338,51 @@ def _manual_order_add_line(
     if quantity <= 0:
         return current, _manual_lines_view(current), "", 1.0, "La cantidad debe ser mayor que cero."
     for row in current:
-        if str(row[0]) == sku_text:
+        if str(row[0]) == sku_text and str(row[2]) == source_text:
             row[1] = int(str(row[1])) + quantity
             break
     else:
-        current.append([sku_text, quantity])
+        current.append([sku_text, quantity, source_text])
     return (
         current,
         _manual_lines_view(current),
         "",
         1.0,
-        f"Línea agregada: {quantity} × {sku_text}.",
+        f"Línea agregada ({source_text}): {quantity} × {sku_text}.",
     )
+
+
+def _manual_order_add_selected(
+    index: object,
+    hits: object,
+    rows: object,
+    cantidad: object,
+) -> tuple[list[list[object]], list[list[object]], float, str]:
+    """Add the product row selected in the search grid to the manual-order state.
+
+    The result row already carries its source (LOCAL/RAG) and stored SKU, so
+    the line is added as-is; quantity accumulation follows the same per-(SKU,
+    origen) rule as the manual SKU entry.
+    """
+    current = _manual_lines_view(rows)
+    if index is None or not isinstance(hits, list):
+        return current, _manual_lines_view(current), 1.0, "Seleccioná un producto de la grilla primero."
+    position = int(str(index))
+    if position < 0 or position >= len(hits):
+        return current, _manual_lines_view(current), 1.0, "Seleccioná un producto de la grilla primero."
+    try:
+        quantity = int(str(cantidad))
+    except ValueError:
+        return current, _manual_lines_view(current), 1.0, "Ingresá una cantidad válida."
+    if quantity <= 0:
+        return current, _manual_lines_view(current), 1.0, "La cantidad debe ser mayor que cero."
+    hit = hits[position]
+    sku_text = str(hit["sku"])
+    source_text = str(hit["source"]).strip().upper()
+    state, grid, _sku, _qty, status = _manual_order_add_line(
+        current, sku_text, quantity, source_text
+    )
+    return state, grid, 1.0, status
 
 
 def _manual_line_selected(evt: gr.SelectData) -> object:
@@ -1312,16 +1411,77 @@ def _create_manual_order(
 ) -> tuple[str, list[list[object]], list[list[object]]]:
     """Create the manual DRAFT order, refresh the orders grid, clear the form.
 
-    Errors (unknown client/SKU, an open draft already existing, ...) surface in
-    the status box and keep the form intact so the owner can fix the input.
+    Lines carry their source (LOCAL/RAG). Errors (unknown client/SKU, an open
+    draft already existing, a missing exchange rate, ...) surface in the
+    status box and keep the form intact so the owner can fix the input.
     """
-    lines = [(str(row[0]), int(str(row[1]))) for row in _manual_lines_view(rows) if row]
+    inputs = _manual_inputs_view(rows)
     if customer_id is None:
         return "Seleccioná un cliente.", _customer_orders_grid(), _manual_lines_view(rows)
     with SessionLocal() as session:
         try:
-            order = create_manual_order_action(session, int(str(customer_id)), lines)
+            order = create_manual_order_action(session, int(str(customer_id)), inputs)
             message = f"Pedido #{order.order_id} creado (borrador) — total {order.total} ARS."
+        except Exception as exc:  # noqa: BLE001 — surfaced in the UI
+            session.rollback()
+            return f"Error: {exc}", _customer_orders_grid(), _manual_lines_view(rows)
+    return message, _customer_orders_grid(), []
+
+
+def _load_manual_draft(
+    order_id: object,
+) -> tuple[list[list[object]], list[list[object]], int | None, int | None, str]:
+    """Load a DRAFT order's lines into the manual form for modification.
+
+    Returns ``(state_rows, grid_rows, loaded_order_id, customer_id, status)``.
+    Only DRAFT orders can be modified: confirmed orders already converted
+    their reservations and are refused here with a clear message.
+    """
+    if not order_id:
+        return [], [], None, None, "Ingresá el número de pedido a modificar."
+    with SessionLocal() as session:
+        try:
+            detail = order_detail(session, int(str(order_id)))
+        except KeyError:
+            return [], [], None, None, f"Pedido inexistente: {order_id}"
+    if detail["estado"] != "DRAFT":
+        estado = str(detail["estado"])
+        return (
+            [],
+            [],
+            None,
+            None,
+            f"Pedido #{order_id} está en estado {estado}: solo borradores se pueden modificar.",
+        )
+    lines = [
+        [line["sku"], int(str(line["cantidad"])), str(line["source"] or "LOCAL").upper()]
+        for line in cast(list[dict[str, object]], detail["lines"])
+    ]
+    return (
+        lines,
+        _manual_lines_view(lines),
+        int(str(order_id)),
+        cast(int | None, detail.get("customer_id")),
+        f"Pedido #{order_id} cargado ({len(lines)} línea(s)). Agregá o quitá líneas y guardá.",
+    )
+
+
+def _save_manual_order_changes(
+    order_id: object, rows: object
+) -> tuple[str, list[list[object]], list[list[object]]]:
+    """Persist the manual-form edits on a loaded DRAFT order and refresh grids.
+
+    The form state is the target line set: new (SKU, origen) pairs are priced
+    on save, removed lines disappear, quantities move. Errors keep the form
+    intact; success clears it and refreshes the orders grid.
+    """
+    inputs = _manual_inputs_view(rows)
+    if not order_id:
+        return "Cargá un borrador con 'Cargar borrador' antes de guardar.", _customer_orders_grid(), _manual_lines_view(rows)
+    with SessionLocal() as session:
+        try:
+            order = update_manual_order_action(session, int(str(order_id)), inputs)
+            message = f"Pedido #{order.order_id} actualizado (borrador) — total {order.total} ARS."
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             session.rollback()
             return f"Error: {exc}", _customer_orders_grid(), _manual_lines_view(rows)
@@ -1746,13 +1906,17 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 manual_client = gr.Dropdown(choices=_client_dropdown_choices(), label="Cliente")
                 manual_client_refresh = gr.Button("Refrescar clientes")
             manual_lines_state = gr.State([])
+            manual_order_id_state = gr.State(None)
             with gr.Row():
                 manual_line_sku = gr.Textbox(label="SKU", placeholder="CLV-001")
                 manual_line_qty = gr.Number(label="Cantidad", precision=0, value=1)
+                manual_line_source = gr.Dropdown(
+                    choices=["LOCAL", "RAG"], value="LOCAL", label="Origen"
+                )
                 manual_add_line = gr.Button("Agregar línea")
             manual_lines_grid = gr.Dataframe(
-                headers=["SKU", "Cantidad"],
-                datatype=["str", "number"],
+                headers=["SKU", "Cantidad", "Origen"],
+                datatype=["str", "number", "str"],
                 value=[],
                 label="Líneas del pedido nuevo",
             )
@@ -1763,7 +1927,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             manual_client_refresh.click(_client_dropdown_choices, None, manual_client)
             manual_add_line.click(
                 _manual_order_add_line,
-                inputs=[manual_lines_state, manual_line_sku, manual_line_qty],
+                inputs=[manual_lines_state, manual_line_sku, manual_line_qty, manual_line_source],
                 outputs=[
                     manual_lines_state,
                     manual_lines_grid,
@@ -1785,6 +1949,83 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             manual_create.click(
                 _create_manual_order,
                 inputs=[manual_client, manual_lines_state],
+                outputs=[manual_status, customer_orders_grid, manual_lines_state],
+            )
+
+            gr.Markdown(
+                "### Búsqueda de productos para el pedido (inventario LOCAL + catálogo RAG)"
+            )
+            with gr.Row():
+                msf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
+                msf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
+                msf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
+                msf_codigo = gr.Textbox(label="Código", placeholder="483-8")
+            msf_texto = gr.Textbox(
+                label="Texto (LOCAL busca por nombre; RAG por descripción)",
+                placeholder="monocomando de cocina",
+            )
+            with gr.Row():
+                manual_search_btn = gr.Button("Buscar productos", variant="primary")
+                msf_limit = gr.Number(label="Máx. resultados por origen", value=100, precision=0)
+            manual_search_grid = gr.Dataframe(
+                headers=[
+                    "Origen",
+                    "SKU",
+                    "Nombre",
+                    "Marca",
+                    "Categoría",
+                    "Proveedor",
+                    "Precio",
+                    "Moneda",
+                    "Stock",
+                ],
+                datatype=["str", "str", "str", "str", "str", "str", "number", "str", "number"],
+                label="Resultados (LOCAL primero, RAG después)",
+            )
+            manual_search_state = gr.State([])
+            manual_selected_result = gr.State(None)
+            with gr.Row():
+                manual_result_qty = gr.Number(label="Cantidad a agregar", precision=0, value=1)
+                manual_add_selected = gr.Button("Agregar seleccionada al pedido")
+            manual_search_btn.click(
+                _manual_product_search,
+                inputs=[msf_proveedor, msf_marca, msf_categoria, msf_codigo, msf_texto, msf_limit],
+                outputs=[manual_search_grid, manual_search_state, manual_status],
+            )
+            manual_search_grid.select(
+                _manual_line_selected,
+                None,
+                manual_selected_result,
+            )
+            manual_add_selected.click(
+                _manual_order_add_selected,
+                inputs=[manual_selected_result, manual_search_state, manual_lines_state, manual_result_qty],
+                outputs=[manual_lines_state, manual_lines_grid, manual_result_qty, manual_status],
+            )
+
+            gr.Markdown("### Modificar pedido en borrador")
+            with gr.Row():
+                manual_edit_order_id = gr.Number(
+                    label="Nº de pedido (borrador)", precision=0, value=None
+                )
+                manual_load_draft = gr.Button("Cargar borrador")
+                manual_save_draft = gr.Button(
+                    "Guardar cambios del borrador", variant="secondary"
+                )
+            manual_load_draft.click(
+                _load_manual_draft,
+                inputs=[manual_edit_order_id],
+                outputs=[
+                    manual_lines_state,
+                    manual_lines_grid,
+                    manual_order_id_state,
+                    manual_client,
+                    manual_status,
+                ],
+            )
+            manual_save_draft.click(
+                _save_manual_order_changes,
+                inputs=[manual_order_id_state, manual_lines_state],
                 outputs=[manual_status, customer_orders_grid, manual_lines_state],
             )
 

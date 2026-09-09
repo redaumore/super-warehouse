@@ -319,36 +319,38 @@ def test_legal_actions_draft_includes_confirm():
 
 
 def test_manual_order_add_line_appends_accumulates_and_validates():
-    """Add appends lines, accumulates repeated SKUs, and rejects bad input."""
-    rows, grid, sku, qty, status = _manual_order_add_line([], "LOCAL-1", 2)
-    assert rows == [["LOCAL-1", 2]]
-    assert grid == [["LOCAL-1", 2]]
+    """Add appends lines, accumulates repeated (SKU, origen), and rejects bad input."""
+    rows, grid, sku, qty, status = _manual_order_add_line([], "LOCAL-1", 2, "LOCAL")
+    assert rows == [["LOCAL-1", 2, "LOCAL"]]
+    assert grid == [["LOCAL-1", 2, "LOCAL"]]
     assert (sku, qty) == ("", 1.0)
     assert "agregada" in status
 
-    rows, grid, _sku, _qty, status = _manual_order_add_line(rows, "LOCAL-1", 1)
-    assert rows == [["LOCAL-1", 3]]  # same SKU accumulates
-    assert grid == [["LOCAL-1", 3]]
+    rows, _grid, _sku, _qty, status = _manual_order_add_line(rows, "LOCAL-1", 1, "LOCAL")
+    assert rows == [["LOCAL-1", 3, "LOCAL"]]  # same (SKU, origen) accumulates
+
+    rows, _grid, _sku, _qty, status = _manual_order_add_line(rows, "LOCAL-1", 4, "RAG")
+    assert rows == [["LOCAL-1", 3, "LOCAL"], ["LOCAL-1", 4, "RAG"]]  # per-source lines
 
     for bad_sku, bad_qty, expected in (
         ("", 2, "SKU"),
         ("LOCAL-1", 0, "mayor que cero"),
         ("LOCAL-1", "x", "cantidad válida"),
     ):
-        rows, _grid, _sku, _qty, status = _manual_order_add_line(rows, bad_sku, bad_qty)
+        rows, _grid, _sku, _qty, status = _manual_order_add_line(rows, bad_sku, bad_qty, "LOCAL")
         assert expected in status
-        assert rows == [["LOCAL-1", 3]]  # invalid input never mutates the lines
+        assert len(rows) == 2  # invalid input never mutates the lines
 
 
 def test_manual_order_remove_line_uses_stored_selection():
     """The stored grid selection drives the removal; no selection is a no-op."""
-    rows = [["LOCAL-1", 2], ["LOCAL-2", 1]]
+    rows = [["LOCAL-1", 2, "LOCAL"], ["LOCAL-2", 1, "LOCAL"]]
     assert _manual_line_selected(SimpleNamespace(selected=True, index=[0])) == 0  # type: ignore[arg-type]
     assert _manual_line_selected(SimpleNamespace(selected=False, index=[0])) is None  # type: ignore[arg-type]
 
     state, grid, status = _manual_order_remove_line(0, rows)
-    assert state == [["LOCAL-2", 1]]
-    assert grid == [["LOCAL-2", 1]]
+    assert state == [["LOCAL-2", 1, "LOCAL"]]
+    assert grid == [["LOCAL-2", 1, "LOCAL"]]
     assert "quitada" in status
 
     state, _grid, status = _manual_order_remove_line(None, rows)
@@ -378,20 +380,20 @@ def test_app_create_manual_order_creates_committed_draft(shop_ctx):
 def test_app_create_manual_order_surfaces_guard_and_keeps_form(shop_ctx):
     """A second draft for the same client surfaces the guard and keeps lines."""
     shop_ctx.commit()
-    _create_manual_order(1, [["LOCAL-1", 2]])
-    message, _grid, lines = _create_manual_order(1, [["LOCAL-1", 1]])
+    _create_manual_order(1, [["LOCAL-1", 2, "LOCAL"]])
+    message, _grid, lines = _create_manual_order(1, [["LOCAL-1", 1, "LOCAL"]])
 
     assert message.startswith("Error:")
     assert "already has an open draft" in message
-    assert lines == [["LOCAL-1", 1]]  # form intact for the fix
+    assert lines == [["LOCAL-1", 1, "LOCAL"]]  # form intact for the fix
 
 
 def test_app_create_manual_order_requires_client(shop_ctx):
     """Without a client selected nothing is created."""
     shop_ctx.commit()
-    message, _grid, lines = _create_manual_order(None, [["LOCAL-1", 2]])
+    message, _grid, lines = _create_manual_order(None, [["LOCAL-1", 2, "LOCAL"]])
     assert message == "Seleccioná un cliente."
-    assert lines == [["LOCAL-1", 2]]
+    assert lines == [["LOCAL-1", 2, "LOCAL"]]
     assert shop_ctx.scalar(select(func.count(Order.order_id))) == 0
 
 

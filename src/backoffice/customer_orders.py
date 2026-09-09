@@ -28,7 +28,8 @@ from src.order_lifecycle.state import (
     start_picking,
 )
 from src.pricing.order_pricing import MissingRateError, PricingLine, compute_order
-from src.sourcing.draft_order import create_manual_order
+from src.sourcing.draft_order import ManualLineInput, create_manual_order, update_manual_order
+from src.sourcing.product_search import ProductSearchHit, search_order_products
 
 _DEFAULT_MARGIN_KEY = "default_margin_pct"
 _DEFAULT_MARGIN = Decimal(20)
@@ -83,6 +84,7 @@ def _order_row(order: Order) -> dict[str, object]:
     """Map one order into the Customer Orders grid contract."""
     return {
         "order_id": order.order_id,
+        "customer_id": order.customer_id,
         "customer": order.customer.nombre_comercial if order.customer else "—",
         "estado": order.estado.value,
         "subtotal": _decimal_text(order.subtotal),
@@ -293,18 +295,82 @@ def legal_actions(estado: str) -> tuple[str, ...]:
 
 
 def create_manual_order_action(
-    session: Session, customer_id: int, lines: Sequence[tuple[str, int]]
+    session: Session,
+    customer_id: int,
+    lines: Sequence[ManualLineInput | tuple[str, int]],
 ) -> Order:
     """Create a manual DRAFT order and commit (po.py pattern).
 
     Thin backoffice wrapper over the ``create_manual_order`` use case: the
     validation and pricing live in ``src.sourcing.draft_order``; this wrapper
     owns the commit so the Gradio handler's short-lived session persists the
-    draft even after the with-block closes.
+    draft even after the with-block closes. Accepts plain ``(sku, cantidad)``
+    tuples (LOCAL) or source-tagged ``ManualLineInput`` rows (LOCAL + RAG).
     """
     order = create_manual_order(session, customer_id, lines)
     session.commit()
     return order
+
+
+def search_order_products_action(
+    session: Session,
+    *,
+    proveedor: str | None = None,
+    marca: str | None = None,
+    categoria: str | None = None,
+    codigo: str | None = None,
+    texto: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, object]]:
+    """Search LOCAL inventory + RAG catalog for the manual order form (read-only).
+
+    Thin wrapper over the ``search_order_products`` use case: rows are plain
+    dicts (Origen/SKU/... grid contract), LOCAL hits first, no dedup across
+    sources, and no commit — the search never writes.
+    """
+
+    def _row(hit: ProductSearchHit) -> dict[str, object]:
+        return {
+            "source": hit.source,
+            "sku": hit.sku,
+            "name": hit.name,
+            "marca": hit.marca,
+            "categoria": hit.categoria,
+            "supplier": hit.supplier,
+            "price": float(hit.price) if hit.price is not None else None,
+            "moneda": hit.moneda,
+            "stock": hit.stock,
+        }
+
+    return [
+        _row(hit)
+        for hit in search_order_products(
+            session,
+            proveedor=proveedor,
+            marca=marca,
+            categoria=categoria,
+            codigo=codigo,
+            texto=texto,
+            limit=limit,
+        )
+    ]
+
+
+def update_manual_order_action(
+    session: Session,
+    order_id: int,
+    lines: Sequence[ManualLineInput | tuple[str, int]],
+) -> Order:
+    """Sync a DRAFT order with the manual form and commit (po.py pattern).
+
+    Thin wrapper over ``update_manual_order``: pricing and sync semantics live
+    in ``src.sourcing.draft_order``; this wrapper owns the commit so the
+    Gradio handler's short-lived session persists the edits.
+    """
+    order = _order_or_raise(session, order_id)
+    updated = update_manual_order(session, order, lines)
+    session.commit()
+    return updated
 
 
 def confirm_order_action(session: Session, order_id: int, *, sheets: SheetsPort) -> str:
