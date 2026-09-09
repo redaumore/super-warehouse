@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 479, agrupados en 33 dominios.
+**Total de escenarios:** 480, agrupados en 33 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -12,7 +12,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Cotización y ventas](#cotización-y-ventas) — 11
 - [Stock e inventario](#stock-e-inventario) — 13
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
-- [Registro de aprobaciones](#registro-de-aprobaciones) — 24
+- [Registro de aprobaciones](#registro-de-aprobaciones) — 25
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
 - [Pipeline de orquestación (walking skeleton)](#pipeline-de-orquestación-walking-skeleton) — 6
 - [Agente Customer (respondedor conversacional)](#agente-customer-respondedor-conversacional) — 32
@@ -124,6 +124,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La cuarentena de Sheets NO revierte: el pedido queda Confirmado y se informa. _(`test_sheets_quarantine_is_tolerated_and_order_stays_confirmed`)_
 - Confirmar un pedido con precios pendientes de conversión se bloquea. _(`test_confirm_pending_conversion_order_is_blocked`)_
 - Classify at confirm: stock que cayó sin supplier cancela el pedido (Case C). _(`test_confirm_discovering_case_c_cancels_the_order`)_
+- Confirmar una línea reservada con stock caído sin candidatos cancela (Caso C). _(`test_confirm_insufficient_reserved_line_without_candidates_cancels`)_
 - Case C con códigos de proveedor sin mapear avisa al dueño y queda logueado. _(`test_confirm_case_c_with_unmapped_codes_notifies_the_owner`)_
 - Sin códigos sin mapear, la respuesta Case C queda sin la nota adicional. _(`test_confirm_case_c_without_unmapped_codes_keeps_plain_reply`)_
 - Classify at confirm: stock que cayó con suppliers devuelve la selección (Case B). _(`test_confirm_discovering_case_b_persists_needs_and_returns_selection_prompt`)_

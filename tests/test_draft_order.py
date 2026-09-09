@@ -18,7 +18,8 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from src.agents.customer import _supplier_margin_source
+from src.agents.customer import _supplier_margin_source, persist_finalized_draft
+from src.agents.inventory import available_stock
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
@@ -28,11 +29,13 @@ from src.db.models import (
     Order,
     OrderEstado,
     OrderItem,
+    ReservationEstado,
     StockReservation,
     Supplier,
 )
 from src.order_lifecycle.state import add_draft_item, remove_draft_item
 from src.pricing.order_pricing import PricedLine, PricedOrder, PricingLine, compute_order
+from src.shared.contracts import ConversationState, ProductEntry, ProductSource
 from src.sourcing.draft_order import persist_draft_order
 
 
@@ -261,6 +264,116 @@ def test_persist_draft_order_normalizes_doubled_prefix_sku(customer_ctx):
 
     item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
     assert item.sku == "AMX-AT-5044"
+
+
+# ------------------------------------- quote-time soft-lock tolerance (AD10)
+
+
+@pytest.fixture
+def quote_ctx(db_session):
+    """Seed a customer and two LOCAL products with NO canonical Inventory rows."""
+    db_session.add(ListaPrecios(lista_id=1, nombre="Base", descuento_lista_pct=Decimal(0)))
+    db_session.add(
+        Cliente(
+            customer_id=1,
+            nombre_comercial="Customer One",
+            telefono_norm="+5491155551234",
+            lista_precios_id=1,
+            descuento_particular_pct=Decimal(0),
+        )
+    )
+    db_session.add(
+        Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0))
+    )
+    db_session.add(
+        Catalogo(
+            id=1,
+            codigo_interno="LOCAL-1",
+            supplier_id=1,
+            nombre_oficial="Local item",
+            costo_proveedor=Decimal("100.00"),
+            margen_aplicado_pct=Decimal("0.35"),
+            precio_lista_base=Decimal("135.00"),
+            stock_disponible=10,
+            sinonimos=[],
+        )
+    )
+    db_session.add(
+        Catalogo(
+            id=2,
+            codigo_interno="LOCAL-2",
+            supplier_id=1,
+            nombre_oficial="Local second item",
+            costo_proveedor=Decimal("50.00"),
+            margen_aplicado_pct=Decimal("0.20"),
+            precio_lista_base=Decimal("60.00"),
+            stock_disponible=0,
+            sinonimos=[],
+        )
+    )
+    db_session.flush()
+    return db_session, db_session.get(Cliente, 1)
+
+
+def _draft_state(*lines: tuple[str, str, int]) -> ConversationState:
+    """A draft whose entries mirror the displayed product-query results."""
+    return ConversationState(
+        sender_id="owner",
+        draft_items=tuple(
+            (ProductEntry(sku=sku, name=name, source=ProductSource.LOCAL), cantidad)
+            for sku, name, cantidad in lines
+        ),
+    )
+
+
+def test_quoting_leaves_no_stock_line_unreserved_and_defers_classification(quote_ctx):
+    """Cotizar un producto sin stock persiste el draft sin reservar ni fallar."""
+    session, customer = quote_ctx
+
+    result = persist_finalized_draft(
+        session, customer, _draft_state(("LOCAL-1", "Local item", 2)), None, persist_draft_order
+    )
+
+    order = session.scalar(select(Order))
+    assert order is not None
+    assert order.estado is OrderEstado.DRAFT
+    item = session.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert (item.sku, item.cantidad) == ("LOCAL-1", 2)
+    # The stock gap is silently tolerated: no reservation row, no error — the
+    # classification is deferred to the confirm ceremony (AD10).
+    assert session.scalars(select(StockReservation)).all() == []
+    assert "Pedido #" in result.reply
+
+
+def test_quoting_mixed_order_reserves_only_the_in_stock_line(quote_ctx):
+    """Pedido mixto: solo la línea con stock se reserva; la otra queda libre."""
+    session, customer = quote_ctx
+    session.add(Inventory(sku_id="LOCAL-1", quantity_on_hand=10))
+    session.flush()
+
+    result = persist_finalized_draft(
+        session,
+        customer,
+        _draft_state(("LOCAL-1", "Local item", 2), ("LOCAL-2", "Local second item", 3)),
+        None,
+        persist_draft_order,
+    )
+
+    order = session.scalar(select(Order))
+    assert order.estado is OrderEstado.DRAFT
+    items = session.scalars(select(OrderItem).where(OrderItem.order_id == order.order_id)).all()
+    assert {(i.sku, i.cantidad) for i in items} == {("LOCAL-1", 2), ("LOCAL-2", 3)}
+    # All-or-nothing per line: the in-stock line soft-locks, the stockless one
+    # does not — and the whole draft still persists.
+    (reservation,) = session.scalars(select(StockReservation)).all()
+    assert (
+        reservation.sku,
+        reservation.cantidad,
+        reservation.estado,
+        reservation.order_id,
+    ) == ("LOCAL-1", 2, ReservationEstado.ACTIVE, order.order_id)
+    assert available_stock(session, "LOCAL-1") == 8  # availability reduced by the lock
+    assert "Pedido #" in result.reply
 
 
 # ------------------------------------------------- single-draft rule (AD4)

@@ -350,6 +350,45 @@ def test_confirm_discovering_case_c_cancels_the_order(order_ctx):
     ]
 
 
+def test_confirm_insufficient_reserved_line_without_candidates_cancels(order_ctx):
+    """Confirmar una línea reservada con stock caído sin candidatos cancela (Caso C)."""
+    # The line was soft-locked at quote (5 of 10 on hand); the on-hand stock
+    # then dropped to 2 (consumed by other orders' deductions).
+    reserve_stock(
+        order_ctx["session"],
+        order_ctx["sku"],
+        customer_id=1,
+        cantidad=5,
+        order_id=order_ctx["order"].order_id,
+    )
+    item = order_ctx["session"].scalar(
+        select(OrderItem).where(OrderItem.order_id == order_ctx["order"].order_id)
+    )
+    item.cantidad = 5
+    on_hand = order_ctx["session"].scalar(
+        select(Inventory).where(Inventory.sku_id == order_ctx["sku"])
+    )
+    on_hand.quantity_on_hand = 2
+    order_ctx["session"].flush()
+
+    result = confirm_and_register(
+        order_ctx["session"], order_ctx["order"], sheets=FakeSheets()
+    )  # no searcher → no supplier candidates → Case C
+
+    assert result.cancelled_case is True
+    assert result.order.estado is OrderEstado.CANCELED
+    assert result.order.sourcing_state.value == "CANCELLED"
+    assert "no están disponibles" in result.confirmation_text
+    assert result.missing[0].missing_quantity == 3  # 5 requested − 2 available
+    assert result.converted == 0
+    assert result.sheets_status is SheetsWriteStatus.SKIPPED
+    # The quote-time soft-lock is released instead of converted: the stock is
+    # available again and nothing was deducted.
+    (reservation,) = order_ctx["session"].scalars(select(StockReservation)).all()
+    assert reservation.estado is ReservationEstado.RELEASED
+    assert _on_hand(order_ctx["session"], "CLV-001") == 2
+
+
 class _UnmappedSearcher:
     """Duck-typed searcher whose RAG hits were dropped for unknown providers."""
 
