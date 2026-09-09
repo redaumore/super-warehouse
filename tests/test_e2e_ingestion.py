@@ -297,6 +297,89 @@ def test_e2e_rag_down_shows_honest_error_and_writes_nothing(supplier, tmp_path):
     assert session.scalar(select(Inventory)) is None
 
 
+def _mixed_lines_rag() -> FakeRag:
+    """FakeRag con una línea existente (CLV-PRS-2) y una nueva RAG-only (PINT-001)."""
+    paint_line = DocumentLine(
+        codigo_orig="PINT-001",
+        codigo=None,
+        descripcion="Pintura Látex Blanco",
+        cantidad=4,
+        costo=3200.0,
+        pagina=1,
+    )
+    paint_product = RagProduct(
+        sku="PINT-001",
+        name="Pintura Látex Blanco",
+        codigo_proveedor="MSA",
+        price=3200.0,
+        currency="ARS",
+        node_id="node_pint_001",
+    )
+    return FakeRag(
+        parse_lines=(_clavos_line(), paint_line),
+        exact={"CLV-PRS-2": (_clavos_product(),)},
+        hybrid=(paint_product,),
+    )
+
+
+def test_e2e_embedding_failure_rolls_back_full_ingestion(supplier, tmp_path):
+    """El embedder falla al adoptar → rollback total: ni bump, ni Catálogo, ni ajuste."""
+    session = supplier["session"]
+
+    class FailingEmbedder:
+        def embed(self, texts):
+            raise RuntimeError("openai down")
+
+    _grid, state, _message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    message = _ingest_confirm(state, 1, FailingEmbedder())
+    assert "no se guardó nada" in message
+
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
+    assert existing.stock_disponible == 50  # the staged bump was rolled back too
+    assert session.scalar(select(Inventory)) is None
+    assert session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    ) is None
+    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")) is None
+
+
+def test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion(supplier, tmp_path):
+    """Embedding con dimensión inválida → rollback total, nada queda persistido."""
+    session = supplier["session"]
+
+    class WrongDimEmbedder:
+        def embed(self, texts):
+            return [[0.0] * 10 for _ in texts]
+
+    _grid, state, _message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    message = _ingest_confirm(state, 1, WrongDimEmbedder())
+    assert "no se guardó nada" in message
+
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
+    assert existing.stock_disponible == 50
+    assert session.scalar(select(Inventory)) is None
+    assert session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    ) is None
+    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")) is None
+
+
+def test_e2e_document_without_usable_lines_writes_nothing(supplier, tmp_path):
+    """Documento sin líneas utilizables → mensaje honesto y cero escrituras."""
+    session = supplier["session"]
+    grid, state, message = _ingest_parse(FakeRag(), _image(tmp_path), 1)
+    assert grid == []
+    assert state == ()
+    assert "No se extrajeron líneas legibles" in message
+
+    existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
+    assert existing.stock_disponible == 50
+    assert session.scalar(select(Inventory)) is None
+    assert session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    ) is None
+
+
 def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     """Una foto de código de barras decodifica y responde el stock disponible."""
     session = supplier["session"]

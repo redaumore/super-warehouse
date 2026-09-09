@@ -82,9 +82,9 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | R2 | Línea no resoluble | Fail-closed: nada se escribe, confirmación bloqueada | ✅ `test_e2e_unmatched_line_blocks_confirm_and_creates_nothing` |
 | R3 | Línea ambigua (>1 hits) | Queda pendiente de asignación manual; luego adopta | ✅ `test_e2e_manual_assignment_resolves_pending_and_adopts`, `test_e2e_manual_search_and_assign_fixes_pending_line` |
 | R4 | RAG caído durante la ingesta | Error honesto al usuario, nada escrito | ✅ `test_e2e_rag_down_shows_honest_error_and_writes_nothing` |
-| R5 | Embedding falla / dimensión inválida en adopción | Rollback total (`EmbeddingUnavailableError`) | 🔲 |
+| R5 | Embedding falla / dimensión inválida en adopción | Rollback total (`EmbeddingUnavailableError`); el bump ya preparado de otra línea también se descarta | ✅ `test_e2e_embedding_failure_rolls_back_full_ingestion`, `test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion` |
 | R6 | Proveedor inactivo al ingestar | Guard bloquea (`ensure_active_supplier`) | 🔲 |
-| R7 | Documento ilegible (sin líneas utilizables) | `IllegibleDocumentError`, nada escrito | 🔲 |
+| R7 | Documento ilegible (sin líneas utilizables) | En el flujo RAG no se levanta `IllegibleDocumentError`: `_ingest_parse` responde con mensaje honesto y cero escrituras (la excepción vive en el límite OCR, cubierta en `test_ocr.py`) | ✅ `test_e2e_document_without_usable_lines_writes_nothing` |
 | R8 | Remito llega **sin PO** o con PO en OPEN (no SENT) | ⚠️ La ingesta bumpa stock **independientemente** de la máquina de estados de PO — hay que decidir si es semántica válida o deuda, y testearla | 🔲 (decisión pendiente) |
 
 ## Bloque 6 — Ciclo de vida, cancelación e invariantes
@@ -103,7 +103,7 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 
 | ID | Gap | Prioridad sugerida |
 |---|---|---|
-| R5, R6, R7 | Fallos de ingesta (embedding, proveedor inactivo, ilegible) | Media |
+| R6 | Fallos de ingesta (proveedor inactivo) | Media |
 | R8, L7 | Decisiones semánticas pendientes antes de testear | Media — decidir primero, testear después |
 | L5 | Race de reservas concurrentes | Baja |
 | L6 | Invariante property-based de cantidades | Baja (requiere `hypothesis`) |
@@ -117,4 +117,4 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 
 ## Próximo paso
 
-Los faltantes de prioridad alta (Q2, Q3, C5) ya están implementados. Sigue la media: los fallos de ingesta (R5, R6, R7) y abrir la decisión de R8/L7 en un ADR.
+Los faltantes de prioridad alta (Q2, Q3, C5) ya están implementados. Sigue la media: el fallo de ingesta restante (R6) y abrir la decisión de R8/L7 en un ADR.
