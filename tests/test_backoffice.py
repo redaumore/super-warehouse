@@ -1121,11 +1121,39 @@ def test_app_customer_orders_tab_has_state_progress_diagram():
     """The Customer Orders tab renders the order state progress diagram."""
     demo = build_app()
     tab = next(t for t in _tabs_block(demo).children if t.label == "Pedidos de clientes")
-    html_components = [c for c in tab.children if type(c).__name__ == "HTML"]
+    html_components = [c for c in _components_recursive(tab) if type(c).__name__ == "HTML"]
     assert len(html_components) == 1
     assert 'data-state="DRAFT"' in (html_components[0].value or "")
-    markdown_values = [c.value for c in tab.children if type(c).__name__ == "Markdown"]
+    markdown_values = [
+        c.value for c in _components_recursive(tab) if type(c).__name__ == "Markdown"
+    ]
     assert any("Progreso del estado del pedido" in (value or "") for value in markdown_values)
+
+
+def test_app_customer_orders_tab_has_nested_consult_and_entry_subtabs():
+    """The Customer Orders tab nests two sub-tabs: consult and manual entry."""
+    demo = build_app()
+    tab = next(t for t in _tabs_block(demo).children if t.label == "Pedidos de clientes")
+    nested_tabs = [
+        c
+        for c in _components_recursive(tab)
+        if type(c).__name__ == "Tab" and getattr(c, "id", None) is not None
+    ]
+    assert [t.label for t in nested_tabs] == [
+        "Consulta de pedidos",
+        "Alta / Modificación de pedido",
+    ]
+    assert {t.id for t in nested_tabs} == {"orders-consult", "order-entry"}
+    labels = _all_labels(tab)
+    assert "Modificar la orden existente" in labels
+    assert "Ignorar" in labels
+    # The orders grid carries the DRAFT-only edit affordance column.
+    orders_grid = next(
+        c
+        for c in _components_recursive(tab)
+        if type(c).__name__ == "Dataframe" and c.label == "Pedidos de clientes"
+    )
+    assert orders_grid.headers[-1] == "Editar"
 
 
 def _committed_order(session, *, estado: OrderEstado) -> Order:
@@ -1280,6 +1308,15 @@ def _all_labels(block) -> set[object]:
     return labels
 
 
+def _components_recursive(block) -> list:
+    """Collect every descendant component of a Blocks subtree (depth-first)."""
+    found: list = []
+    for child in getattr(block, "children", ()):
+        found.append(child)
+        found.extend(_components_recursive(child))
+    return found
+
+
 def test_app_customer_orders_tab_has_fulfillment_buttons():
     """El tab Customer Orders expone las cuatro acciones de cumplimiento."""
     demo = build_app()
@@ -1351,7 +1388,16 @@ def test_order_row_selected_returns_state_label_diagram_and_lines(shop_ctx):
 
     evt = SimpleNamespace(
         selected=True,
-        row_value=[order.order_id, "Ferretería Don Juan", "CONFIRMED", "270.00", "256.50", False],
+        index=[0, 0],
+        row_value=[
+            order.order_id,
+            "Ferretería Don Juan",
+            "CONFIRMED",
+            "270.00",
+            "256.50",
+            False,
+            "",  # "Editar" column: empty for non-DRAFT rows
+        ],
     )
     selected_id, label, html, lines = _order_row_selected(evt)  # type: ignore[arg-type]
 

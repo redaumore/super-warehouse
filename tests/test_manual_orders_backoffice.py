@@ -16,20 +16,26 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from gradio import skip
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import OperationalError
 
 from src.backoffice.app import (
     _client_dropdown_choices,
     _create_manual_order,
+    _customer_orders_grid,
     _manual_line_selected,
     _manual_order_add_line,
     _manual_order_remove_line,
+    _order_edit_request,
+    _order_edit_selected,
 )
 from src.backoffice.customer_orders import (
     confirm_order_action,
     create_manual_order_action,
+    is_editable_order,
     legal_actions,
+    open_draft_for_customer,
 )
 from src.config import get_settings
 from src.db.models import (
@@ -363,12 +369,16 @@ def test_manual_order_remove_line_uses_stored_selection():
 def test_app_create_manual_order_creates_committed_draft(shop_ctx):
     """The create handler commits the draft and clears the lines form."""
     shop_ctx.commit()
-    message, orders_grid, lines = _create_manual_order(1, [["LOCAL-1", 2]])
+    message, orders_grid, lines, banner_visible, banner_text = _create_manual_order(
+        1, [["LOCAL-1", 2]]
+    )
 
     assert "creado (borrador)" in message
     assert "270.00" in message
     assert any("Ferretería Don Juan" in str(row[1]) for row in orders_grid)
     assert lines == []  # form cleared
+    assert banner_visible is False  # no draft warning: the draft was just created
+    assert banner_text == ""
     with SessionLocal() as session:
         order = session.scalar(select(Order))
         assert order is not None
@@ -376,23 +386,35 @@ def test_app_create_manual_order_creates_committed_draft(shop_ctx):
         assert order.total == Decimal("270.00")
 
 
-def test_app_create_manual_order_surfaces_guard_and_keeps_form(shop_ctx):
-    """A second draft for the same client surfaces the guard and keeps lines."""
+def test_app_create_manual_order_intercepts_existing_draft(shop_ctx):
+    """A second draft attempt is intercepted: warning banner, no creation."""
     shop_ctx.commit()
-    _create_manual_order(1, [["LOCAL-1", 2, "LOCAL"]])
-    message, _grid, lines = _create_manual_order(1, [["LOCAL-1", 1, "LOCAL"]])
+    first_message, _grid, _lines, _visible, _text = _create_manual_order(
+        1, [["LOCAL-1", 2, "LOCAL"]]
+    )
+    assert "creado (borrador)" in first_message
 
-    assert message.startswith("Error:")
-    assert "already has an open draft" in message
+    message, _grid, lines, banner_visible, banner_text = _create_manual_order(
+        1, [["LOCAL-1", 1, "LOCAL"]]
+    )
+
+    assert "no se creó uno nuevo" in message
     assert lines == [["LOCAL-1", 1, "LOCAL"]]  # form intact for the fix
+    assert banner_visible is True
+    assert "borrador #" in banner_text
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count(Order.order_id))) == 1  # still one draft
 
 
 def test_app_create_manual_order_requires_client(shop_ctx):
     """Without a client selected nothing is created."""
     shop_ctx.commit()
-    message, _grid, lines = _create_manual_order(None, [["LOCAL-1", 2, "LOCAL"]])
+    message, _grid, lines, banner_visible, _text = _create_manual_order(
+        None, [["LOCAL-1", 2, "LOCAL"]]
+    )
     assert message == "Seleccioná un cliente."
     assert lines == [["LOCAL-1", 2, "LOCAL"]]
+    assert banner_visible is False
     assert shop_ctx.scalar(select(func.count(Order.order_id))) == 0
 
 
@@ -403,3 +425,110 @@ def test_client_dropdown_choices_lists_clients(shop_ctx):
         ("Corralón Gremio", 2),
         ("Ferretería Don Juan", 1),
     ]
+
+
+# ------------------------------------------------- grid edit affordance (DRAFT only)
+
+
+def test_customer_orders_grid_marks_only_drafts_editable(shop_ctx):
+    """The "Editar" column carries ✏️ for DRAFT rows and stays empty otherwise."""
+    session = shop_ctx
+    draft = create_manual_order(session, 1, [("LOCAL-1", 2)])
+    session.add(Order(customer_id=2, estado=OrderEstado.CONFIRMED))
+    session.commit()
+
+    grid = _customer_orders_grid()
+    draft_row = next(row for row in grid if row[1] == "Ferretería Don Juan")
+    confirmed_row = next(row for row in grid if row[1] == "Corralón Gremio")
+
+    assert draft_row[0] == draft.order_id
+    assert draft_row[2] == "DRAFT"
+    assert draft_row[6] == "✏️"
+    assert confirmed_row[2] == "CONFIRMED"
+    assert confirmed_row[6] == ""
+
+
+@pytest.mark.parametrize(
+    ("estado", "editable"),
+    [("DRAFT", True), ("draft", True), ("CONFIRMED", False), ("", False)],
+)
+def test_is_editable_order_matches_draft_only(estado, editable):
+    """The editability rule is exactly DRAFT (case-insensitive)."""
+    assert is_editable_order(estado) is editable
+
+
+# ------------------------------------------------ edit-select decision (pure)
+
+
+def test_order_edit_request_edit_column_and_draft_loads():
+    """A click on "Editar" of a DRAFT row resolves to the order id to load."""
+    row = [7, "Ferretería Don Juan", "DRAFT", "270.00", "270.00", False, "✏️"]
+    assert _order_edit_request(6, row) == 7
+
+
+@pytest.mark.parametrize(
+    ("col_index", "row_value"),
+    [
+        (0, [7, "cust", "DRAFT", "270.00", "270.00", False, "✏️"]),  # data column: no-op
+        (2, [7, "cust", "DRAFT", "270.00", "270.00", False, "✏️"]),  # estado column
+        (6, [8, "cust", "CONFIRMED", "270.00", "270.00", False, ""]),  # non-DRAFT row
+        (6, [8, "cust", "PICKING", "270.00", "270.00", False, ""]),  # non-DRAFT row
+        (6, None),  # deselection / no row payload
+        (6, []),  # empty row payload
+        (None, [7, "cust", "DRAFT", "270.00", "270.00", False, "✏️"]),  # malformed index
+    ],
+)
+def test_order_edit_request_other_cases_are_no_op(col_index, row_value):
+    """Every click outside "Editar"-of-a-DRAFT resolves to None (no-op)."""
+    assert _order_edit_request(col_index, row_value) is None
+
+
+def test_order_edit_selected_no_op_for_other_clicks():
+    """Non-edit selections return gr.skip() for every output (nothing changes)."""
+    evt = SimpleNamespace(
+        selected=True,
+        index=[0, 0],
+        row_value=[7, "cust", "DRAFT", "270.00", "270.00", False, "✏️"],
+    )
+    assert all(value == skip() for value in _order_edit_selected(evt))  # type: ignore[arg-type]
+
+    deselect = SimpleNamespace(selected=False, index=[0, 6], row_value=[])
+    assert all(value == skip() for value in _order_edit_selected(deselect))  # type: ignore[arg-type]
+
+
+def test_order_edit_selected_loads_draft_and_switches_subtab(shop_ctx):
+    """Clicking "Editar" of a real DRAFT loads the form and targets the sub-tab."""
+    shop_ctx.commit()
+    order = create_manual_order(shop_ctx, 1, [("LOCAL-1", 2)])
+    shop_ctx.commit()
+    evt = SimpleNamespace(
+        selected=True,
+        index=[0, 6],
+        row_value=[order.order_id, "Ferretería Don Juan", "DRAFT", "270.00", "270.00", False, "✏️"],
+    )
+
+    tabs, lines, _grid, loaded_id, customer_id, status = _order_edit_selected(evt)  # type: ignore[arg-type]
+
+    assert tabs.selected == "order-entry"
+    assert loaded_id == order.order_id
+    assert customer_id == 1
+    assert lines == [["LOCAL-1", 2, "LOCAL"]]
+    assert "cargado" in status
+
+
+# ------------------------------------------------ open_draft_for_customer
+
+
+def test_open_draft_for_customer_returns_the_only_draft(shop_ctx):
+    """The lookup returns the client's single DRAFT and None for others/absent."""
+    session = shop_ctx
+    assert open_draft_for_customer(session, 1) is None
+    order = create_manual_order(session, 1, [("LOCAL-1", 2)])
+    session.commit()
+
+    with SessionLocal() as fresh:
+        draft = open_draft_for_customer(fresh, 1)
+        assert draft is not None
+        assert draft.order_id == order.order_id
+        assert draft.estado is OrderEstado.DRAFT
+        assert open_draft_for_customer(fresh, 2) is None  # the other client: no draft

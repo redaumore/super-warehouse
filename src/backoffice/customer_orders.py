@@ -19,7 +19,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import AppSetting, ExchangeRate, Order, Supplier
+from src.db.models import AppSetting, ExchangeRate, Order, OrderEstado, Supplier
 from src.orchestrator.approval import SheetsPort, confirm_and_register
 from src.order_lifecycle.state import (
     cancel_order,
@@ -100,6 +100,28 @@ def list_customer_orders(session: Session) -> list[dict[str, object]]:
         _order_row(order)
         for order in session.scalars(select(Order).order_by(Order.order_id.desc()))
     ]
+
+
+def is_editable_order(estado: str) -> bool:
+    """Only DRAFT orders can be modified from the Customer Orders tab.
+
+    ``update_manual_order`` is DRAFT-only (confirmed orders already converted
+    their reservations), so the grid edit affordance must reflect exactly that:
+    any other state renders no edit affordance at all.
+    """
+    return str(estado).strip().upper() == "DRAFT"
+
+
+def open_draft_for_customer(session: Session, customer_id: int) -> Order | None:
+    """Return the customer's open DRAFT order, or ``None`` when absent.
+
+    The one-DRAFT-per-customer rule (app-side guard + partial unique index)
+    guarantees at most one, so a scalar lookup is enough — the same query
+    pattern ``create_manual_order`` uses for its own guard.
+    """
+    return session.scalar(
+        select(Order).where(Order.customer_id == customer_id, Order.estado == OrderEstado.DRAFT)
+    )
 
 
 def _order_or_raise(session: Session, order_id: int) -> Order:

@@ -49,9 +49,11 @@ from src.backoffice.customer_orders import (
     create_manual_order_action,
     deliver_order_action,
     get_default_margin,
+    is_editable_order,
     legal_actions,
     list_customer_orders,
     list_exchange_rates,
+    open_draft_for_customer,
     order_detail,
     order_state_diagram,
     recompute_pending_conversion,
@@ -1127,8 +1129,28 @@ def _delete_price_list(
     )
 
 
+# Position of the "Editar" affordance column in the customer-orders grid
+# (same positional contract as the row selection: id at 0, estado at 2).
+_ORDER_GRID_EDIT_INDEX = 6
+_ORDER_EDIT_MARKER = "✏️"
+
+
+def _order_edit_marker(estado: object) -> str:
+    """Render the "Editar" grid cell: a pencil for DRAFT rows, empty otherwise.
+
+    The marker is decided by ``is_editable_order`` (DRAFT-only, mirroring the
+    DRAFT-only ``update_manual_order`` use case), so the grid never offers an
+    edit affordance for states the backend would refuse.
+    """
+    return _ORDER_EDIT_MARKER if is_editable_order(str(estado)) else ""
+
+
 def _customer_orders_grid() -> list[list[object]]:
-    """Render persisted customer orders for the seventh tab."""
+    """Render persisted customer orders for the seventh tab.
+
+    The final "Editar" column marks the rows the manual form can modify
+    (DRAFT only); clicking that cell loads the draft into the entry form.
+    """
     with SessionLocal() as session:
         rows = list_customer_orders(session)
     return [
@@ -1139,6 +1161,7 @@ def _customer_orders_grid() -> list[list[object]]:
             row["subtotal"] or "—",
             row["total"] or "—",
             row["conversion_pending"],
+            _order_edit_marker(row["estado"]),
         ]
         for row in rows
     ]
@@ -1199,6 +1222,53 @@ def _order_row_selected(evt: gr.SelectData) -> tuple[object, str, str, list[list
         _order_state_diagram(order_id),
         _customer_order_detail_grid(order_id),
     )
+
+
+def _order_edit_request(col_index: object, row_value: object) -> int | None:
+    """Pure decision for the orders-grid edit flow: which click means "edit".
+
+    Returns the order id to load into the manual form when the click landed on
+    the "Editar" column of a DRAFT row; ``None`` for every other case (data
+    columns, non-DRAFT rows, malformed events), which the caller renders as a
+    no-op. Positions follow the grid contract: order id at column 0, estado at
+    column 2 — labels never matter, indexes do.
+    """
+    if not isinstance(row_value, (list, tuple)) or not row_value:
+        return None
+    try:
+        if int(str(col_index)) != _ORDER_GRID_EDIT_INDEX:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if len(row_value) <= _ORDER_GRID_EDIT_INDEX:
+        return None
+    if not is_editable_order(str(row_value[2])):
+        return None
+    try:
+        return int(str(row_value[0]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _order_edit_selected(evt: gr.SelectData) -> tuple[object, ...]:
+    """Second select listener on the orders grid: the "Editar" cell opens the form.
+
+    Both listeners fire on every selection; this one loads the DRAFT into the
+    manual form — the same load path as "Cargar borrador" — and switches to the
+    "order-entry" sub-tab (``gr.Tabs`` as target with ``selected=``) only when
+    the click landed on the edit column of a DRAFT row. Every other click is a
+    full no-op via ``gr.skip()``.
+    """
+    no_op = tuple(gr.skip() for _ in range(6))
+    if not getattr(evt, "selected", False):
+        return no_op
+    index = getattr(evt, "index", None)
+    col_index = index[1] if isinstance(index, (list, tuple)) and len(index) > 1 else None
+    order_id = _order_edit_request(col_index, getattr(evt, "row_value", None))
+    if order_id is None:
+        return no_op
+    lines, grid, loaded_id, customer_id, status = _load_manual_draft(order_id)
+    return gr.Tabs(selected="order-entry"), lines, grid, loaded_id, customer_id, status
 
 
 def _legal_actions_label(order_id: object) -> str:
@@ -1406,26 +1476,109 @@ def _manual_order_remove_line(
     return current, _manual_lines_view(current), f"Línea quitada: {removed[0]}."
 
 
+def _draft_banner_text(order_id: int) -> str:
+    """Warning shown when the selected client already has a DRAFT in progress."""
+    return (
+        f"⚠️ El cliente ya tiene el pedido borrador #{order_id} en curso "
+        "(se permite un solo borrador por cliente). Podés modificarlo o elegir otro cliente."
+    )
+
+
+def _client_open_draft(customer_id: object) -> int | None:
+    """Id of the client's open DRAFT order, if any (thin session wrapper)."""
+    if customer_id is None:
+        return None
+    with SessionLocal() as session:
+        draft = open_draft_for_customer(session, int(str(customer_id)))
+    return draft.order_id if draft is not None else None
+
+
+def _manual_client_selected(customer_id: object) -> tuple[bool, str]:
+    """Show the draft warning when the picked client already has a DRAFT.
+
+    Wired to the client dropdown's ``.input`` (user-driven picks only), so a
+    programmatic value set — e.g. ``Cargar borrador`` filling the client —
+    does not re-show the banner over an already-loaded form.
+    """
+    draft_id = _client_open_draft(customer_id)
+    if draft_id is None:
+        return False, ""
+    return True, _draft_banner_text(draft_id)
+
+
+def _load_existing_draft(
+    customer_id: object,
+) -> tuple[object, str, object, object, object, object, str]:
+    """Load the client's existing DRAFT into the form (banner "Modificar" path).
+
+    Same load path as "Cargar borrador"; the banner is hidden on the way out.
+    If the draft vanished meanwhile (confirmed/canceled in another session)
+    nothing else changes — hiding the stale warning is the honest outcome.
+    """
+    order_id = _client_open_draft(customer_id)
+    if order_id is None:
+        return (
+            gr.update(visible=False),
+            "",
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+            gr.skip(),
+        )
+    lines, grid, loaded_id, loaded_customer, status = _load_manual_draft(order_id)
+    return gr.update(visible=False), "", lines, grid, loaded_id, loaded_customer, status
+
+
+def _dismiss_draft_banner() -> tuple[object, str]:
+    """Hide the draft warning banner (the owner chose to ignore it)."""
+    return gr.update(visible=False), ""
+
+
 def _create_manual_order(
     customer_id: object, rows: object
-) -> tuple[str, list[list[object]], list[list[object]]]:
+) -> tuple[str, list[list[object]], list[list[object]], bool, str]:
     """Create the manual DRAFT order, refresh the orders grid, clear the form.
 
-    Lines carry their source (LOCAL/RAG). Errors (unknown client/SKU, an open
-    draft already existing, a missing exchange rate, ...) surface in the
-    status box and keep the form intact so the owner can fix the input.
+    Lines carry their source (LOCAL/RAG). Before hitting the backend, the
+    one-DRAFT-per-customer guard is checked here: if the client already has a
+    draft, the warning banner is shown and creation is not attempted (the
+    backend error is the race backstop, not the UX). Other errors (unknown
+    client/SKU, a missing exchange rate, ...) surface in the status box and
+    keep the form intact so the owner can fix the input.
     """
     inputs = _manual_inputs_view(rows)
     if customer_id is None:
-        return "Seleccioná un cliente.", _customer_orders_grid(), _manual_lines_view(rows)
+        return (
+            "Seleccioná un cliente.",
+            _customer_orders_grid(),
+            _manual_lines_view(rows),
+            False,
+            "",
+        )
+    draft_id = _client_open_draft(customer_id)
+    if draft_id is not None:
+        return (
+            f"El cliente ya tiene el pedido borrador #{draft_id}: no se creó uno nuevo.",
+            _customer_orders_grid(),
+            _manual_lines_view(rows),
+            True,
+            _draft_banner_text(draft_id),
+        )
     with SessionLocal() as session:
         try:
             order = create_manual_order_action(session, int(str(customer_id)), inputs)
             message = f"Pedido #{order.order_id} creado (borrador) — total {order.total} ARS."
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             session.rollback()
-            return f"Error: {exc}", _customer_orders_grid(), _manual_lines_view(rows)
-    return message, _customer_orders_grid(), []
+            return (
+                f"Error: {exc}",
+                _customer_orders_grid(),
+                _manual_lines_view(rows),
+                False,
+                "",
+            )
+    return message, _customer_orders_grid(), [], False, ""
 
 
 def _load_manual_draft(
@@ -1617,7 +1770,11 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 inputs=[edit_sku, edit_stock, edit_price, edit_margin],
                 outputs=catalog_status,
             )
-            catalog_refresh = gr.Button("Refrescar")
+            # Refresh pattern: icon-only 🔄, sm + scale=0 so it never stretches.
+            with gr.Row():
+                catalog_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             catalog_refresh.click(_catalog_grid, outputs=catalog_grid)
 
             gr.Markdown("### Consulta catálogo RAG (proveedores)")
@@ -1697,7 +1854,10 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     client_discount,
                 ],
             )
-            client_refresh = gr.Button("Refrescar")
+            with gr.Row():
+                client_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             client_refresh.click(_clients_grid, outputs=clients_grid)
             client_refresh.click(_price_list_dropdown_choices, None, client_list)
 
@@ -1745,7 +1905,9 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             with gr.Row():
                 supplier_save = gr.Button("Guardar proveedor", variant="primary")
                 supplier_toggle = gr.Button("Cambiar estado", variant="stop")
-                supplier_refresh = gr.Button("Refrescar")
+                supplier_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             supplier_search.change(
                 _suppliers_grid,
                 inputs=[supplier_search, supplier_status_filter],
@@ -1822,212 +1984,295 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
 
         with gr.Tab("Pedidos de clientes"):
             gr.Markdown("### Pedidos de clientes y mantenimiento de conversión")
-            customer_orders_grid = gr.Dataframe(
-                headers=[
-                    "Pedido",
-                    "Cliente",
-                    "Estado",
-                    "Subtotal (ARS)",
-                    "Total (ARS)",
-                    "Conversión pendiente",
-                ],
-                datatype=["number", "str", "str", "str", "str", "bool"],
-                value=_customer_orders_grid,
-                label="Pedidos de clientes",
-            )
-            customer_orders_refresh = gr.Button("Refrescar pedidos")
-            customer_orders_refresh.click(_customer_orders_grid, outputs=customer_orders_grid)
-            selected_order_id = gr.State(None)
-            gr.Markdown("### Progreso del estado del pedido")
-            order_state_html = gr.HTML(value=order_state_diagram(""))
-            customer_order_detail_grid = gr.Dataframe(
-                headers=[
-                    "SKU",
-                    "Nombre producto",
-                    "Cantidad",
-                    "Precio original",
-                    "Margen %",
-                    "Precio base/unit.",
-                    "Total / producto",
-                ],
-                datatype=["str", "str", "number", "str", "str", "str", "str"],
-                label="Líneas del pedido",
-            )
+            # Nested sub-tabs: consultation/fulfillment on one side, the manual
+            # entry + draft modification form on the other. ``customer_orders_tabs``
+            # is an event target: the grid's edit-select listener switches to
+            # "order-entry" by returning ``gr.Tabs(selected="order-entry")``.
+            with gr.Tabs() as customer_orders_tabs:
+                with gr.Tab("Consulta de pedidos", id="orders-consult"):
+                    customer_orders_grid = gr.Dataframe(
+                        headers=[
+                            "Pedido",
+                            "Cliente",
+                            "Estado",
+                            "Subtotal (ARS)",
+                            "Total (ARS)",
+                            "Conversión pendiente",
+                            "Editar",
+                        ],
+                        datatype=["number", "str", "str", "str", "str", "bool", "str"],
+                        value=_customer_orders_grid,
+                        label="Pedidos de clientes",
+                    )
+                    with gr.Row():
+                        customer_orders_refresh = gr.Button(
+                            "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                        )
+                    customer_orders_refresh.click(
+                        _customer_orders_grid, outputs=customer_orders_grid
+                    )
+                    selected_order_id = gr.State(None)
+                    gr.Markdown("### Progreso del estado del pedido")
+                    order_state_html = gr.HTML(value=order_state_diagram(""))
+                    customer_order_detail_grid = gr.Dataframe(
+                        headers=[
+                            "SKU",
+                            "Nombre producto",
+                            "Cantidad",
+                            "Precio original",
+                            "Margen %",
+                            "Precio base/unit.",
+                            "Total / producto",
+                        ],
+                        datatype=["str", "str", "number", "str", "str", "str", "str"],
+                        label="Líneas del pedido",
+                    )
 
-            gr.Markdown("### Acciones de preparación y entrega")
-            order_action_status = gr.Textbox(label="Estado de la acción", interactive=False)
-            order_action_label = gr.Textbox(
-                label="Acciones disponibles para el pedido seleccionado", interactive=False
-            )
-            with gr.Row():
-                action_start_picking = gr.Button("Iniciar preparación (Confirmed → Picking)")
-                action_complete_picking = gr.Button("Completar preparación (Picking → Ready)")
-                action_deliver = gr.Button("Entregar (Ready → Closed)")
-                action_confirm = gr.Button("Confirmar pedido (Draft → Confirmed)", variant="primary")
-                action_cancel = gr.Button("Cancelar pedido", variant="stop")
-            customer_orders_grid.select(
-                _order_row_selected,
-                None,
-                [
-                    selected_order_id,
-                    order_action_label,
-                    order_state_html,
-                    customer_order_detail_grid,
-                ],
-            )
-            action_start_picking.click(
-                _order_action_with_diagram(start_picking_action),
-                inputs=selected_order_id,
-                outputs=[order_action_status, order_state_html],
-            )
-            action_complete_picking.click(
-                _order_action_with_diagram(complete_picking_action),
-                inputs=selected_order_id,
-                outputs=[order_action_status, order_state_html],
-            )
-            action_deliver.click(
-                _order_action_with_diagram(deliver_order_action),
-                inputs=selected_order_id,
-                outputs=[order_action_status, order_state_html],
-            )
-            action_confirm.click(
-                _order_action_with_diagram(partial(confirm_order_action, sheets=_SHEETS)),
-                inputs=selected_order_id,
-                outputs=[order_action_status, order_state_html],
-            )
-            action_cancel.click(
-                _order_action_with_diagram(cancel_order_action),
-                inputs=selected_order_id,
-                outputs=[order_action_status, order_state_html],
-            )
+                    gr.Markdown("### Acciones de preparación y entrega")
+                    order_action_status = gr.Textbox(label="Estado de la acción", interactive=False)
+                    order_action_label = gr.Textbox(
+                        label="Acciones disponibles para el pedido seleccionado",
+                        interactive=False,
+                    )
+                    with gr.Row():
+                        action_start_picking = gr.Button(
+                            "Iniciar preparación (Confirmed → Picking)"
+                        )
+                        action_complete_picking = gr.Button(
+                            "Completar preparación (Picking → Ready)"
+                        )
+                        action_deliver = gr.Button("Entregar (Ready → Closed)")
+                        action_confirm = gr.Button(
+                            "Confirmar pedido (Draft → Confirmed)", variant="primary"
+                        )
+                        action_cancel = gr.Button("Cancelar pedido", variant="stop")
+                    customer_orders_grid.select(
+                        _order_row_selected,
+                        None,
+                        [
+                            selected_order_id,
+                            order_action_label,
+                            order_state_html,
+                            customer_order_detail_grid,
+                        ],
+                    )
+                    action_start_picking.click(
+                        _order_action_with_diagram(start_picking_action),
+                        inputs=selected_order_id,
+                        outputs=[order_action_status, order_state_html],
+                    )
+                    action_complete_picking.click(
+                        _order_action_with_diagram(complete_picking_action),
+                        inputs=selected_order_id,
+                        outputs=[order_action_status, order_state_html],
+                    )
+                    action_deliver.click(
+                        _order_action_with_diagram(deliver_order_action),
+                        inputs=selected_order_id,
+                        outputs=[order_action_status, order_state_html],
+                    )
+                    action_confirm.click(
+                        _order_action_with_diagram(partial(confirm_order_action, sheets=_SHEETS)),
+                        inputs=selected_order_id,
+                        outputs=[order_action_status, order_state_html],
+                    )
+                    action_cancel.click(
+                        _order_action_with_diagram(cancel_order_action),
+                        inputs=selected_order_id,
+                        outputs=[order_action_status, order_state_html],
+                    )
 
-            gr.Markdown("### Alta manual de pedido (borrador)")
-            with gr.Row():
-                manual_client = gr.Dropdown(choices=_client_dropdown_choices(), label="Cliente")
-                manual_client_refresh = gr.Button("Refrescar clientes")
-            manual_lines_state = gr.State([])
-            manual_order_id_state = gr.State(None)
-            with gr.Row():
-                manual_line_sku = gr.Textbox(label="SKU", placeholder="CLV-001")
-                manual_line_qty = gr.Number(label="Cantidad", precision=0, value=1)
-                manual_line_source = gr.Dropdown(
-                    choices=["LOCAL", "RAG"], value="LOCAL", label="Origen"
-                )
-                manual_add_line = gr.Button("Agregar línea")
-            manual_lines_grid = gr.Dataframe(
-                headers=["SKU", "Cantidad", "Origen"],
-                datatype=["str", "number", "str"],
-                value=[],
-                label="Líneas del pedido nuevo",
-            )
-            manual_remove_line = gr.Button("Quitar línea seleccionada", variant="stop")
-            manual_create = gr.Button("Crear pedido (borrador)", variant="primary")
-            manual_status = gr.Textbox(label="Estado del alta manual", interactive=False)
-            manual_selected_line = gr.State(None)
-            manual_client_refresh.click(_client_dropdown_choices, None, manual_client)
-            manual_add_line.click(
-                _manual_order_add_line,
-                inputs=[manual_lines_state, manual_line_sku, manual_line_qty, manual_line_source],
-                outputs=[
-                    manual_lines_state,
-                    manual_lines_grid,
-                    manual_line_sku,
-                    manual_line_qty,
-                    manual_status,
-                ],
-            )
-            manual_lines_grid.select(
-                _manual_line_selected,
-                None,
-                manual_selected_line,
-            )
-            manual_remove_line.click(
-                _manual_order_remove_line,
-                inputs=[manual_selected_line, manual_lines_state],
-                outputs=[manual_lines_state, manual_lines_grid, manual_status],
-            )
-            manual_create.click(
-                _create_manual_order,
-                inputs=[manual_client, manual_lines_state],
-                outputs=[manual_status, customer_orders_grid, manual_lines_state],
-            )
+                with gr.Tab("Alta / Modificación de pedido", id="order-entry"):
+                    gr.Markdown("### Alta manual de pedido (borrador)")
+                    with gr.Row():
+                        manual_client = gr.Dropdown(
+                            choices=_client_dropdown_choices(), label="Cliente", scale=3
+                        )
+                        manual_client_refresh = gr.Button(
+                            "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                        )
+                    manual_lines_state = gr.State([])
+                    manual_order_id_state = gr.State(None)
+                    with gr.Row():
+                        manual_line_sku = gr.Textbox(label="SKU", placeholder="CLV-001")
+                        manual_line_qty = gr.Number(label="Cantidad", precision=0, value=1)
+                        manual_line_source = gr.Dropdown(
+                            choices=["LOCAL", "RAG"], value="LOCAL", label="Origen"
+                        )
+                        manual_add_line = gr.Button("Agregar línea")
+                    manual_lines_grid = gr.Dataframe(
+                        headers=["SKU", "Cantidad", "Origen"],
+                        datatype=["str", "number", "str"],
+                        value=[],
+                        label="Líneas del pedido nuevo",
+                    )
+                    manual_remove_line = gr.Button("Quitar línea seleccionada", variant="stop")
+                    manual_create = gr.Button("Crear pedido (borrador)", variant="primary")
+                    manual_status = gr.Textbox(label="Estado del alta manual", interactive=False)
+                    manual_selected_line = gr.State(None)
+                    # One-DRAFT-per-customer warning: shown as soon as the owner
+                    # picks a client that already has a draft, with a direct
+                    # path to load it into the form instead of failing later.
+                    with gr.Group(visible=False) as manual_draft_banner:
+                        manual_draft_banner_text = gr.Markdown("")
+                        with gr.Row():
+                            manual_edit_existing = gr.Button(
+                                "Modificar la orden existente", scale=0, min_width=220
+                            )
+                            manual_ignore_draft = gr.Button("Ignorar", scale=0, min_width=110)
+                    manual_client_refresh.click(_client_dropdown_choices, None, manual_client)
+                    manual_client.input(
+                        _manual_client_selected,
+                        inputs=[manual_client],
+                        outputs=[manual_draft_banner, manual_draft_banner_text],
+                    )
+                    manual_edit_existing.click(
+                        _load_existing_draft,
+                        inputs=[manual_client],
+                        outputs=[
+                            manual_draft_banner,
+                            manual_draft_banner_text,
+                            manual_lines_state,
+                            manual_lines_grid,
+                            manual_order_id_state,
+                            manual_client,
+                            manual_status,
+                        ],
+                    )
+                    manual_ignore_draft.click(
+                        _dismiss_draft_banner,
+                        None,
+                        [manual_draft_banner, manual_draft_banner_text],
+                    )
+                    manual_add_line.click(
+                        _manual_order_add_line,
+                        inputs=[manual_lines_state, manual_line_sku, manual_line_qty, manual_line_source],
+                        outputs=[
+                            manual_lines_state,
+                            manual_lines_grid,
+                            manual_line_sku,
+                            manual_line_qty,
+                            manual_status,
+                        ],
+                    )
+                    manual_lines_grid.select(
+                        _manual_line_selected,
+                        None,
+                        manual_selected_line,
+                    )
+                    manual_remove_line.click(
+                        _manual_order_remove_line,
+                        inputs=[manual_selected_line, manual_lines_state],
+                        outputs=[manual_lines_state, manual_lines_grid, manual_status],
+                    )
+                    manual_create.click(
+                        _create_manual_order,
+                        inputs=[manual_client, manual_lines_state],
+                        outputs=[
+                            manual_status,
+                            customer_orders_grid,
+                            manual_lines_state,
+                            manual_draft_banner,
+                            manual_draft_banner_text,
+                        ],
+                    )
 
-            gr.Markdown(
-                "### Búsqueda de productos para el pedido (inventario LOCAL + catálogo RAG)"
-            )
-            with gr.Row():
-                msf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
-                msf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
-                msf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
-                msf_codigo = gr.Textbox(label="Código", placeholder="483-8")
-            msf_texto = gr.Textbox(
-                label="Texto (LOCAL busca por nombre; RAG por descripción)",
-                placeholder="monocomando de cocina",
-            )
-            with gr.Row():
-                manual_search_btn = gr.Button("Buscar productos", variant="primary")
-                msf_limit = gr.Number(label="Máx. resultados por origen", value=100, precision=0)
-            manual_search_grid = gr.Dataframe(
-                headers=[
-                    "Origen",
-                    "SKU",
-                    "Nombre",
-                    "Marca",
-                    "Categoría",
-                    "Proveedor",
-                    "Precio",
-                    "Moneda",
-                    "Stock",
-                ],
-                datatype=["str", "str", "str", "str", "str", "str", "number", "str", "number"],
-                label="Resultados (LOCAL primero, RAG después)",
-            )
-            manual_search_state = gr.State([])
-            manual_selected_result = gr.State(None)
-            with gr.Row():
-                manual_result_qty = gr.Number(label="Cantidad a agregar", precision=0, value=1)
-                manual_add_selected = gr.Button("Agregar seleccionada al pedido")
-            manual_search_btn.click(
-                _manual_product_search,
-                inputs=[msf_proveedor, msf_marca, msf_categoria, msf_codigo, msf_texto, msf_limit],
-                outputs=[manual_search_grid, manual_search_state, manual_status],
-            )
-            manual_search_grid.select(
-                _manual_line_selected,
-                None,
-                manual_selected_result,
-            )
-            manual_add_selected.click(
-                _manual_order_add_selected,
-                inputs=[manual_selected_result, manual_search_state, manual_lines_state, manual_result_qty],
-                outputs=[manual_lines_state, manual_lines_grid, manual_result_qty, manual_status],
-            )
+                    gr.Markdown(
+                        "### Búsqueda de productos para el pedido (inventario LOCAL + catálogo RAG)"
+                    )
+                    with gr.Row():
+                        msf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
+                        msf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
+                        msf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
+                        msf_codigo = gr.Textbox(label="Código", placeholder="483-8")
+                    msf_texto = gr.Textbox(
+                        label="Texto (LOCAL busca por nombre; RAG por descripción)",
+                        placeholder="monocomando de cocina",
+                    )
+                    with gr.Row():
+                        manual_search_btn = gr.Button("Buscar productos", variant="primary")
+                        msf_limit = gr.Number(
+                            label="Máx. resultados por origen", value=100, precision=0
+                        )
+                    manual_search_grid = gr.Dataframe(
+                        headers=[
+                            "Origen",
+                            "SKU",
+                            "Nombre",
+                            "Marca",
+                            "Categoría",
+                            "Proveedor",
+                            "Precio",
+                            "Moneda",
+                            "Stock",
+                        ],
+                        datatype=["str", "str", "str", "str", "str", "str", "number", "str", "number"],
+                        label="Resultados (LOCAL primero, RAG después)",
+                    )
+                    manual_search_state = gr.State([])
+                    manual_selected_result = gr.State(None)
+                    with gr.Row():
+                        manual_result_qty = gr.Number(
+                            label="Cantidad a agregar", precision=0, value=1
+                        )
+                        manual_add_selected = gr.Button("Agregar seleccionada al pedido")
+                    manual_search_btn.click(
+                        _manual_product_search,
+                        inputs=[msf_proveedor, msf_marca, msf_categoria, msf_codigo, msf_texto, msf_limit],
+                        outputs=[manual_search_grid, manual_search_state, manual_status],
+                    )
+                    manual_search_grid.select(
+                        _manual_line_selected,
+                        None,
+                        manual_selected_result,
+                    )
+                    manual_add_selected.click(
+                        _manual_order_add_selected,
+                        inputs=[manual_selected_result, manual_search_state, manual_lines_state, manual_result_qty],
+                        outputs=[manual_lines_state, manual_lines_grid, manual_result_qty, manual_status],
+                    )
 
-            gr.Markdown("### Modificar pedido en borrador")
-            with gr.Row():
-                manual_edit_order_id = gr.Number(
-                    label="Nº de pedido (borrador)", precision=0, value=None
-                )
-                manual_load_draft = gr.Button("Cargar borrador")
-                manual_save_draft = gr.Button(
-                    "Guardar cambios del borrador", variant="secondary"
-                )
-            manual_load_draft.click(
-                _load_manual_draft,
-                inputs=[manual_edit_order_id],
-                outputs=[
-                    manual_lines_state,
-                    manual_lines_grid,
-                    manual_order_id_state,
-                    manual_client,
-                    manual_status,
-                ],
-            )
-            manual_save_draft.click(
-                _save_manual_order_changes,
-                inputs=[manual_order_id_state, manual_lines_state],
-                outputs=[manual_status, customer_orders_grid, manual_lines_state],
-            )
+                    gr.Markdown("### Modificar pedido en borrador")
+                    with gr.Row():
+                        manual_edit_order_id = gr.Number(
+                            label="Nº de pedido (borrador)", precision=0, value=None
+                        )
+                        manual_load_draft = gr.Button("Cargar borrador")
+                        manual_save_draft = gr.Button(
+                            "Guardar cambios del borrador", variant="secondary"
+                        )
+                    manual_load_draft.click(
+                        _load_manual_draft,
+                        inputs=[manual_edit_order_id],
+                        outputs=[
+                            manual_lines_state,
+                            manual_lines_grid,
+                            manual_order_id_state,
+                            manual_client,
+                            manual_status,
+                        ],
+                    )
+                    manual_save_draft.click(
+                        _save_manual_order_changes,
+                        inputs=[manual_order_id_state, manual_lines_state],
+                        outputs=[manual_status, customer_orders_grid, manual_lines_state],
+                    )
+                    # The edit-select listener needs the manual-form components
+                    # above, so it is wired here — after both sub-tabs rendered.
+                    # Both listeners fire on every grid selection; the no-op
+                    # path returns gr.skip() for every output.
+                    customer_orders_grid.select(
+                        _order_edit_selected,
+                        None,
+                        [
+                            customer_orders_tabs,
+                            manual_lines_state,
+                            manual_lines_grid,
+                            manual_order_id_state,
+                            manual_client,
+                            manual_status,
+                        ],
+                    )
 
         with gr.Tab("Monitor de pedidos"):
             gr.Markdown("### Pedidos en vivo")
@@ -2037,7 +2282,10 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 value=_monitor_grid,
                 label="Pedidos",
             )
-            monitor_refresh = gr.Button("Refrescar")
+            with gr.Row():
+                monitor_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             monitor_refresh.click(_monitor_grid, outputs=orders_grid)
 
         with gr.Tab("Órdenes de compra"):
@@ -2048,7 +2296,10 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 value=_po_grid,
                 label="Órdenes de compra",
             )
-            po_refresh = gr.Button("Refrescar")
+            with gr.Row():
+                po_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             po_refresh.click(_po_grid, outputs=po_grid)
             with gr.Row():
                 po_id = gr.Number(label="ID de PO", precision=0, value=1)
@@ -2065,11 +2316,17 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
 
         with gr.Tab("Ingesta de remitos"):
             gr.Markdown("### Carga de remito / factura del proveedor (con RAG)")
-            supplier_selector = gr.Dropdown(
-                choices=_active_supplier_choices(),
-                label="Proveedor (activo)",
-            )
-            supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            # Icon-only refresh beside the dropdown: scale=0 + sm keeps the
+            # button compact instead of stretching to the container width.
+            with gr.Row():
+                supplier_selector = gr.Dropdown(
+                    choices=_active_supplier_choices(),
+                    label="Proveedor (activo)",
+                    scale=3,
+                )
+                supplier_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             supplier_refresh.click(_supplier_choices_update, outputs=supplier_selector)
             upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
             preview_grid = gr.Dataframe(
@@ -2148,11 +2405,15 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 "nuevo (usá el mismo valor en cada archivo del mismo documento). "
                 "Si lo dejás vacío, la ingesta usa el default **LISTA GENERAL**."
             )
-            catalog_supplier_selector = gr.Dropdown(
-                choices=_active_supplier_choices(),
-                label="Proveedor (activo)",
-            )
-            catalog_supplier_refresh = gr.Button("Refrescar", variant="secondary")
+            with gr.Row():
+                catalog_supplier_selector = gr.Dropdown(
+                    choices=_active_supplier_choices(),
+                    label="Proveedor (activo)",
+                    scale=3,
+                )
+                catalog_supplier_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             catalog_supplier_refresh.click(
                 _supplier_choices_update, outputs=catalog_supplier_selector
             )
@@ -2331,7 +2592,9 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             with gr.Row():
                 price_list_save = gr.Button("Guardar lista", variant="primary")
                 price_list_delete = gr.Button("Eliminar lista", variant="stop")
-                price_list_refresh = gr.Button("Refrescar")
+                price_list_refresh = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             price_lists_grid.select(
                 _price_list_row_selected,
                 inputs=[price_lists_grid],
@@ -2373,8 +2636,11 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     choices=initial_sessions,
                     value=initial_selected,
                     interactive=True,
+                    scale=3,
                 )
-                refresh_sessions_btn = gr.Button("Refrescar sesiones")
+                refresh_sessions_btn = gr.Button(
+                    "🔄", variant="secondary", size="sm", scale=0, min_width=48
+                )
             session_trace_grid = gr.Dataframe(
                 headers=["Hora", "Servicio", "Acción", "Nivel", "Detalles"],
                 datatype=["str", "str", "str", "str", "str"],
