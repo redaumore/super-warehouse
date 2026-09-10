@@ -31,6 +31,7 @@ DOMAINS: dict[str, str] = {
     "test_pricing": "Motor de precios",
     "test_sales": "Cotización y ventas",
     "test_inventory": "Stock e inventario",
+    "test_inventory_properties": "Invariante de inventario (property-based)",
     "test_dispatch": "Despacho y aprobación del dueño",
     "test_approval": "Registro de aprobaciones",
     "test_orchestrator": "Orquestador y enrutamiento",

@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 484, agrupados en 33 dominios.
+**Total de escenarios:** 486, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -10,7 +10,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 
 - [Motor de precios](#motor-de-precios) — 6
 - [Cotización y ventas](#cotización-y-ventas) — 11
-- [Stock e inventario](#stock-e-inventario) — 13
+- [Stock e inventario](#stock-e-inventario) — 14
+- [Invariante de inventario (property-based)](#invariante-de-inventario-property-based) — 1
 - [Despacho y aprobación del dueño](#despacho-y-aprobación-del-dueño) — 12
 - [Registro de aprobaciones](#registro-de-aprobaciones) — 25
 - [Orquestador y enrutamiento](#orquestador-y-enrutamiento) — 26
@@ -80,6 +81,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Reservar crea una reserva activa con el TTL configurado y bloquea stock. _(`test_reserve_creates_active_reservation_and_locks`)_
 - Reservar más de lo disponible se rechaza sin bloquear de más. _(`test_reserve_beyond_available_stock_is_refused`)_
 - Reservar una cantidad no positiva se rechaza. _(`test_reserve_rejects_non_positive_quantity`)_
+- Race de reservas en dos sesiones: a lo sumo una reserva activa del lote disputado sobrevive y nunca hay doble reserva. _(`test_two_session_reserve_race_at_most_one_succeeds`)_
+
+## Invariante de inventario (property-based)
+
+- Bajo cualquier secuencia de reservas, el stock en mano no cambia y la disponibilidad nunca es negativa. _(`test_arbitrary_reservation_sequences_preserve_stock_invariants`)_
 
 ## Despacho y aprobación del dueño
 

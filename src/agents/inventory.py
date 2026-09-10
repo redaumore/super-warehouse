@@ -90,7 +90,17 @@ def reserve_stock(
     """Create an ACTIVE soft-lock reservation; refuse when stock is insufficient."""
     if cantidad <= 0:
         raise ValueError("cantidad must be positive")
-    if available_stock(session, sku) < cantidad:
+    # Serialize concurrent reservations per SKU: lock the canonical Inventory
+    # row (FOR UPDATE) before reading availability and inserting. Without it,
+    # two READ COMMITTED sessions both read the unreserved availability and
+    # both INSERT (TOCTOU double-booking). A missing row locks nothing and
+    # reads as zero on hand, so the refusal below is preserved. Callers that
+    # reserve several SKUs inside one transaction should iterate them in a
+    # consistent order (e.g. by sku) to avoid lock-order deadlocks.
+    locked = session.execute(
+        select(Inventory.sku_id).where(Inventory.sku_id == sku).with_for_update()
+    ).scalar()
+    if locked is None or available_stock(session, sku) < cantidad:
         raise InsufficientStockError(f"insufficient available stock for sku {sku}")
     reservation = StockReservation(
         sku=sku,

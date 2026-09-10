@@ -95,8 +95,8 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | L2 | Cancelación tardía (post-deducción) | Stock restaurado con auditoría | ✅ `test_late_cancel_restores_deducted_stock_with_audit` |
 | L3 | Reservas expiradas marcan la orden | Requiere re-cotización | ✅ `test_expire_reservations_flags_order_when_rows_expired` |
 | L4 | Modificación de orden confirmada | Stock restaurado sin doble conteo | ✅ `test_modify_restores_deducted_stock_without_double_count` |
-| L5 | Race de reservas: dos dueños reservan el mismo stock | Al menos uno debe fallar limpio | 🔲 |
-| L6 | Invariante: stock nunca negativo (cantidades arbitrarias) | `Inventory.quantity_on_hand − reservas activas ≥ 0` bajo cualquier cantidad | 🔲 (candidato a property-based con `hypothesis`) |
+| L5 | Race de reservas: dos dueños reservan el mismo stock | Al menos uno debe fallar limpio | ✅ `test_two_session_reserve_race_at_most_one_succeeds` — **Arreglado**: `reserve_stock` ahora toma `SELECT ... FOR UPDATE` sobre la fila de `Inventory` antes de leer disponibilidad e insertar, serializando las reservas concurrentes por SKU (el TOCTOU que doble-reservaba está cerrado, sin cambio de esquema). El test ya no es `xfail`: T2 o bloquea sobre el lock de T1 (cancelado por `lock_timeout`) o lee la reserva commiteada y es rechazado limpio con `InsufficientStockError`; a lo sumo una reserva activa del lote disputado sobrevive |
+| L6 | Invariante: stock nunca negativo (cantidades arbitrarias) | `Inventory.quantity_on_hand − reservas activas ≥ 0` bajo cualquier cantidad | ✅ `test_arbitrary_reservation_sequences_preserve_stock_invariants` (property-based con `hypothesis`, DB real: cada ejemplo aplica una secuencia arbitraria de pedidos y verifica que el stock en mano no cambie, la disponibilidad nunca sea negativa y una reserva rechazada no altere el estado) |
 | L7 | Invariante: `catalogo.stock_disponible` vs `Inventory` | Hoy **se desincronizan por diseño** (la deducción solo toca `Inventory`); decidir si es deuda y documentar con test | 🔲 (decisión pendiente) |
 
 ## Resumen de faltantes
@@ -104,8 +104,6 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | ID | Gap | Prioridad sugerida |
 |---|---|---|
 | R8, L7 | Decisiones semánticas pendientes antes de testear | Media — decidir primero, testear después |
-| L5 | Race de reservas concurrentes | Baja |
-| L6 | Invariante property-based de cantidades | Baja (requiere `hypothesis`) |
 
 ## Checklist
 
@@ -116,4 +114,4 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 
 ## Próximo paso
 
-Los faltantes de prioridad alta (Q2, Q3, C5) ya están implementados. R6 (ingesta con proveedor inactivo) también está cerrado. Sigue la media: abrir la decisión de R8/L7 en un ADR.
+Los faltantes de prioridad alta (Q2, Q3, C5) ya están implementados. R6 (ingesta con proveedor inactivo) también está cerrado, el doble-reservado de L5 está arreglado (`FOR UPDATE` en `reserve_stock`) y L6 está testeado y registrado en `escenarios-testeados.md`. Sigue la media: abrir la decisión de R8/L7 en un ADR.

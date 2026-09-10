@@ -13,8 +13,9 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
 
 from src.agents.inventory import (
     InsufficientStockError,
@@ -211,3 +212,79 @@ def test_reserve_rejects_non_positive_quantity(stock):
     """Reservar una cantidad no positiva se rechaza."""
     with pytest.raises(ValueError, match="positive"):
         reserve_stock(stock, "CLV-001", customer_id=1, cantidad=0)
+
+
+# ------------------------------------------------ concurrent reservation race (L5)
+
+
+def test_two_session_reserve_race_at_most_one_succeeds(db_engine, stock):
+    """Race de reservas en dos sesiones: a lo sumo una reserva activa del lote disputado sobrevive y nunca hay doble reserva."""
+    session = stock
+    # Shrink on hand to the contended quantity so a second full claim can
+    # never legitimately fit: at most one of the two reservations may survive.
+    inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    inventory_row.quantity_on_hand = 5
+    session.commit()
+
+    # T1 claims all 5 units: INSERT flushed but NOT committed. With the
+    # FOR UPDATE fix T1 also holds the Inventory row lock for the transaction.
+    reservation_t1 = reserve_stock(session, "CLV-001", customer_id=1, cantidad=5)
+
+    # T2 is an independent session mirroring the draft race test pattern. The
+    # old TOCTOU interleaving (plain SELECT availability → both sessions
+    # succeed) is closed: T2 must not create a second reservation, whether it
+    # blocks on T1's row lock until the statement timeout cancels the read
+    # (OperationalError) or, after T1 commits, reads the committed claim and
+    # is refused with InsufficientStockError.
+    Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+    second = Session()
+    try:
+        # SET LOCAL scopes the timeout to T2's single attempt transaction, so
+        # no pooled connection leaks a session-level setting into other tests.
+        second.execute(text("SET LOCAL lock_timeout = '500ms'"))
+        try:
+            reserve_stock(second, "CLV-001", customer_id=1, cantidad=5)
+            second.commit()  # only reachable if T2 legitimately succeeded
+        except OperationalError:
+            second.rollback()  # blocked on T1's uncommitted lock; statement canceled
+        except InsufficientStockError:
+            second.rollback()  # clean refusal, nothing was persisted
+    finally:
+        second.close()
+
+    # T1 commits after T2's attempt: exactly ONE active reservation of the
+    # contended quantity may survive (5 reserved against 5 on hand).
+    session.commit()
+    active = session.scalars(
+        select(StockReservation).where(
+            StockReservation.sku == "CLV-001",
+            StockReservation.cantidad == 5,
+            StockReservation.estado == ReservationEstado.ACTIVE,
+        )
+    ).all()
+    assert len(active) == 1, (
+        f"double-booked: {len(active)} active reservations of 5 against 5 on hand "
+        f"(ids {[r.reservation_id for r in active]})"
+    )
+    assert available_stock(session, "CLV-001") == 0
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(StockReservation)
+            .where(
+                StockReservation.sku == "CLV-001",
+                StockReservation.reservation_id == reservation_t1.reservation_id,
+            )
+        )
+        == 1
+    )
+
+    # A retry on a fresh session now sees T1's committed reservation and is
+    # refused cleanly instead of double-booking.
+    retry = Session()
+    try:
+        with pytest.raises(InsufficientStockError):
+            reserve_stock(retry, "CLV-001", customer_id=1, cantidad=5)
+    finally:
+        retry.rollback()
+        retry.close()
