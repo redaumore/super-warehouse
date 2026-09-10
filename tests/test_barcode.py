@@ -29,7 +29,13 @@ from src.barcode.decoder import (
     lookup_barcode,
 )
 from src.config import get_settings
-from src.db.models import Catalogo, StockAdjustment, Supplier
+from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier
+
+
+def _on_hand(session, sku: str) -> int:
+    """Current on-hand stock of a SKU from the canonical Inventory row."""
+    row = session.scalar(select(Inventory).where(Inventory.sku_id == sku))
+    return row.quantity_on_hand if row is not None else 0
 
 
 def _real_png(path: Path) -> None:
@@ -117,11 +123,11 @@ def _seed_catalog(db_session, *, barcodes: list[str], skus: list[str]) -> None:
                 costo_proveedor=Decimal("100.00"),
                 margen_aplicado_pct=Decimal(0),
                 precio_lista_base=Decimal("100.00"),
-                stock_disponible=10,
                 sinonimos=[],
                 codigo_barras=barcode,
             )
         )
+        db_session.add(Inventory(sku_id=sku, quantity_on_hand=10))
     db_session.flush()
 
 
@@ -156,8 +162,9 @@ def test_adjust_stock_increase_records_audit_trail(db_session):
     adjustment = adjust_stock_by_barcode(
         db_session, "7790001", delta=50, reason="llegó mercadería", actor="dueño"
     )
-    item = db_session.get(Catalogo, 1)
-    assert item.stock_disponible == 60
+    inventory = db_session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    assert inventory is not None
+    assert inventory.quantity_on_hand == 60
     assert adjustment.adjustment_id is not None
     assert adjustment.sku == "CLV-001"
     assert adjustment.delta == 50
@@ -174,7 +181,7 @@ def test_adjust_stock_decrease_records_audit_trail(db_session):
     adjustment = adjust_stock_by_barcode(
         db_session, "7790001", delta=-3, reason="venta anulada", actor="dueño"
     )
-    assert db_session.get(Catalogo, 1).stock_disponible == 7
+    assert _on_hand(db_session, "CLV-001") == 7
     assert adjustment.delta == -3
     assert adjustment.reason == "venta anulada"
     assert adjustment.actor == "dueño"
@@ -204,5 +211,5 @@ def test_adjust_stock_below_zero_raises_and_keeps_stock(db_session):
     with pytest.raises(BarcodeAdjustmentError) as exc_info:
         adjust_stock_by_barcode(db_session, "7790001", delta=-20, reason="error", actor="dueño")
     assert exc_info.value.kind is BarcodeAdjustmentErrorKind.NEGATIVE
-    assert db_session.get(Catalogo, 1).stock_disponible == 10
+    assert _on_hand(db_session, "CLV-001") == 10
     assert db_session.scalars(select(StockAdjustment)).all() == []

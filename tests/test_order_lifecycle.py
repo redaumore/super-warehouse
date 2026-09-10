@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.inventory import available_stock, reserve_stock, seed_inventory
+from src.agents.inventory import available_stock, reserve_stock
 from src.config import get_settings
 from src.db.models import (
     Catalogo,
@@ -428,12 +428,11 @@ def order_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()

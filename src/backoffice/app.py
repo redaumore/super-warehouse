@@ -127,7 +127,7 @@ def _catalog_grid() -> list[list[object]]:
             r["costo_proveedor"],
             r["margen_aplicado_pct"],
             r["precio_lista_base"],
-            r["stock_disponible"],
+            r["on_hand"],
         ]
         for r in rows
     ]

@@ -94,12 +94,11 @@ def stock(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos 2 pulgadas"],
         )
     )
+    db_session.add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     db_session.flush()
-    seed_inventory(db_session)
     return db_session
 
 
@@ -166,16 +165,31 @@ def test_unknown_sku_returns_zero(stock):
     assert available_stock(stock, "CLV-XXX") == 0
 
 
-def test_seed_inventory_backfills_from_catalogo(stock):
-    """El seed copia stock_disponible del catálogo a Inventory.quantity_on_hand."""
-    row = stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+def test_seed_inventory_creates_missing_rows_with_zero(stock):
+    """El seed crea filas Inventory faltantes con cero en mano y no pisa las existentes."""
+    stock.add(
+        Catalogo(
+            id=2,
+            codigo_interno="CLV-002",
+            supplier_id=1,
+            nombre_oficial="Clavos con cabeza (40mm)",
+            costo_proveedor=Decimal("80.00"),
+            margen_aplicado_pct=Decimal("0.35"),
+            precio_lista_base=Decimal("108.00"),
+            sinonimos=["clavos 40mm"],
+        )
+    )
+    stock.flush()
+    inserted = seed_inventory(stock)
+    assert inserted == 1
+    row = stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-002"))
     assert row is not None
-    assert row.quantity_on_hand == 10
+    assert row.quantity_on_hand == 0
 
 
 def test_seed_inventory_is_idempotent(stock):
     """Volver a sembrar no duplica filas ni pisa valores existentes."""
-    first = seed_inventory(stock)  # the fixture already seeded → no insert
+    first = seed_inventory(stock)  # the fixture's SKU already has a row → no insert
     assert first == 0
     row = stock.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
     row.quantity_on_hand = 7

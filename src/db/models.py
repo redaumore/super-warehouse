@@ -187,8 +187,10 @@ class Supplier(Base):
 
 
 class Catalogo(Base):
-    """Catalog product with cost, margin, base price, stock, synonyms and vector.
+    """Catalog product with cost, margin, base price, synonyms and vector.
 
+    On-hand stock lives exclusively in `Inventory.quantity_on_hand` (ADR 0002);
+    this table holds no stock counter.
     `embedding` is a pgvector `vector(1536)` used by hybrid search (Phase 2).
     `marca`/`categoria`/`subcategoria`/`moneda` mirror RAG product metadata and
     `origen` is the write-once adoption provenance JSONB (single INSERT site in
@@ -207,7 +209,6 @@ class Catalogo(Base):
         Numeric(5, 2), nullable=False, default=Decimal(0)
     )
     precio_lista_base: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    stock_disponible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sinonimos: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     marca: Mapped[str | None] = mapped_column(String(300), nullable=True)
     categoria: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -376,8 +377,9 @@ class AppSetting(Base):
 class Inventory(Base):
     """Canonical on-hand stock per SKU (the single availability source).
 
-    Backfilled from ``catalogo.stock_disponible``; later stock changes update
-    ``quantity_on_hand`` and touch ``updated_at``.
+    Every stock write path updates ``quantity_on_hand`` and touches
+    ``updated_at``; the legacy ``catalogo.stock_disponible`` counter was
+    retired (ADR 0002).
     """
 
     __tablename__ = "inventory"

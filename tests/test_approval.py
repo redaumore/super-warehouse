@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
-from src.agents.inventory import reserve_stock, seed_inventory
+from src.agents.inventory import reserve_stock
 from src.config import Settings, get_settings
 from src.db.models import (
     Catalogo,
@@ -180,12 +180,11 @@ def order_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     order = Order(customer_id=1, estado=OrderEstado.DRAFT, needs_requote=False)
     db_session.add(order)
     db_session.flush()
@@ -250,9 +249,10 @@ def test_confirm_and_register_converts_deducts_and_confirms(order_ctx):
         .all()
     )
     assert all(r.estado is ReservationEstado.CONVERTED for r in reservations)
+    # Inventory is the single on-hand counter (ADR 0002): the legacy catalog
+    # column no longer exists on the model.
     assert _on_hand(order_ctx["session"], "CLV-001") == 0  # 10 − 10
-    # Legacy catalogo stock counter is untouched by the confirm deduction.
-    assert order_ctx["session"].get(Catalogo, 1).stock_disponible == 10
+    assert not hasattr(Catalogo, "stock_disponible")
 
 
 def test_confirm_on_expired_reservation_refuses_without_side_effects(order_ctx):

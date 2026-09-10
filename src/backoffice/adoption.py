@@ -182,7 +182,6 @@ def adopt_product(
         costo_proveedor=precio,
         margen_aplicado_pct=margen,
         precio_lista_base=compute_base(precio, margen),
-        stock_disponible=dto.stock,
         sinonimos=[dto.nombre],
         marca=dto.marca or None,
         categoria=dto.categoria or None,

@@ -300,7 +300,6 @@ def shop_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos"],
         )
     )
@@ -316,9 +315,11 @@ def shop_ctx(db_session):
 
 def test_catalog_list_products_returns_expected_fields(shop_ctx):
     """La grilla de catálogo devuelve todos los campos por producto."""
+    shop_ctx["session"].add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
+    shop_ctx["session"].flush()
     rows = list_products(shop_ctx["session"])
     assert rows[0]["codigo_interno"] == "CLV-001"
-    assert rows[0]["stock_disponible"] == 10
+    assert rows[0]["on_hand"] == 10
     assert rows[0]["precio_lista_base"] == "135.00"
 
 
@@ -327,8 +328,9 @@ def test_catalog_update_stock_and_price(shop_ctx):
     update_stock(shop_ctx["session"], "CLV-001", 25)
     update_price(shop_ctx["session"], "CLV-001", Decimal("150.00"))
     product = shop_ctx["session"].get(Catalogo, 1)
-    assert product.stock_disponible == 25
     assert product.precio_lista_base == Decimal("150.00")
+    inventory = shop_ctx["session"].scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+    assert inventory.quantity_on_hand == 25
 
 
 def test_catalog_update_margin_recomputes_base_price(shop_ctx):
@@ -386,7 +388,7 @@ def test_clients_update_changes_discount(client_ctx):
     ).descuento_particular_pct == Decimal("0.05")
 
 
-def _seed_receipt_product(session, *, codigo_interno="MSA-CLV-001", stock=10, origen=None) -> Catalogo:
+def _seed_receipt_product(session, *, codigo_interno="MSA-CLV-001", origen=None) -> Catalogo:
     """Seed a catalog row whose SKU follows the build_sku convention (adoption-style)."""
     product = Catalogo(
         codigo_interno=codigo_interno,
@@ -395,7 +397,6 @@ def _seed_receipt_product(session, *, codigo_interno="MSA-CLV-001", stock=10, or
         costo_proveedor=Decimal("100.00"),
         margen_aplicado_pct=Decimal("0.35"),
         precio_lista_base=Decimal("135.00"),
-        stock_disponible=stock,
         sinonimos=["clavos"],
         origen=origen,
     )
@@ -500,7 +501,7 @@ def test_ingest_updates_existing_stock_keeps_origen_and_audits(shop_ctx):
     result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
     assert result == IngestResult(updated=1, created=0)
     product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
-    assert product.stock_disponible == 15  # 10 + 5
+    assert product is not None
     assert product.origen == {"rag": {"node_id": "node-1"}}  # write-once: untouched
     inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-001"))
     assert inventory.quantity_on_hand == 5
@@ -534,7 +535,7 @@ def test_ingest_adopts_new_product_with_rag_origen_dict(shop_ctx):
     result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
     assert result == IngestResult(updated=0, created=1)
     created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
-    assert created.stock_disponible == 4
+    assert created is not None
     assert created.origen == {
         "rag": {
             "node_id": "node-prod-AT-5044",
@@ -567,9 +568,8 @@ def test_ingest_embed_failure_rolls_back_whole_confirmation(shop_ctx):
             session, 1, [first, failing], OwnerContext(owner_id="t"), _embedder(fail=True)
         )
     session.rollback()  # caller-commits: rollback undoes the whole batch
-    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
-    assert product.stock_disponible == 10  # first line's bump rolled back too
-    assert session.scalar(select(Inventory)) is None
+    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001")) is not None
+    assert session.scalar(select(Inventory)) is None  # first line's bump rolled back too
 
 
 def test_ingest_missing_node_id_fails_closed(shop_ctx):
@@ -819,10 +819,11 @@ def test_pending_conversion_order_is_blocked_at_approval(shop_ctx):
 
 def test_app_catalog_grid_renders_seeded_products(shop_ctx):
     """La grilla del catálogo renderiza los productos sembrados."""
+    shop_ctx["session"].add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     shop_ctx["session"].commit()
     rows = _catalog_grid()
     assert any(row[0] == "CLV-001" for row in rows)
-    assert any(row[6] == 10 for row in rows)  # stock column
+    assert any(row[6] == 10 for row in rows)  # on-hand column (Inventory)
 
 
 def test_app_register_client_returns_success_message(shop_ctx):
@@ -842,12 +843,14 @@ def test_app_register_client_returns_success_message(shop_ctx):
 
 
 def test_app_catalog_edit_persists_stock_change(shop_ctx):
-    """Editar stock desde la UI persiste el cambio en el catálogo."""
+    """Editar stock desde la UI persiste el cambio en Inventory (fuente única)."""
     shop_ctx["session"].commit()
     message = _catalog_edit("CLV-001", 25, None, None)
     assert message == "Guardado: CLV-001"
     with SessionLocal() as session:
-        assert session.get(Catalogo, 1).stock_disponible == 25
+        inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+        assert inventory is not None
+        assert inventory.quantity_on_hand == 25
 
 
 def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):
@@ -981,8 +984,9 @@ def test_app_ingest_confirm_unblocked_when_all_resolved(shop_ctx):
     message = _ingest_confirm((resolved,), 1, _embedder())
     assert message == "Ingresado: 1 actualizados, 0 nuevos."
     with SessionLocal() as session:
-        product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-001"))
-        assert product.stock_disponible == 13  # 10 + 3
+        inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-001"))
+        assert inventory is not None
+        assert inventory.quantity_on_hand == 3  # 0 + 3 (no pre-existing row)
 
 
 def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):
@@ -1471,8 +1475,10 @@ def test_app_adoption_confirm_adopts_selected_product(shop_ctx):
     assert message == "Adoptado: MSA-AT-5044"
     with SessionLocal() as session:
         product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
-    assert product is not None
-    assert product.stock_disponible == 1
+        assert product is not None
+        inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-AT-5044"))
+        assert inventory is not None
+        assert inventory.quantity_on_hand == 1
     assert product.origen["rag"]["node_id"] == "node-1"
 
 

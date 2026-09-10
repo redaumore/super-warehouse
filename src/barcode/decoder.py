@@ -128,18 +128,21 @@ def adjust_stock_by_barcode(
             f"barcode {data!r} is not recognized",
         )
     item = lookup.candidates[0]
-    new_stock = item.stock_disponible + delta
+    # Inventory is the single on-hand source (ADR 0002); a product without an
+    # Inventory row reads as zero on hand.
+    inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == item.codigo_interno))
+    current_stock = inventory_row.quantity_on_hand if inventory_row is not None else 0
+    new_stock = current_stock + delta
     if new_stock < 0:
         raise BarcodeAdjustmentError(
             BarcodeAdjustmentErrorKind.NEGATIVE,
             f"cannot adjust {item.codigo_interno} below zero (stock "
-            f"{item.stock_disponible}, delta {delta})",
+            f"{current_stock}, delta {delta})",
         )
-    item.stock_disponible = new_stock
-    # Mirror the adjustment into the canonical on-hand source.
-    inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == item.codigo_interno))
-    if inventory_row is not None:
-        inventory_row.quantity_on_hand += delta
+    if inventory_row is None:
+        session.add(Inventory(sku_id=item.codigo_interno, quantity_on_hand=new_stock))
+    else:
+        inventory_row.quantity_on_hand = new_stock
         inventory_row.updated_at = datetime.now(UTC)
     adjustment = StockAdjustment(
         sku=item.codigo_interno,

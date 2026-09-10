@@ -42,9 +42,18 @@ def _folded(column) -> object:
 
 
 def list_products(session: Session) -> list[dict[str, object]]:
-    """Every product row for the catalog grid: SKU, barcode, name, prices, stock."""
+    """Every product row for the catalog grid: SKU, barcode, name, prices, stock.
+
+    Stock comes from the canonical ``Inventory.quantity_on_hand`` (ADR 0002);
+    a product with no Inventory row displays zero.
+    """
     rows = []
-    for product in session.scalars(select(Catalogo).order_by(Catalogo.codigo_interno)):
+    results = session.execute(
+        select(Catalogo, Inventory.quantity_on_hand)
+        .outerjoin(Inventory, Inventory.sku_id == Catalogo.codigo_interno)
+        .order_by(Catalogo.codigo_interno)
+    )
+    for product, on_hand in results:
         rows.append(
             {
                 "codigo_interno": product.codigo_interno,
@@ -53,7 +62,7 @@ def list_products(session: Session) -> list[dict[str, object]]:
                 "costo_proveedor": str(product.costo_proveedor),
                 "margen_aplicado_pct": str(product.margen_aplicado_pct),
                 "precio_lista_base": str(product.precio_lista_base),
-                "stock_disponible": product.stock_disponible,
+                "on_hand": int(on_hand or 0),
             }
         )
     return rows
@@ -67,15 +76,14 @@ def _product_by_sku(session: Session, sku: str) -> Catalogo:
 
 
 def update_stock(session: Session, sku: str, stock: int) -> Catalogo:
-    """Set the available stock of a product (audited adjustments live in Phase 3+).
+    """Set the on-hand stock of a product (audited adjustments live in Phase 3+).
 
-    The canonical on-hand counter (``Inventory``) mirrors the new value so the
-    legacy ``catalogo.stock_disponible`` and the availability source never drift.
+    ``Inventory.quantity_on_hand`` is the single on-hand source (ADR 0002);
+    this edit writes it directly.
     """
     if stock < 0:
         raise ValueError("stock cannot be negative")
     product = _product_by_sku(session, sku)
-    product.stock_disponible = stock
     inventory_row = session.scalar(select(Inventory).where(Inventory.sku_id == sku))
     if inventory_row is not None:
         inventory_row.quantity_on_hand = stock

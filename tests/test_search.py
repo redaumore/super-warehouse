@@ -78,7 +78,6 @@ def catalog(db_session):
                 costo_proveedor=Decimal("100.00"),
                 margen_aplicado_pct=Decimal("0.35"),
                 precio_lista_base=Decimal("135.00"),
-                stock_disponible=50,
                 sinonimos=["clavo paris 2", "clavos 2 pulgadas", "clavos paris 2 pulgadas"],
             ),
             Catalogo(
@@ -89,7 +88,6 @@ def catalog(db_session):
                 costo_proveedor=Decimal("80.00"),
                 margen_aplicado_pct=Decimal("0.30"),
                 precio_lista_base=Decimal("104.00"),
-                stock_disponible=30,
                 sinonimos=["clavo espiralado 2"],
             ),
             Catalogo(
@@ -100,7 +98,6 @@ def catalog(db_session):
                 costo_proveedor=Decimal("1200.00"),
                 margen_aplicado_pct=Decimal("0.25"),
                 precio_lista_base=Decimal("1500.00"),
-                stock_disponible=20,
                 sinonimos=["cemento portland"],
             ),
         ]

@@ -130,7 +130,6 @@ def shop_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=3,
             sinonimos=[],
             marca="FV",
             categoria="Griferías",
@@ -146,7 +145,6 @@ def shop_ctx(db_session):
             costo_proveedor=Decimal("50.00"),
             margen_aplicado_pct=Decimal("0.20"),
             precio_lista_base=Decimal("60.00"),
-            stock_disponible=3,
             sinonimos=[],
             marca="Fischer",
             categoria="Fijaciones",
@@ -162,7 +160,6 @@ def shop_ctx(db_session):
             costo_proveedor=Decimal("10.00"),
             margen_aplicado_pct=Decimal("0.50"),
             precio_lista_base=Decimal("15.00"),
-            stock_disponible=0,
             sinonimos=[],
         )
     )

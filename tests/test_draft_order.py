@@ -85,7 +85,6 @@ def customer_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=[],
         )
     )
@@ -294,7 +293,6 @@ def quote_ctx(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=[],
         )
     )
@@ -307,7 +305,6 @@ def quote_ctx(db_session):
             costo_proveedor=Decimal("50.00"),
             margen_aplicado_pct=Decimal("0.20"),
             precio_lista_base=Decimal("60.00"),
-            stock_disponible=0,
             sinonimos=[],
         )
     )

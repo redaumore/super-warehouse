@@ -21,7 +21,7 @@ from sqlalchemy.exc import OperationalError
 from src.agents.customers import resolve_customer_name
 from src.agents.disambiguation import resolve_item
 from src.agents.dispatch import Decision, DecisionAction, apply_decision
-from src.agents.inventory import available_stock, reserve_stock, seed_inventory
+from src.agents.inventory import available_stock, reserve_stock
 from src.agents.sales import ItemInput, quote_order
 from src.channels.whatsapp import WhatsAppChannel
 from src.config import Settings, get_settings
@@ -143,12 +143,11 @@ def shop(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=50,
             sinonimos=["clavo paris 2", "clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-PRS-2", quantity_on_hand=50))
     db_session.commit()
     return {"session": db_session, "sku": "CLV-PRS-2"}
 
@@ -225,11 +224,11 @@ async def test_e2e_owner_order_confirms_and_deducts_stock(shop):
         select(StockReservation).where(StockReservation.order_id == order.order_id)
     )
     assert reservation.estado is ReservationEstado.CONVERTED
-    # The confirm deduction writes Inventory (canonical on-hand), not the
-    # legacy catalogo counter.
+    # Inventory is the single on-hand counter (ADR 0002): the legacy catalog
+    # column no longer exists on the model.
     on_hand = session.scalar(select(Inventory).where(Inventory.sku_id == shop["sku"]))
     assert on_hand.quantity_on_hand == 40  # 50 − 10 deducted
-    assert session.get(Catalogo, 1).stock_disponible == 50  # legacy counter untouched
+    assert not hasattr(Catalogo, "stock_disponible")
     assert available_stock(session, shop["sku"]) == 40
 
 

@@ -22,7 +22,6 @@ from src.agents.commands import GUIDED_ASK_CLIENT, GUIDED_ASK_MORE
 from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
 from src.agents.guided import build_guided_handler
-from src.agents.inventory import seed_inventory
 from src.agents.product_search import ProductSearchResult
 from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
@@ -30,6 +29,7 @@ from src.config import get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
+    Inventory,
     ListaPrecios,
     Order,
     OrderEstado,
@@ -129,12 +129,11 @@ def shop(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=4,
             sinonimos=["clavo paris 2", "clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-PRS-2", quantity_on_hand=4))
     # The guided handler owns a session per turn (closing it between turns),
     # so the seed must be committed to stay visible across turns.
     db_session.commit()

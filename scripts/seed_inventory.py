@@ -1,10 +1,10 @@
-"""Idempotent inventory backfill from the legacy catalog stock counter.
+"""Idempotent inventory repair for catalog SKUs missing an Inventory row.
 
-Mirrors every catalog product's ``stock_disponible`` into the canonical
-``Inventory.quantity_on_hand`` (INSERT … ON CONFLICT (sku_id) DO NOTHING), so
-re-running never overwrites live on-hand adjustments. The Alembic migration
-already backfills once at upgrade time; this script is for existing databases
-and for re-seeding after a manual reset.
+The historical catalog→Inventory backfill ended when the legacy
+``catalogo.stock_disponible`` counter was retired (ADR 0002). The seed now
+ensures every catalog product has an ``Inventory`` row, defaulting missing
+ones to zero on hand (INSERT … ON CONFLICT (sku_id) DO NOTHING), so re-running
+never overwrites live on-hand adjustments.
 
 Usage:
     python3 scripts/seed_inventory.py

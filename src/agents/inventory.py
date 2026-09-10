@@ -4,9 +4,8 @@ Availability follows the design formula:
 
     available = Inventory.quantity_on_hand − Σ(cantidad of ACTIVE, unexpired reservations)
 
-``Inventory`` is the single on-hand source (backfilled from
-``catalogo.stock_disponible``); an SKU with no inventory row is treated as
-unavailable (zero on hand). Expiry is honored at read time by filtering
+``Inventory`` is the single on-hand source; an SKU with no inventory row is
+treated as unavailable (zero on hand). Expiry is honored at read time by filtering
 reservations whose `timestamp + ttl_minutes` is still in the future; the TTL
 sweeper, the reject→release transitions and the order state machine are later
 phases.
@@ -16,7 +15,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -59,16 +58,19 @@ def available_stock(session: Session, sku: str, *, now: datetime | None = None) 
 
 
 def seed_inventory(session: Session) -> int:
-    """Backfill `Inventory` from each catalog product's `stock_disponible`.
+    """Ensure every catalog product has an ``Inventory`` row (zero on hand).
 
-    Idempotent: rows already present (INSERT … ON CONFLICT DO NOTHING) keep
-    their current on-hand value. Returns how many rows were inserted.
+    The historical catalog→Inventory backfill ended when the legacy
+    ``catalogo.stock_disponible`` counter was retired (ADR 0002); the seed now
+    only repairs catalog SKUs missing an Inventory row, defaulting them to zero
+    on hand. Idempotent: rows already present (INSERT … ON CONFLICT DO NOTHING)
+    keep their current on-hand value. Returns how many rows were inserted.
     """
     result = session.execute(
         insert(Inventory)
         .from_select(
             [Inventory.sku_id, Inventory.quantity_on_hand, Inventory.updated_at],
-            select(Catalogo.codigo_interno, Catalogo.stock_disponible, func.now()),
+            select(Catalogo.codigo_interno, literal(0), func.now()),
         )
         .on_conflict_do_nothing(index_elements=[Inventory.sku_id])
         .returning(Inventory.sku_id)

@@ -25,7 +25,6 @@ from src.agents.customers import (
     parse_customer_pick,
     resolve_customer_name,
 )
-from src.agents.inventory import seed_inventory
 from src.backoffice.clients import (
     InvalidClientDataError,
     chat_register_client,
@@ -36,6 +35,7 @@ from src.config import get_settings
 from src.db.models import (
     Catalogo,
     Cliente,
+    Inventory,
     ListaPrecios,
     Supplier,
 )
@@ -301,12 +301,11 @@ def shop_with_catalog(shop):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=50,
             sinonimos=["clavos", "clavo paris 2", "clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-PRS-2", quantity_on_hand=50))
     db_session.commit()  # survive the handlers' per-call session close
     return shop
 

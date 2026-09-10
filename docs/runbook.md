@@ -45,7 +45,7 @@ The sourcing workflow (see `docs/sourcing.md`) is enabled by setting
 |---|---|
 | Enable sourcing flow | `OWNER_PHONE=+54911...` in `.env`; notifications go over Telegram |
 | Disable (legacy intake) | remove `OWNER_PHONE` (parse step turns off) |
-| Backfill inventory | `python3 scripts/seed_inventory.py` (idempotent; the migration already backfills from `catalogo.stock_disponible`) |
+| Repair inventory rows | `python3 scripts/seed_inventory.py` (idempotent; ensures every catalog SKU has an `Inventory` row) |
 | Verify availability source | `SELECT sku_id, quantity_on_hand FROM inventory;` — this is the canonical on-hand |
 | Execute a PO | backoffice → **Purchase Orders** tab: send / receive (partial or full) / cancel |
 

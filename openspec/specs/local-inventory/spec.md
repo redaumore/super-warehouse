@@ -38,15 +38,15 @@ The system MUST compute a SKU's availability as `quantity_on_hand − sum(active
 - WHEN availability is queried
 - THEN availability equals 10
 
-### Requirement: Seed inventory from catalog stock
+### Requirement: Seed inventory rows for catalog products
 
-The system MUST seed `Inventory` from each catalog product's `stock_disponible` as the initial backfill; later stock changes MUST update `Inventory` and its `updated_at`.
+The system MUST ensure every catalog product has an `Inventory` row (seed defaults missing rows to zero on hand); later stock changes MUST update `Inventory.quantity_on_hand` and its `updated_at`. `Inventory` is the single on-hand stock source; the legacy `catalogo.stock_disponible` counter was retired (ADR 0002).
 
-#### Scenario: Initial backfill
+#### Scenario: Seed missing inventory rows
 
-- GIVEN catalog products carrying a `stock_disponible` value
+- GIVEN catalog products without an `Inventory` row
 - WHEN inventory is seeded
-- THEN each SKU's `quantity_on_hand` mirrors that value
+- THEN each missing SKU gets a row with `quantity_on_hand` zero, and existing rows are untouched
 
 #### Scenario: Stock adjustments update inventory
 

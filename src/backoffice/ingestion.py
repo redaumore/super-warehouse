@@ -214,12 +214,11 @@ def ingest_receipt_lines(
 
 
 def _bump_stock(session: Session, product: Catalogo, cantidad: int, actor: str) -> None:
-    """Bump stock on an existing product, mirror inventory, audit the change.
+    """Bump the canonical on-hand stock of an existing product, audit the change.
 
     ``origen`` is write-once: the update path never overwrites it (provenance
     of the original adoption/creation stays intact).
     """
-    product.stock_disponible += cantidad
     inventory_row = session.scalar(
         select(Inventory).where(Inventory.sku_id == product.codigo_interno)
     )
@@ -283,7 +282,6 @@ def _adopt_new(
         costo_proveedor=costo,
         margen_aplicado_pct=default_margin_pct,
         precio_lista_base=compute_base(costo, default_margin_pct),
-        stock_disponible=receipt.cantidad,
         sinonimos=[receipt.descripcion] if receipt.descripcion else [product.name],
         marca=product.brand,
         categoria=product.categoria,

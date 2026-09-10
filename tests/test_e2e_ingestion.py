@@ -83,10 +83,10 @@ def supplier(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=50,
             sinonimos=["clavos"],
         )
     )
+    db_session.add(Inventory(sku_id="MSA-CLV-PRS-2", quantity_on_hand=50))
     db_session.commit()
     db_session.execute(text("SELECT setval(pg_get_serial_sequence('catalogo', 'id'), 1, true)"))
     return {"session": db_session}
@@ -166,9 +166,9 @@ def test_e2e_receipt_flow_writes_stock_with_node_id_provenance(supplier, tmp_pat
     assert result_message == "Ingresado: 1 actualizados, 0 nuevos."
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
-    assert existing.stock_disponible == 60  # 50 + 10
+    assert existing is not None
     inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
-    assert inventory.quantity_on_hand == 10
+    assert inventory.quantity_on_hand == 60  # 50 + 10
     adjustment = session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     )
@@ -201,7 +201,9 @@ def test_e2e_unmatched_line_blocks_confirm_and_creates_nothing(supplier, tmp_pat
 
     session.rollback()
     assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")) is None
-    assert session.scalar(select(Inventory)) is None  # zero writes while blocked
+    # zero writes while blocked: only the seeded Inventory row exists, unchanged
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
 
 
 def test_e2e_manual_assignment_resolves_pending_and_adopts(supplier, tmp_path):
@@ -236,7 +238,11 @@ def test_e2e_manual_assignment_resolves_pending_and_adopts(supplier, tmp_path):
     assert result_message == "Ingresado: 0 actualizados, 1 nuevos."
 
     created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001"))
-    assert created.stock_disponible == 4
+    assert created is not None
+    created_inventory = session.scalar(
+        select(Inventory).where(Inventory.sku_id == "MSA-PINT-001")
+    )
+    assert created_inventory.quantity_on_hand == 4
     assert created.origen == {
         "rag": {
             "node_id": "node_pint_001",
@@ -295,7 +301,9 @@ def test_e2e_rag_down_shows_honest_error_and_writes_nothing(supplier, tmp_path):
     assert grid == []
     assert state == ()
     assert "RAG no disponible" in message
-    assert session.scalar(select(Inventory)) is None
+    # zero writes: only the seeded Inventory row exists, unchanged
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
 
 
 def _mixed_lines_rag() -> FakeRag:
@@ -336,8 +344,10 @@ def test_e2e_embedding_failure_rolls_back_full_ingestion(supplier, tmp_path):
     assert "no se guardó nada" in message
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
-    assert existing.stock_disponible == 50  # the staged bump was rolled back too
-    assert session.scalar(select(Inventory)) is None
+    assert existing is not None
+    # The seeded Inventory row is the only one and the staged bump rolled back.
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
     assert session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     ) is None
@@ -357,8 +367,10 @@ def test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion(supplier, tmp_p
     assert "no se guardó nada" in message
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
-    assert existing.stock_disponible == 50
-    assert session.scalar(select(Inventory)) is None
+    assert existing is not None
+    # The seeded Inventory row is the only one and no staged write survived.
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
     assert session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     ) is None
@@ -374,8 +386,10 @@ def test_e2e_document_without_usable_lines_writes_nothing(supplier, tmp_path):
     assert "No se extrajeron líneas legibles" in message
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
-    assert existing.stock_disponible == 50
-    assert session.scalar(select(Inventory)) is None
+    assert existing is not None
+    # The seeded Inventory row is the only one and nothing else was written.
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
     assert session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     ) is None
@@ -413,8 +427,10 @@ def test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing(supplier, tmp
     assert confirm_message == "Error: supplier 1 is INACTIVO"
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
-    assert existing.stock_disponible == 50
-    assert session.scalar(select(Inventory)) is None
+    assert existing is not None
+    # The seeded Inventory row is the only one and nothing else was written.
+    inventory_rows = session.scalars(select(Inventory)).all()
+    assert [row.quantity_on_hand for row in inventory_rows] == [50]
     assert session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     ) is None
@@ -440,4 +456,5 @@ def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     lookup = lookup_barcode(session, decoded[0].data)
     assert lookup.kind is BarcodeLookupKind.SINGLE
     assert lookup.candidates[0].codigo_interno == "MSA-CLV-PRS-2"
-    assert lookup.candidates[0].stock_disponible == 50
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 50

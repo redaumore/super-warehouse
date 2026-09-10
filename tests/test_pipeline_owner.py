@@ -20,7 +20,6 @@ from sqlalchemy.exc import OperationalError
 
 from src.agents.customer import SourcingDeps
 from src.agents.dispatch import build_dispatch_handler
-from src.agents.inventory import seed_inventory
 from src.agents.product_search import ProductSearchResult
 from src.backoffice.clients import chat_register_client
 from src.channels.base import InboundMessage
@@ -145,12 +144,11 @@ def shop(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=50,
             sinonimos=["clavo paris 2", "clavos 2 pulgadas"],
         )
     )
     db_session.flush()
-    seed_inventory(db_session)
+    db_session.add(Inventory(sku_id="CLV-PRS-2", quantity_on_hand=50))
     db_session.commit()
     return {"session": db_session}
 

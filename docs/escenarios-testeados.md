@@ -75,7 +75,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Una reserva ACTIVE vencida por TTL se excluye al leer la disponibilidad. _(`test_expired_ttl_reservation_does_not_lock_stock`)_
 - Una reserva vigente todavía bloquea stock. _(`test_unexpired_reservation_still_locks_stock`)_
 - Consultar un SKU desconocido devuelve 0 (nunca KeyError). _(`test_unknown_sku_returns_zero`)_
-- El seed copia stock_disponible del catálogo a Inventory.quantity_on_hand. _(`test_seed_inventory_backfills_from_catalogo`)_
+- El seed crea filas Inventory faltantes con cero en mano y no pisa las existentes. _(`test_seed_inventory_creates_missing_rows_with_zero`)_
 - Volver a sembrar no duplica filas ni pisa valores existentes. _(`test_seed_inventory_is_idempotent`)_
 - Un SKU sin fila en Inventory se trata como no disponible. _(`test_missing_inventory_row_means_zero_on_hand`)_
 - Reservar crea una reserva activa con el TTL configurado y bloquea stock. _(`test_reserve_creates_active_reservation_and_locks`)_
@@ -618,7 +618,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Approval registration refuses an order until its prices are converted. _(`test_pending_conversion_order_is_blocked_at_approval`)_
 - La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente recarga la grilla y limpia el formulario. _(`test_app_register_client_returns_success_message`)_
-- Editar stock desde la UI persiste el cambio en el catálogo. _(`test_app_catalog_edit_persists_stock_change`)_
+- Editar stock desde la UI persiste el cambio en Inventory (fuente única). _(`test_app_catalog_edit_persists_stock_change`)_
 - Un teléfono inválido desde la UI devuelve el error y no toca el formulario. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
 - [rag-doc R1] El dropdown lista solo ACTIVO por business_name y retiene el ID. _(`test_active_supplier_choices_lists_activo_by_business_name`)_
 - [backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes. _(`test_app_ingest_parse_returns_grid_with_resolved_and_pending`)_

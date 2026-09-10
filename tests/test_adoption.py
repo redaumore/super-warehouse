@@ -163,7 +163,6 @@ def test_adopcion_crea_catalogo_inventory_y_stock_adjustment(db_session):
     product = adopt_product(db_session, _dto(), OWNER, FakeEmbedder())
 
     assert product.codigo_interno == "AMX-AT-5044"
-    assert product.stock_disponible == 50
     inventory = db_session.scalar(
         select(Inventory).where(Inventory.sku_id == product.codigo_interno)
     )
@@ -199,7 +198,6 @@ def test_sku_colision_rechazada_sin_persistir(db_session):
             costo_proveedor=Decimal("1.00"),
             margen_aplicado_pct=Decimal(0),
             precio_lista_base=Decimal("1.00"),
-            stock_disponible=1,
             sinonimos=[f"Semilla {i}"],
         )
         for i in range(1, 4)
@@ -335,7 +333,6 @@ def test_endpoint_adopcion_feliz_crea_tres_filas_y_no_toca_rag(
     product = db_session.scalar(select(Catalogo))
     assert product is not None
     assert product.codigo_interno == "AMX-AT-5044"
-    assert product.stock_disponible == 50
     assert product.origen == {
         "rag": {
             "node_id": "node-abc-123",
@@ -365,7 +362,6 @@ def test_endpoint_colision_sku_rechazada_409(db_session, client, fake_embedder):
             costo_proveedor=Decimal("1.00"),
             margen_aplicado_pct=Decimal(0),
             precio_lista_base=Decimal("1.00"),
-            stock_disponible=1,
             sinonimos=["Ya existe"],
         )
     )

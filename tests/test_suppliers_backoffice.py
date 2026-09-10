@@ -180,7 +180,6 @@ def test_margin_edit_does_not_reprice_existing_catalog_rows(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos"],
         )
     )
@@ -203,7 +202,6 @@ def test_update_supplier_code_blocked_when_linked_to_catalog(db_session):
             costo_proveedor=Decimal("100.00"),
             margen_aplicado_pct=Decimal("0.35"),
             precio_lista_base=Decimal("135.00"),
-            stock_disponible=10,
             sinonimos=["clavos"],
         )
     )

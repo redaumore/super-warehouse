@@ -21,7 +21,7 @@ The system MUST place a soft-lock reservation on ordered stock when a quotation 
 
 - GIVEN an active reservation exists for a SKU
 - WHEN another customer's availability is checked
-- THEN available stock is computed as `stock_disponible − sum(stock_reservations)`
+- THEN available stock is computed as `Inventory.quantity_on_hand − sum(stock_reservations)`
 - AND the reserved quantity is not double-sold
 
 ### Requirement: Owner approval with adjustments

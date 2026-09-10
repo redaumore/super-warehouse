@@ -196,8 +196,7 @@ def _convert_reservations(session: Session, order: Order) -> list[StockReservati
 def _deduct_stock(session: Session, reservations: list[StockReservation]) -> None:
     """Subtract each converted reservation's quantity from the canonical Inventory.
 
-    ``Inventory.quantity_on_hand`` is the single on-hand source; the legacy
-    ``catalogo.stock_disponible`` counter is deliberately left untouched.
+    ``Inventory.quantity_on_hand`` is the single on-hand stock source.
     """
     for reservation in reservations:
         row = session.scalar(select(Inventory).where(Inventory.sku_id == reservation.sku))
