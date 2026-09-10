@@ -30,7 +30,16 @@ from src.backoffice.app import (
 from src.backoffice.ingestion import ReceiptLine, ResolvedLine
 from src.barcode.decoder import BarcodeLookupKind, decode_image, lookup_barcode
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier, SupplierStatus
+from src.db.models import (
+    Catalogo,
+    Inventory,
+    StockAdjustment,
+    Supplier,
+    SupplierPurchaseOrder,
+    SupplierPurchaseOrderItem,
+    SupplierPurchaseOrderState,
+    SupplierStatus,
+)
 from src.integrations.rag import DocumentLine, RagProduct, RagProductError
 
 
@@ -458,3 +467,65 @@ def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
     assert lookup.candidates[0].codigo_interno == "MSA-CLV-PRS-2"
     inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
     assert inventory.quantity_on_hand == 50
+
+
+def test_e2e_receipt_without_po_bumps_stock_with_full_audit(supplier, tmp_path):
+    """[R8][adr-0002] Remito sin PO vinculada → la ingesta bumpa stock con auditoría completa."""
+    session = supplier["session"]
+    rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
+
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert len(grid) == 1
+    assert not state[0].pending
+
+    result_message = _ingest_confirm(state, 1, _embedder())
+    assert result_message == "Ingresado: 1 actualizados, 0 nuevos."
+
+    # PO-agnostic per ADR 0002: ingestion never requires or creates a PO.
+    assert session.scalars(select(SupplierPurchaseOrder)).all() == []
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 60  # 50 + 10
+    adjustments = session.scalars(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    ).all()
+    assert len(adjustments) == 1
+    assert adjustments[0].sku == "MSA-CLV-PRS-2"
+    assert adjustments[0].delta == 10
+    assert adjustments[0].actor == "owner:backoffice-ui"
+
+
+def test_e2e_receipt_with_open_po_ingests_and_leaves_po_untouched(supplier, tmp_path):
+    """[R8][adr-0002] Remito con PO en OPEN → la ingesta bumpa stock y la PO queda intacta."""
+    session = supplier["session"]
+    po = SupplierPurchaseOrder(supplier_id=1, estado=SupplierPurchaseOrderState.OPEN)
+    session.add(po)
+    session.flush()
+    session.add(
+        SupplierPurchaseOrderItem(
+            po_id=po.po_id, sku="MSA-CLV-PRS-2", quantity=10, received_quantity=0
+        )
+    )
+    session.commit()
+
+    rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert len(grid) == 1
+    result_message = _ingest_confirm(state, 1, _embedder())
+    assert result_message == "Ingresado: 1 actualizados, 0 nuevos."
+
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 60  # 50 + 10
+    adjustment = session.scalar(
+        select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
+    )
+    assert adjustment.delta == 10
+
+    # The two receiving paths are independent per ADR 0002: ingestion must not
+    # transition the PO nor touch its item's received_quantity.
+    session.expire_all()
+    reloaded = session.get(SupplierPurchaseOrder, po.po_id)
+    assert reloaded.estado is SupplierPurchaseOrderState.OPEN
+    item = session.scalar(
+        select(SupplierPurchaseOrderItem).where(SupplierPurchaseOrderItem.po_id == po.po_id)
+    )
+    assert item.received_quantity == 0

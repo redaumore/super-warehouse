@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 486, agrupados en 34 dominios.
+**Total de escenarios:** 488, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -39,7 +39,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 87
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 10
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 12
 - [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
@@ -715,6 +715,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Documento sin líneas utilizables → mensaje honesto y cero escrituras. _(`test_e2e_document_without_usable_lines_writes_nothing`)_
 - Proveedor INACTIVO al ingestar → el guard bloquea parse y confirm, nada escrito. _(`test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
+- [R8][adr-0002] Remito sin PO vinculada → la ingesta bumpa stock con auditoría completa. _(`test_e2e_receipt_without_po_bumps_stock_with_full_audit`)_
+- [R8][adr-0002] Remito con PO en OPEN → la ingesta bumpa stock y la PO queda intacta. _(`test_e2e_receipt_with_open_po_ingests_and_leaves_po_untouched`)_
 
 ## Observabilidad y logs por sesión
 

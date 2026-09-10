@@ -85,7 +85,7 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | R5 | Embedding falla / dimensión inválida en adopción | Rollback total (`EmbeddingUnavailableError`); el bump ya preparado de otra línea también se descarta | ✅ `test_e2e_embedding_failure_rolls_back_full_ingestion`, `test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion` |
 | R6 | Proveedor inactivo al ingestar | Guard bloquea (`ensure_active_supplier`) en parse y confirm: mensaje `Error: supplier N is INACTIVO`, cero escrituras | ✅ `test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing` |
 | R7 | Documento ilegible (sin líneas utilizables) | En el flujo RAG no se levanta `IllegibleDocumentError`: `_ingest_parse` responde con mensaje honesto y cero escrituras (la excepción vive en el límite OCR, cubierta en `test_ocr.py`) | ✅ `test_e2e_document_without_usable_lines_writes_nothing` |
-| R8 | Remito llega **sin PO** o con PO en OPEN (no SENT) | ⚠️ La ingesta bumpa stock **independientemente** de la máquina de estados de PO — hay que decidir si es semántica válida o deuda, y testearla | 🔲 (decisión pendiente) |
+| R8 | Remito llega **sin PO** o con PO en OPEN (no SENT) | Semántica válida por decisión (**ADR 0002**): la ingesta es PO-agnóstica — el remito es evidencia física, la PO es el acuerdo comercial. Bumpea `Inventory` + `StockAdjustment(receipt_ingestion)` siempre, sin tocar la PO ni su máquina de estados | ✅ `test_e2e_receipt_without_po_bumps_stock_with_full_audit`, `test_e2e_receipt_with_open_po_ingests_and_leaves_po_untouched` |
 
 ## Bloque 6 — Ciclo de vida, cancelación e invariantes
 
@@ -97,21 +97,21 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | L4 | Modificación de orden confirmada | Stock restaurado sin doble conteo | ✅ `test_modify_restores_deducted_stock_without_double_count` |
 | L5 | Race de reservas: dos dueños reservan el mismo stock | Al menos uno debe fallar limpio | ✅ `test_two_session_reserve_race_at_most_one_succeeds` — **Arreglado**: `reserve_stock` ahora toma `SELECT ... FOR UPDATE` sobre la fila de `Inventory` antes de leer disponibilidad e insertar, serializando las reservas concurrentes por SKU (el TOCTOU que doble-reservaba está cerrado, sin cambio de esquema). El test ya no es `xfail`: T2 o bloquea sobre el lock de T1 (cancelado por `lock_timeout`) o lee la reserva commiteada y es rechazado limpio con `InsufficientStockError`; a lo sumo una reserva activa del lote disputado sobrevive |
 | L6 | Invariante: stock nunca negativo (cantidades arbitrarias) | `Inventory.quantity_on_hand − reservas activas ≥ 0` bajo cualquier cantidad | ✅ `test_arbitrary_reservation_sequences_preserve_stock_invariants` (property-based con `hypothesis`, DB real: cada ejemplo aplica una secuencia arbitraria de pedidos y verifica que el stock en mano no cambie, la disponibilidad nunca sea negativa y una reserva rechazada no altere el estado) |
-| L7 | Invariante: `catalogo.stock_disponible` vs `Inventory` | Hoy **se desincronizan por diseño** (la deducción solo toca `Inventory`); decidir si es deuda y documentar con test | 🔲 (decisión pendiente) |
+| L7 | Invariante: `catalogo.stock_disponible` vs `Inventory` | Resuelto (**ADR 0002**): `Inventory.quantity_on_hand` es la única fuente de stock en mano; el contador legacy `catalogo.stock_disponible` fue **retirado** (columna eliminada por migración `934d98c5d1b2`, todos los dual-writes ahora Inventory-only, la UI lee `Inventory`). El desync es imposible por construcción | ✅ `test_e2e_owner_order_confirms_and_deducts_stock`, `test_confirm_and_register_converts_deducts_and_confirms` (ambos asertan `not hasattr(Catalogo, "stock_disponible")`) |
 
 ## Resumen de faltantes
 
-| ID | Gap | Prioridad sugerida |
-|---|---|---|
-| R8, L7 | Decisiones semánticas pendientes antes de testear | Media — decidir primero, testear después |
+No quedan faltantes: los 9 escenarios de ingesta (R1–R8) y los 7 de ciclo de vida/invariantes (L1–L7) están implementados y testeados. R8 y L7 se cerraron como decisión semántica en **ADR 0002** (`docs/adr/0002-receipt-ingestion-po-agnostic-inventory-single-source.md`) y sus tests la documentan.
+
+Deuda aceptada registrada en el ADR (no cubierta por la matriz): riesgo de doble-bump si el mismo remito se procesa por ambas vías (ingesta + receive de PO); mitigación procedimental "un remito, un camino".
 
 ## Checklist
 
 - [ ] Todo escenario ✅ mantiene su test verde en CI (Postgres de prueba corriendo).
 - [ ] Los faltantes nuevos siguen la convención: docstring en español de una línea + `make test-docs` actualiza `escenarios-testeados.md`.
-- [ ] R8 y L7 se resuelven como decisión (ADR) antes de escribir su test.
+- [x] R8 y L7 se resuelven como decisión (ADR) antes de escribir su test.
 - [ ] Si se adopta `hypothesis` y/o `factory_boy`, L6 y los faltantes del bloque 1 se reimplementan sobre la fábrica compartida.
 
 ## Próximo paso
 
-Los faltantes de prioridad alta (Q2, Q3, C5) ya están implementados. R6 (ingesta con proveedor inactivo) también está cerrado, el doble-reservado de L5 está arreglado (`FOR UPDATE` en `reserve_stock`) y L6 está testeado y registrado en `escenarios-testeados.md`. Sigue la media: abrir la decisión de R8/L7 en un ADR.
+La matriz está completa: R1–R8 y L1–L7 cerrados. Q2, Q3, C5 (prioridad alta) se cerraron antes, R6 con su guard, L5 arreglado con `FOR UPDATE` y L6 con property-based testing. El cierre semántico de R8/L7 quedó registrado en **ADR 0002**, con los tests e2e correspondientes y la columna `catalogo.stock_disponible` retirada (migración `934d98c5d1b2`). Siguiente frente natural: los faltantes de prioridad baja del resto de bloques, o atacar la deuda registrada en el ADR (convención de ledger unificada entre las dos vías de recepción).
