@@ -67,6 +67,7 @@ from src.backoffice.customer_orders import (
 )
 from src.backoffice.ingestion import (
     IngestResult,
+    PendingReason,
     ReceiptLine,
     ResolvedLine,
     UnresolvedLineError,
@@ -454,18 +455,20 @@ def test_resolve_lines_hybrid_ignores_other_supplier_products(shop_ctx):
 
 
 def test_resolve_lines_duplicate_exact_stays_pending(shop_ctx):
-    """[rag-doc R3/R5] >1 hit exacto → pendiente: nunca se elige silenciosamente."""
+    """[rag-doc R3/R5] >1 hit exacto → ambigua: nunca se elige silenciosamente."""
     rag = FakeRag(exact=(_product(node_id="n-1"), _product(node_id="n-2")))
     resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
     assert resolved[0].pending
+    assert resolved[0].pending_reason is PendingReason.AMBIGUOUS
     assert rag.query_calls == []  # ambiguous exact is pending, no hybrid either
 
 
 def test_resolve_lines_no_match_stays_pending(shop_ctx):
-    """[manual R2] Sin match exacto ni híbrido → la línea queda pendiente."""
+    """[manual R2] Sin match exacto ni híbrido → pendiente sin candidatos (ADR 0003)."""
     rag = FakeRag(exact=(), hybrid=())
     resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
     assert resolved[0].pending
+    assert resolved[0].pending_reason is PendingReason.NO_CANDIDATES
 
 
 def test_resolve_lines_normalizes_codigo_orig_uppercase_trim(shop_ctx):
@@ -483,13 +486,11 @@ def test_resolve_lines_zero_quantity_does_not_gate(shop_ctx):
     assert rag.exact_calls == []  # never queried
 
 
-def test_ingest_unresolved_positive_line_fails_closed(shop_ctx):
-    """[rag-doc R5] Una línea positiva sin resolver impide el ingreso (fail closed)."""
-    lines = [ResolvedLine(receipt=_receipt(), product=None)]
-    with pytest.raises(UnresolvedLineError, match="unresolved"):
-        ingest_receipt_lines(
-            shop_ctx["session"], 1, lines, OwnerContext(owner_id="t"), _embedder()
-        )
+def test_ingest_ambiguous_line_blocks_confirmation(shop_ctx):
+    """[rag-doc R5] Línea ambigua (>1 hits) sin asignar impide el ingreso (ADR 0003)."""
+    lines = [ResolvedLine(receipt=_receipt(), product=None, pending_reason=PendingReason.AMBIGUOUS)]
+    with pytest.raises(UnresolvedLineError, match="ambiguous lines require manual assignment"):
+        ingest_receipt_lines(shop_ctx["session"], 1, lines, OwnerContext(owner_id="t"), _embedder())
     assert shop_ctx["session"].scalar(select(Inventory)) is None  # nothing written
 
 
@@ -549,6 +550,135 @@ def test_ingest_adopts_new_product_with_rag_origen_dict(shop_ctx):
     assert session.scalar(
         select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")
     ).quantity_on_hand == 4
+
+
+def test_ingest_no_candidate_adopts_definitive_product_with_remito_origen(shop_ctx):
+    """[ADR 0003] Línea sin match en el índice → producto DEFINITIVO con origen remito."""
+    session = shop_ctx["session"]
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=3,
+            source_file="remito-2026-09-10.jpg",
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.nombre_oficial == "Tarugo Fischer 8mm"
+    assert created.costo_proveedor == Decimal("95.00")
+    assert created.precio_lista_base == Decimal("104.50")  # 95.00 × 1.10
+    assert created.embedding is not None
+    assert len(created.embedding) == 1536
+    remito = dict(created.origen["remito"])
+    remito.pop("fecha_ingesta")  # ingest timestamp: audited but nondeterministic
+    assert remito == {
+        "archivo_origen": "remito-2026-09-10.jpg",
+        "codigo_proveedor": "MSA",
+        "pagina_origen": 3,
+        "linea": {
+            "codigo_orig": "AT-5044",
+            "descripcion": "Tarugo Fischer 8mm",
+            "cantidad": 4,
+            "costo": "95.00",
+        },
+    }
+    assert "fecha_ingesta" in created.origen["remito"]
+    assert (
+        session.scalar(select(StockAdjustment).where(StockAdjustment.sku == "MSA-AT-5044")).delta
+        == 4
+    )
+    assert (
+        session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")).quantity_on_hand
+        == 4
+    )
+
+
+def test_ingest_no_candidate_local_sku_collision_bumps_existing(shop_ctx):
+    """[ADR 0003] El SKU calculado ya existe en el catálogo local → bump, no duplicado."""
+    session = shop_ctx["session"]
+    _seed_receipt_product(
+        session, codigo_interno="MSA-AT-5044", origen={"rag": {"node_id": "node-tar"}}
+    )
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=1,
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=1, created=0)
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert product.origen == {"rag": {"node_id": "node-tar"}}  # write-once: untouched
+    assert (
+        session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")).quantity_on_hand
+        == 4
+    )
+    assert (
+        len(session.scalars(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044")).all())
+        == 1  # no duplicate row
+    )
+
+
+def test_ingest_no_candidate_without_code_builds_sku_from_description(shop_ctx):
+    """[ADR 0003] Sin codigo_orig el SKU sale de la descripción normalizada."""
+    session = shop_ctx["session"]
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig=None,
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=2,
+            costo=None,
+            pagina=1,
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(
+        select(Catalogo).where(Catalogo.codigo_interno == "MSA-TARUGO-FISCHER-8MM")
+    )
+    assert created is not None
+    assert created.costo_proveedor == Decimal("0.00")  # document showed no cost
+
+
+def test_ingest_no_candidate_embedding_failure_adopts_without_vector(shop_ctx):
+    """[ADR 0003] Fallo del embedder NO bloquea: se adopta el producto sin vector."""
+    session = shop_ctx["session"]
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=1,
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(
+        session, 1, [line], OwnerContext(owner_id="t"), _embedder(fail=True)
+    )
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.embedding is None
+    assert (
+        session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")).quantity_on_hand
+        == 4
+    )
 
 
 def test_ingest_embed_failure_rolls_back_whole_confirmation(shop_ctx):
@@ -912,11 +1042,11 @@ def test_app_ingest_parse_returns_grid_with_resolved_and_pending(shop_ctx, tmp_p
     assert len(grid) == 2
     assert grid[0][0] == "CLV-001"
     assert grid[0][1] == "Clavos Paris 2 Pulgadas"
-    assert grid[0][4] == "PENDIENTE"
-    assert grid[1][4] == "PENDIENTE"
-    assert len(state) == 2  # both lines pending: exact miss + no hybrid candidates
+    assert grid[0][4] == "NUEVO (por confirmar)"  # no candidates → definitive on confirm
+    assert grid[1][4] == "NUEVO (por confirmar)"
+    assert len(state) == 2  # both lines no-candidates: exact miss + no hybrid candidates
     assert all(line.pending for line in state)
-    assert "2 líneas; 2 pendiente(s)" in message
+    assert "2 líneas; 2 sin match en el índice (se adoptan al confirmar)" in message
 
 
 def test_app_ingest_parse_exact_resolves_line(shop_ctx, tmp_path):
@@ -964,15 +1094,47 @@ def test_app_ingest_manual_search_and_assign_fix_pending(shop_ctx):
     assert grid[0][4] == "AT-5044 — Tarugo Fischer 8mm"
 
 
-def test_app_ingest_confirm_blocked_while_pending(shop_ctx):
-    """[rag-doc R4] Confirmación bloqueada con líneas pendientes; mensaje las lista."""
+def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):
+    """[rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista."""
     shop_ctx["session"].commit()
-    pending = ResolvedLine(receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"))
+    pending = ResolvedLine(
+        receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"),
+        pending_reason=PendingReason.AMBIGUOUS,
+    )
     message = _ingest_confirm((pending,), 1, _embedder())
     assert "bloqueado" in message
+    assert "asignación manual" in message
     assert "AT-5044" in message
     with SessionLocal() as session:
         assert session.scalar(select(Inventory)) is None  # zero writes while blocked
+
+
+def test_app_ingest_confirm_adopts_no_candidate_line(shop_ctx):
+    """[ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo."""
+    shop_ctx["session"].commit()
+    no_candidate = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=1,
+            source_file="remito.jpg",
+        ),
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    message = _ingest_confirm((no_candidate,), 1, _embedder())
+    assert message == "Ingresado: 0 actualizados, 1 nuevos."
+    with SessionLocal() as session:
+        created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+        assert created is not None
+        assert created.origen is not None and "remito" in created.origen
+        assert (
+            session.scalar(
+                select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")
+            ).quantity_on_hand
+            == 4
+        )
 
 
 def test_app_ingest_confirm_unblocked_when_all_resolved(shop_ctx):

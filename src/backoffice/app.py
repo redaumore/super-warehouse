@@ -64,6 +64,7 @@ from src.backoffice.customer_orders import (
     update_manual_order_action,
 )
 from src.backoffice.ingestion import (
+    PendingReason,
     ResolvedLine,
     UnresolvedLineError,
     hybrid_candidates,
@@ -306,12 +307,22 @@ def _supplier_choices_update() -> gr.Dropdown:
 
 
 def _resolved_grid(lines: Sequence[ResolvedLine]) -> list[list[object]]:
-    """Render resolved/pending receipt lines for the review grid."""
+    """Render resolved/pending receipt lines for the review grid.
+
+    Pending labels follow ADR 0003: a NO_CANDIDATES line shows
+    ``NUEVO (por confirmar)`` — it becomes a definitive product on confirm —
+    while an AMBIGUOUS line keeps ``PENDIENTE`` (manual assignment required).
+    Zero/negative-quantity lines are never ingested and stay ``PENDIENTE``.
+    """
     rows: list[list[object]] = []
     for resolved in lines:
         receipt = resolved.receipt
         if resolved.product is not None:
             resolution = f"{resolved.product.sku} — {resolved.product.name}"
+        elif resolved.pending_reason is PendingReason.AMBIGUOUS:
+            resolution = "PENDIENTE"
+        elif receipt.cantidad > 0:
+            resolution = "NUEVO (por confirmar)"
         else:
             resolution = "PENDIENTE"
         rows.append(
@@ -352,18 +363,35 @@ def _ingest_parse(
         )
     except RagProductError as exc:
         return [], (), f"Error: RAG no disponible ({exc})"
-    receipt_lines = to_receipt_lines(document_lines)
+    receipt_lines = to_receipt_lines(document_lines, source_file=filename)
     with SessionLocal() as session:
         resolved = resolve_lines(
             session, client, receipt_lines, supplier_id=int(str(supplier_id))
         )
     grid = _resolved_grid(resolved)
-    pending = sum(1 for line in resolved if line.pending and line.receipt.cantidad > 0)
-    message = (
-        f"{len(grid)} líneas; {pending} pendiente(s) de resolver."
-        if grid
-        else "No se extrajeron líneas legibles."
-    )
+    if grid:
+        parts = [f"{len(grid)} líneas"]
+        ambiguous = sum(
+            1
+            for line in resolved
+            if line.receipt.cantidad > 0
+            and line.pending
+            and line.pending_reason is PendingReason.AMBIGUOUS
+        )
+        new_products = sum(
+            1
+            for line in resolved
+            if line.receipt.cantidad > 0
+            and line.pending
+            and line.pending_reason is not PendingReason.AMBIGUOUS
+        )
+        if ambiguous:
+            parts.append(f"{ambiguous} ambigua(s) de asignar manualmente")
+        if new_products:
+            parts.append(f"{new_products} sin match en el índice (se adoptan al confirmar)")
+        message = "; ".join(parts) + "."
+    else:
+        message = "No se extrajeron líneas legibles."
     return grid, resolved, message
 
 
@@ -447,16 +475,26 @@ def _ingest_assign(
 
 
 def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> str:
-    """Gated confirmation: blocked while any positive-qty line is unresolved."""
+    """Gated confirmation: blocked only while AMBIGUOUS lines are unresolved.
+
+    Per ADR 0003 a NO_CANDIDATES line does not block: it is adopted as a
+    definitive new product inside ``ingest_receipt_lines``.
+    """
     lines = list(state) if isinstance(state, (tuple, list)) else []
     if not lines:
         return "Primero parseá un documento."
-    pending = [line for line in lines if line.pending and line.receipt.cantidad > 0]
-    if pending:
+    ambiguous = [
+        line
+        for line in lines
+        if line.pending
+        and line.receipt.cantidad > 0
+        and line.pending_reason is PendingReason.AMBIGUOUS
+    ]
+    if ambiguous:
         detail = "; ".join(
-            line.receipt.codigo_orig or line.receipt.descripcion for line in pending[:5]
+            line.receipt.codigo_orig or line.receipt.descripcion for line in ambiguous[:5]
         )
-        return f"Ingreso bloqueado: líneas sin resolver: {detail}"
+        return f"Ingreso bloqueado: líneas ambiguas requieren asignación manual: {detail}"
     with SessionLocal() as session:
         try:
             result = ingest_receipt_lines(

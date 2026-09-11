@@ -2,10 +2,11 @@
 
 Drives the RAG-backed path end-to-end with a mocked ``RagProductClient``:
 upload → parse → two-pass resolve → review grid → gated confirm writes stock
-with ``node_id`` provenance. Covers: unmatched lines (no ``Catalogo`` created,
-confirm blocked), manual assignment of pending lines, RAG down → honest error
-with zero writes, and the standalone barcode stock-query flow (decoder mocked,
-catalog lookup real).
+with ``node_id`` provenance. Covers: unmatched lines (no index candidate →
+definitive adoption per ADR 0003), ambiguous lines (2+ candidates → confirm
+blocked, manual assignment), manual assignment of pending lines, RAG down →
+honest error with zero writes, and the standalone barcode stock-query flow
+(decoder mocked, catalog lookup real).
 
 Skipped cleanly when Postgres is not running.
 """
@@ -185,8 +186,8 @@ def test_e2e_receipt_flow_writes_stock_with_node_id_provenance(supplier, tmp_pat
     assert adjustment.actor == "owner:backoffice-ui"
 
 
-def test_e2e_unmatched_line_blocks_confirm_and_creates_nothing(supplier, tmp_path):
-    """[rag-doc R5][sup-doc R2] Línea sin match → no Catalogo + confirm bloqueado."""
+def test_e2e_unmatched_line_confirms_and_adopts_definitive_product(supplier, tmp_path):
+    """[ADR 0003] Línea sin match en el índice → confirmar crea producto definitivo."""
     session = supplier["session"]
     paint_line = DocumentLine(
         codigo_orig="PINT-001",
@@ -202,17 +203,72 @@ def test_e2e_unmatched_line_blocks_confirm_and_creates_nothing(supplier, tmp_pat
         hybrid=(),
     )
     grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
-    assert grid[1][4] == "PENDIENTE"
+    assert grid[0][4] == "CLV-PRS-2 — Clavos Paris 2 Pulgadas"
+    assert grid[1][4] == "NUEVO (por confirmar)"  # no candidates, not a blocker
+
+    result_message = _ingest_confirm(state, 1, _embedder())
+    assert result_message == "Ingresado: 1 actualizados, 1 nuevos."
+
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001"))
+    assert created is not None
+    assert created.nombre_oficial == "Pintura Látex Blanco"
+    assert created.costo_proveedor == Decimal("3200.00")
+    assert created.embedding is not None
+    remito = dict(created.origen["remito"])
+    remito.pop("fecha_ingesta")  # ingest timestamp: audited but nondeterministic
+    assert remito == {
+        "archivo_origen": "remito.jpg",
+        "codigo_proveedor": "MSA",
+        "pagina_origen": 1,
+        "linea": {
+            "codigo_orig": "PINT-001",
+            "descripcion": "Pintura Látex Blanco",
+            "cantidad": 4,
+            "costo": "3200.00",
+        },
+    }
+    # The resolved line bumped existing stock; the new product carries its own.
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 60  # 50 + 10
+    created_inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-PINT-001"))
+    assert created_inventory.quantity_on_hand == 4
+    adjustments = session.scalars(
+        select(StockAdjustment).where(StockAdjustment.sku == "MSA-PINT-001")
+    ).all()
+    assert len(adjustments) == 1
+    assert adjustments[0].delta == 4
+    assert adjustments[0].reason == "receipt_ingestion"
+    assert adjustments[0].actor == "owner:backoffice-ui"
+
+
+def test_e2e_ambiguous_line_blocks_confirm_and_creates_nothing(supplier, tmp_path):
+    """[rag-doc R4/R5] Línea ambigua (>1 hits) → confirm bloqueado, cero escrituras."""
+    session = supplier["session"]
+    duplicate = RagProduct(
+        sku="CLV-PRS-2",
+        name="Clavos Paris 2 Pulgadas (duplicado)",
+        codigo_proveedor="MSA",
+        price=135.5,
+        currency="ARS",
+        node_id="node_clv_prs_2_dup",
+    )
+    rag = FakeRag(
+        parse_lines=(_clavos_line(),),
+        exact={"CLV-PRS-2": (_clavos_product(), duplicate)},
+        hybrid=(),
+    )
+    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert grid[0][4] == "PENDIENTE"  # ambiguous: manual assignment required
 
     blocked = _ingest_confirm(state, 1, _embedder())
     assert "bloqueado" in blocked
-    assert "PINT-001" in blocked
+    assert "asignación manual" in blocked
+    assert "CLV-PRS-2" in blocked
 
-    session.rollback()
-    assert session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")) is None
     # zero writes while blocked: only the seeded Inventory row exists, unchanged
     inventory_rows = session.scalars(select(Inventory)).all()
     assert [row.quantity_on_hand for row in inventory_rows] == [50]
+    assert session.scalars(select(StockAdjustment)).all() == []
 
 
 def test_e2e_manual_assignment_resolves_pending_and_adopts(supplier, tmp_path):

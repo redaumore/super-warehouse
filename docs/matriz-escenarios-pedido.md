@@ -11,7 +11,7 @@ El flujo no es una lista plana de casos: es la combinación de **4 dimensiones i
 | **D1. Disponibilidad por línea** | A: stock suficiente · Insuficiente (parcial) · B: falta, con candidatos · C: falta, sin candidatos |
 | **D2. Composición del pedido** | Solo LOCAL · LOCAL + RAG (mixto) · Solo RAG |
 | **D3. Orden de compra al proveedor** | No existe (se crea) · OPEN existente (se agrega ítems) · SENT existente · Compartida con otro pedido |
-| **D4. Resultado de ingesta de remito** | Resuelto 1:1 · Ambiguo (>1 hits) · SKU nuevo (adopción RAG) · No resuelto (fail-closed) · Embeddings caídos · Proveedor inactivo · Documento ilegible |
+| **D4. Resultado de ingesta de remito** | Resuelto 1:1 · Ambiguo (>1 hits) · SKU nuevo (adopción RAG) · Sin match en el índice (adopción definitiva, ADR 0003) · Embeddings caídos · Proveedor inactivo · Documento ilegible |
 
 La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza con ~30 escenarios; el producto cartesiano total sería exponencial y no aporta.
 
@@ -79,7 +79,7 @@ La cobertura completa por parejas (pairwise) entre estas dimensiones se alcanza 
 | ID | Escenario | Comportamiento esperado | Test |
 |---|---|---|---|
 | R1 | SKU existente, resuelto 1:1 | Stock bump + espejo Inventory + `StockAdjustment(receipt_ingestion)` con provenance | ✅ `test_e2e_receipt_flow_writes_stock_with_node_id_provenance` |
-| R2 | Línea no resoluble | Fail-closed: nada se escribe, confirmación bloqueada | ✅ `test_e2e_unmatched_line_blocks_confirm_and_creates_nothing` |
+| R2 | Línea sin match en el índice RAG (0 exactos, 0 híbridos) | Se adopta como producto **DEFINITIVO** al confirmar (**ADR 0003**): sin flag provisional ni pantalla de revisión, con `origen={"remito": {...}}` y embedding best-effort (un fallo del embedder la adopta sin vector). Si el SKU calculado ya existe en el catálogo local, se bumpea el stock del existente en lugar de duplicarlo | ✅ `test_e2e_unmatched_line_confirms_and_adopts_definitive_product` |
 | R3 | Línea ambigua (>1 hits) | Queda pendiente de asignación manual; luego adopta | ✅ `test_e2e_manual_assignment_resolves_pending_and_adopts`, `test_e2e_manual_search_and_assign_fixes_pending_line` |
 | R4 | RAG caído durante la ingesta | Error honesto al usuario, nada escrito | ✅ `test_e2e_rag_down_shows_honest_error_and_writes_nothing` |
 | R5 | Embedding falla / dimensión inválida en adopción | Rollback total (`EmbeddingUnavailableError`); el bump ya preparado de otra línea también se descarta | ✅ `test_e2e_embedding_failure_rolls_back_full_ingestion`, `test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion` |

@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 489, agrupados en 34 dominios.
+**Total de escenarios:** 495, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,10 +36,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 88
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 93
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 12
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 13
 - [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
@@ -598,13 +598,17 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [rag-doc R3] Un hit exacto resuelve la línea sin correr búsqueda híbrida. _(`test_resolve_lines_exact_hit_resolves_without_hybrid`)_
 - [rag-doc R3] Un miss exacto cae al híbrido, scoped al proveedor. _(`test_resolve_lines_exact_miss_falls_back_to_hybrid_scoped`)_
 - [rag-doc R3] El híbrido se filtra al proveedor: filas de otro proveedor no resuelven. _(`test_resolve_lines_hybrid_ignores_other_supplier_products`)_
-- [rag-doc R3/R5] >1 hit exacto → pendiente: nunca se elige silenciosamente. _(`test_resolve_lines_duplicate_exact_stays_pending`)_
-- [manual R2] Sin match exacto ni híbrido → la línea queda pendiente. _(`test_resolve_lines_no_match_stays_pending`)_
+- [rag-doc R3/R5] >1 hit exacto → ambigua: nunca se elige silenciosamente. _(`test_resolve_lines_duplicate_exact_stays_pending`)_
+- [manual R2] Sin match exacto ni híbrido → pendiente sin candidatos (ADR 0003). _(`test_resolve_lines_no_match_stays_pending`)_
 - [rag-doc R3] El código se normaliza UPPER(TRIM) antes del lookup exacto. _(`test_resolve_lines_normalizes_codigo_orig_uppercase_trim`)_
 - Las líneas sin cantidad positiva no se resuelven ni bloquean el ingreso. _(`test_resolve_lines_zero_quantity_does_not_gate`)_
-- [rag-doc R5] Una línea positiva sin resolver impide el ingreso (fail closed). _(`test_ingest_unresolved_positive_line_fails_closed`)_
+- [rag-doc R5] Línea ambigua (>1 hits) sin asignar impide el ingreso (ADR 0003). _(`test_ingest_ambiguous_line_blocks_confirmation`)_
 - [rag-doc R5] SKU existente: bump + Inventory + StockAdjustment, origen intacto. _(`test_ingest_updates_existing_stock_keeps_origen_and_audits`)_
 - [rag-doc R5] Solo-en-RAG: se adopta con origen {"rag": {node_id, ...}}. _(`test_ingest_adopts_new_product_with_rag_origen_dict`)_
+- [ADR 0003] Línea sin match en el índice → producto DEFINITIVO con origen remito. _(`test_ingest_no_candidate_adopts_definitive_product_with_remito_origen`)_
+- [ADR 0003] El SKU calculado ya existe en el catálogo local → bump, no duplicado. _(`test_ingest_no_candidate_local_sku_collision_bumps_existing`)_
+- [ADR 0003] Sin codigo_orig el SKU sale de la descripción normalizada. _(`test_ingest_no_candidate_without_code_builds_sku_from_description`)_
+- [ADR 0003] Fallo del embedder NO bloquea: se adopta el producto sin vector. _(`test_ingest_no_candidate_embedding_failure_adopts_without_vector`)_
 - [rag-doc R5] Fallo de embedding → la confirmación completa se revierte. _(`test_ingest_embed_failure_rolls_back_whole_confirmation`)_
 - [rag-doc R5] Resuelto sin node_id → no se persiste nada (provenance obligatoria). _(`test_ingest_missing_node_id_fails_closed`)_
 - [rag-doc R1] Proveedor desconocido → KeyError antes de escribir. _(`test_ingest_unknown_supplier_raises`)_
@@ -624,7 +628,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes. _(`test_app_ingest_parse_returns_grid_with_resolved_and_pending`)_
 - [rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla. _(`test_app_ingest_parse_exact_resolves_line`)_
 - [manual R1] La búsqueda manual devuelve candidatos y asignar resuelve la línea. _(`test_app_ingest_manual_search_and_assign_fix_pending`)_
-- [rag-doc R4] Confirmación bloqueada con líneas pendientes; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_pending`)_
+- [rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_ambiguous`)_
+- [ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo. _(`test_app_ingest_confirm_adopts_no_candidate_line`)_
 - [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_
 - The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
 - Solo las acciones legales del estado se ofrecen en el tab (backoffice spec). _(`test_legal_actions_per_state`)_
@@ -707,7 +712,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 ## E2E: ingesta de documentos
 
 - [rag-doc R5] Upload → parse → resolve → confirm escribe stock con provenance. _(`test_e2e_receipt_flow_writes_stock_with_node_id_provenance`)_
-- [rag-doc R5][sup-doc R2] Línea sin match → no Catalogo + confirm bloqueado. _(`test_e2e_unmatched_line_blocks_confirm_and_creates_nothing`)_
+- [ADR 0003] Línea sin match en el índice → confirmar crea producto definitivo. _(`test_e2e_unmatched_line_confirms_and_adopts_definitive_product`)_
+- [rag-doc R4/R5] Línea ambigua (>1 hits) → confirm bloqueado, cero escrituras. _(`test_e2e_ambiguous_line_blocks_confirm_and_creates_nothing`)_
 - [manual R1][rag-doc R5] Búsqueda manual + asignación adopta con origen rag. _(`test_e2e_manual_assignment_resolves_pending_and_adopts`)_
 - [manual R1] Sin fallback automático, la búsqueda manual resuelve la línea. _(`test_e2e_manual_search_and_assign_fixes_pending_line`)_
 - [rag-doc R6] RAG caído → error honesto, cero escrituras. _(`test_e2e_rag_down_shows_honest_error_and_writes_nothing`)_
