@@ -395,10 +395,29 @@ def _ingest_parse(
     return grid, resolved, message
 
 
+def _candidate_rows(candidates: Sequence[RagProduct]) -> list[list[object]]:
+    """Render RAG candidates for the manual-assignment grid (1:1 with state)."""
+    return [
+        [
+            product.sku,
+            product.name,
+            product.brand or "",
+            product.price if product.price is not None else "",
+            product.node_id or "",
+        ]
+        for product in candidates
+    ]
+
+
 def _ingest_manual_search(
     client: RagProductClient, line_index: object, query_text: object, supplier_id: object
 ) -> tuple[list[list[object]], tuple[RagProduct, ...], str]:
-    """Per-line RAG product-code search for a pending line (supplier-scoped)."""
+    """Per-line RAG product-code search for a pending line (supplier-scoped).
+
+    Exact-code lookup first: a query like ``SM 0048-84`` vectorizes poorly and
+    the hybrid endpoint returns irrelevant products, so an exact code match
+    (even several — the owner picks) short-circuits the hybrid fallback.
+    """
     line_idx = _as_index(line_index)
     if line_idx < 0:
         return [], (), "Seleccioná el número de línea pendiente (1-based)."
@@ -412,25 +431,64 @@ def _ingest_manual_search(
             return [], (), f"Error: {exc}"
         supplier_code = supplier.code
     try:
-        candidates = hybrid_candidates(client, supplier_code, text)
+        exact_matches = client.exact_lookup(text.upper(), codigo_proveedor=supplier_code)
+        if exact_matches:
+            candidates = tuple(exact_matches)
+            note = " (coincidencia exacta de código)"
+        else:
+            candidates = hybrid_candidates(client, supplier_code, text)
+            note = ""
     except RagProductError as exc:
         return [], (), f"Error: RAG no disponible ({exc})"
-    rows: list[list[object]] = [
-        [
-            product.sku,
-            product.name,
-            product.brand or "",
-            product.price if product.price is not None else "",
-            product.node_id or "",
-        ]
-        for product in candidates
-    ]
+    rows = _candidate_rows(candidates)
     message = (
-        f"{len(rows)} candidato(s) para la línea {line_idx + 1}. Seleccioná uno y asignalo."
+        f"{len(rows)} candidato(s){note} para la línea {line_idx + 1}. Seleccioná uno y asignalo."
         if rows
         else "Sin resultados: la línea sigue pendiente."
     )
     return rows, candidates, message
+
+
+def _pending_row_selected(
+    evt: gr.SelectData, state: object
+) -> tuple[list[list[object]], tuple[RagProduct, ...], str]:
+    """Populate the candidate grid from the cached candidates of a pending row.
+
+    Selecting a row in the main resolved grid maps 1:1 to the line index; an
+    AMBIGUOUS line whose resolution cached RAG candidates shows them right
+    away — no re-search. Read-only: no COMMIT, pure UI state.
+    """
+    lines = list(state) if isinstance(state, (tuple, list)) else []
+    if not getattr(evt, "selected", False):
+        return [], (), ""
+    idx = _manual_row_selected(evt)  # same click → index mapping as the candidate grid
+    if idx is None or idx < 0 or idx >= len(lines):
+        return [], (), ""
+    line = lines[idx]
+    if (
+        line.pending
+        and line.pending_reason is PendingReason.AMBIGUOUS
+        and line.candidates
+    ):
+        return (
+            _candidate_rows(line.candidates),
+            line.candidates,
+            (
+                f"{len(line.candidates)} candidatos recuperados para la línea {idx + 1}. "
+                "Seleccioná uno y asignalo."
+            ),
+        )
+    if line.pending and line.pending_reason is PendingReason.AMBIGUOUS:
+        return [], (), (
+            f"La línea {idx + 1} es ambigua pero no tiene candidatos cacheados: "
+            "usá la búsqueda manual."
+        )
+    if line.pending:
+        return [], (), (
+            f"La línea {idx + 1} no tiene candidatos en el índice: al confirmar se "
+            "adopta como producto nuevo. Solo las ambiguas requieren asignación."
+        )
+    return [], (), f"La línea {idx + 1} ya está resuelta: no requiere asignación."
 
 
 def _manual_row_selected(evt: gr.SelectData) -> int | None:
@@ -469,7 +527,9 @@ def _ingest_assign(
     current = lines[line_idx]
     if not current.pending:
         return tuple(lines), _resolved_grid(lines), "Esa línea ya está resuelta."
-    lines[line_idx] = ResolvedLine(receipt=current.receipt, product=product)
+    lines[line_idx] = ResolvedLine(
+        receipt=current.receipt, product=product, candidates=current.candidates
+    )
     updated = tuple(lines)
     return updated, _resolved_grid(updated), f"Línea {line_idx + 1} asignada: {product.sku}"
 
@@ -2396,6 +2456,11 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 _ingest_parse,
                 inputs=[gr.State(_get_rag_client()), upload, supplier_selector],
                 outputs=[preview_grid, resolved_state, preview_status],
+            )
+            preview_grid.select(
+                _pending_row_selected,
+                [resolved_state],
+                [manual_results, manual_results_state, manual_status],
             )
             manual_search_btn.click(
                 _ingest_manual_search,

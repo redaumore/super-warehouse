@@ -97,12 +97,16 @@ class ResolvedLine:
     """A receipt line with its attached RAG product; ``None`` means pending.
 
     ``pending_reason`` classifies the pending state (see ``PendingReason``);
-    it is only meaningful when ``product`` is ``None``.
+    it is only meaningful when ``product`` is ``None``. ``candidates`` caches
+    the RAG rows retrieved during resolution for AMBIGUOUS lines, so the
+    backoffice can offer them for manual assignment without re-querying the
+    index; resolved lines keep it empty.
     """
 
     receipt: ReceiptLine
     product: RagProduct | None = None
     pending_reason: PendingReason = PendingReason.NONE
+    candidates: tuple[RagProduct, ...] = ()
 
     @property
     def pending(self) -> bool:
@@ -168,12 +172,13 @@ def resolve_lines(
         if line.cantidad <= 0:
             resolved.append(ResolvedLine(receipt=line))
             continue
-        product, reason = _auto_resolve(rag, line, supplier.code)
+        product, reason, candidates = _auto_resolve(rag, line, supplier.code)
         resolved.append(
             ResolvedLine(
                 receipt=line,
                 product=product,
                 pending_reason=PendingReason.NONE if product else reason,
+                candidates=candidates if product is None else (),
             )
         )
     return tuple(resolved)
@@ -181,27 +186,30 @@ def resolve_lines(
 
 def _auto_resolve(
     rag: RagProductClient, line: ReceiptLine, supplier_code: str
-) -> tuple[RagProduct | None, PendingReason]:
+) -> tuple[RagProduct | None, PendingReason, tuple[RagProduct, ...]]:
     """Resolve one line: exact hit → product, exact miss → hybrid (1 candidate).
 
-    Returns the product (or ``None``) plus the pending reason: ``AMBIGUOUS``
+    Returns the product (or ``None``) plus the pending reason — ``AMBIGUOUS``
     when the index holds 2+ candidates, ``NO_CANDIDATES`` when it returns
-    none (adopted as a definitive product at confirm time, ADR 0003).
+    none (adopted as a definitive product at confirm time, ADR 0003) — and
+    the candidates tuple retrieved during the ambiguous pass, cached on the
+    pending line so manual assignment can reuse it without re-querying.
     """
     key = (line.codigo_orig or "").strip().upper()
     if key:
         exact_matches = rag.exact_lookup(key, codigo_proveedor=supplier_code)
         if len(exact_matches) == 1:
-            return exact_matches[0], PendingReason.NONE
+            return exact_matches[0], PendingReason.NONE, ()
         if len(exact_matches) > 1:
-            return None, PendingReason.AMBIGUOUS  # duplicate codes — manual assignment
+            # duplicate codes — manual assignment with the exact hits cached
+            return None, PendingReason.AMBIGUOUS, tuple(exact_matches)
     query_text = f"{line.codigo_orig or ''} {line.descripcion}".strip()
     candidates = hybrid_candidates(rag, supplier_code, query_text)
     if len(candidates) == 1:
-        return candidates[0], PendingReason.NONE
+        return candidates[0], PendingReason.NONE, ()
     if len(candidates) > 1:
-        return None, PendingReason.AMBIGUOUS
-    return None, PendingReason.NO_CANDIDATES
+        return None, PendingReason.AMBIGUOUS, candidates
+    return None, PendingReason.NO_CANDIDATES, ()
 
 
 def hybrid_candidates(

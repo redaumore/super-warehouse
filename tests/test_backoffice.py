@@ -39,6 +39,7 @@ from src.backoffice.app import (
     _ingest_parse,
     _load_provider_documents,
     _order_row_selected,
+    _pending_row_selected,
     _register_client,
     _save_exchange_rate,
     build_app,
@@ -460,7 +461,23 @@ def test_resolve_lines_duplicate_exact_stays_pending(shop_ctx):
     resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
     assert resolved[0].pending
     assert resolved[0].pending_reason is PendingReason.AMBIGUOUS
+    assert resolved[0].candidates == (_product(node_id="n-1"), _product(node_id="n-2"))
     assert rag.query_calls == []  # ambiguous exact is pending, no hybrid either
+
+
+def test_resolve_lines_ambiguous_hybrid_caches_candidates(shop_ctx):
+    """[manual R1] >1 candidatos híbridos → ambigua con los candidatos cacheados."""
+    rag = FakeRag(
+        exact=(),
+        hybrid=(
+            _product(sku="A-1", name="Ducha flexible A", node_id="n-a"),
+            _product(sku="A-2", name="Ducha flexible B", node_id="n-b"),
+        ),
+    )
+    resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
+    assert resolved[0].pending
+    assert resolved[0].pending_reason is PendingReason.AMBIGUOUS
+    assert [p.node_id for p in resolved[0].candidates] == ["n-a", "n-b"]
 
 
 def test_resolve_lines_no_match_stays_pending(shop_ctx):
@@ -469,6 +486,7 @@ def test_resolve_lines_no_match_stays_pending(shop_ctx):
     resolved = resolve_lines(shop_ctx["session"], rag, [_receipt()], supplier_id=1)
     assert resolved[0].pending
     assert resolved[0].pending_reason is PendingReason.NO_CANDIDATES
+    assert resolved[0].candidates == ()
 
 
 def test_resolve_lines_normalizes_codigo_orig_uppercase_trim(shop_ctx):
@@ -1092,6 +1110,127 @@ def test_app_ingest_manual_search_and_assign_fix_pending(shop_ctx):
     assert "asignada" in assign_status
     assert new_state[0].product.node_id == "n-tar"
     assert grid[0][4] == "AT-5044 — Tarugo Fischer 8mm"
+
+
+def test_app_ingest_manual_search_exact_hit_skips_hybrid(shop_ctx):
+    """[manual R1] El código exacto hace lookup exacto: la híbrida ni se consulta."""
+    shop_ctx["session"].commit()
+    exact_product = RagProduct(
+        sku="SM-0048-84", name="Ducha Flexible Cromo 84cm", codigo_proveedor="MSA", node_id="n-ducha"
+    )
+
+    class _ExplodingHybridRag(FakeRag):
+        def query(self, text: str):
+            raise AssertionError("hybrid query must not run when exact lookup hits")
+
+    rag = _ExplodingHybridRag(exact=(exact_product,))
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "SM 0048-84", 1)
+    assert len(candidates_grid) == 1
+    assert candidates_grid[0][4] == "n-ducha"
+    assert candidates == (exact_product,)
+    assert "exacta" in status
+
+
+def test_app_ingest_manual_search_exact_miss_falls_back_to_hybrid(shop_ctx):
+    """[manual R1] Sin hit exacto cae a la híbrida scoped al proveedor."""
+    shop_ctx["session"].commit()
+    hybrid_product = RagProduct(
+        sku="AT-5044", name="Tarugo Fischer 8mm", codigo_proveedor="MSA", node_id="n-tar"
+    )
+    rag = FakeRag(exact=(), hybrid=(hybrid_product,))
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "tarugo 8mm", 1)
+    assert len(candidates_grid) == 1
+    assert candidates == (hybrid_product,)
+    assert "exacta" not in status
+    assert rag.exact_calls == [("TARUGO 8MM", "MSA")]
+    assert rag.query_calls == ["tarugo 8mm"]
+
+
+def test_app_ingest_manual_search_exact_multi_hit_returns_all(shop_ctx):
+    """[manual R1] Varios hits exactos comparten el código: se devuelven todos."""
+    shop_ctx["session"].commit()
+    dup_a = RagProduct(sku="SM-1", name="Ducha A", codigo_proveedor="MSA", node_id="n-a")
+    dup_b = RagProduct(sku="SM-2", name="Ducha B", codigo_proveedor="MSA", node_id="n-b")
+
+    class _ExplodingHybridRag(FakeRag):
+        def query(self, text: str):
+            raise AssertionError("hybrid query must not run when exact lookup hits")
+
+    rag = _ExplodingHybridRag(exact=(dup_a, dup_b))
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "SM-1", 1)
+    assert [row[4] for row in candidates_grid] == ["n-a", "n-b"]
+    assert candidates == (dup_a, dup_b)
+    assert "exacta" in status
+
+
+def test_pending_row_selected_fills_grid_from_cached_candidates(shop_ctx):
+    """[manual R1] Seleccionar la fila ambigua popula la grilla con los candidatos cacheados."""
+    cached = (
+        RagProduct(sku="SM-1", name="Ducha A", codigo_proveedor="MSA", node_id="n-a"),
+        RagProduct(sku="SM-2", name="Ducha B", codigo_proveedor="MSA", node_id="n-b"),
+    )
+    state = (
+        ResolvedLine(receipt=_receipt(cantidad=2), product=_product()),  # resolved row 1
+        ResolvedLine(
+            receipt=_receipt(codigo_orig="SM 0048-84", descripcion="Ducha flexible"),
+            pending_reason=PendingReason.AMBIGUOUS,
+            candidates=cached,
+        ),
+    )
+    evt = SimpleNamespace(selected=True, index=[1])
+    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    assert [row[4] for row in rows] == ["n-a", "n-b"]
+    assert candidates == cached
+    assert "2 candidatos recuperados para la línea 2" in message
+
+
+def test_pending_row_selected_resolved_row_clears_grid(shop_ctx):
+    """[manual R1] Fila resuelta → grilla limpia con mensaje de línea resuelta."""
+    state = (ResolvedLine(receipt=_receipt(cantidad=2), product=_product()),)
+    evt = SimpleNamespace(selected=True, index=[0])
+    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    assert rows == []
+    assert candidates == ()
+    assert "ya está resuelta" in message
+
+
+def test_pending_row_selected_ambiguous_without_candidates_clears_grid(shop_ctx):
+    """[manual R1] Ambigua sin cache → grilla limpia sugiriendo búsqueda manual."""
+    state = (
+        ResolvedLine(
+            receipt=_receipt(codigo_orig="SM 0048-84", descripcion="Ducha flexible"),
+            pending_reason=PendingReason.AMBIGUOUS,
+        ),
+    )
+    evt = SimpleNamespace(selected=True, index=[0])
+    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    assert rows == []
+    assert candidates == ()
+    assert "búsqueda manual" in message
+
+
+def test_pending_row_selected_no_candidates_row_clears_grid(shop_ctx):
+    """[ADR 0003] Fila sin candidatos en el índice → grilla limpia, se adopta al confirmar."""
+    state = (
+        ResolvedLine(
+            receipt=_receipt(codigo_orig="XX-1", descripcion="Producto raro"),
+            pending_reason=PendingReason.NO_CANDIDATES,
+        ),
+    )
+    evt = SimpleNamespace(selected=True, index=[0])
+    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    assert rows == []
+    assert candidates == ()
+    assert "no tiene candidatos" in message
+
+
+def test_pending_row_selected_deselection_is_a_noop(shop_ctx):
+    """Deseleccionar (o un evento sin fila usable) no toca la grilla ni el estado."""
+    evt = SimpleNamespace(selected=False, index=[0])
+    rows, candidates, message = _pending_row_selected(evt, ())  # type: ignore[arg-type]
+    assert rows == []
+    assert candidates == ()
+    assert message == ""
 
 
 def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):

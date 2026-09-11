@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 495, agrupados en 34 dominios.
+**Total de escenarios:** 504, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,7 +36,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 93
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 102
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 13
@@ -599,6 +599,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [rag-doc R3] Un miss exacto cae al híbrido, scoped al proveedor. _(`test_resolve_lines_exact_miss_falls_back_to_hybrid_scoped`)_
 - [rag-doc R3] El híbrido se filtra al proveedor: filas de otro proveedor no resuelven. _(`test_resolve_lines_hybrid_ignores_other_supplier_products`)_
 - [rag-doc R3/R5] >1 hit exacto → ambigua: nunca se elige silenciosamente. _(`test_resolve_lines_duplicate_exact_stays_pending`)_
+- [manual R1] >1 candidatos híbridos → ambigua con los candidatos cacheados. _(`test_resolve_lines_ambiguous_hybrid_caches_candidates`)_
 - [manual R2] Sin match exacto ni híbrido → pendiente sin candidatos (ADR 0003). _(`test_resolve_lines_no_match_stays_pending`)_
 - [rag-doc R3] El código se normaliza UPPER(TRIM) antes del lookup exacto. _(`test_resolve_lines_normalizes_codigo_orig_uppercase_trim`)_
 - Las líneas sin cantidad positiva no se resuelven ni bloquean el ingreso. _(`test_resolve_lines_zero_quantity_does_not_gate`)_
@@ -628,6 +629,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes. _(`test_app_ingest_parse_returns_grid_with_resolved_and_pending`)_
 - [rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla. _(`test_app_ingest_parse_exact_resolves_line`)_
 - [manual R1] La búsqueda manual devuelve candidatos y asignar resuelve la línea. _(`test_app_ingest_manual_search_and_assign_fix_pending`)_
+- [manual R1] El código exacto hace lookup exacto: la híbrida ni se consulta. _(`test_app_ingest_manual_search_exact_hit_skips_hybrid`)_
+- [manual R1] Sin hit exacto cae a la híbrida scoped al proveedor. _(`test_app_ingest_manual_search_exact_miss_falls_back_to_hybrid`)_
+- [manual R1] Varios hits exactos comparten el código: se devuelven todos. _(`test_app_ingest_manual_search_exact_multi_hit_returns_all`)_
+- [manual R1] Seleccionar la fila ambigua popula la grilla con los candidatos cacheados. _(`test_pending_row_selected_fills_grid_from_cached_candidates`)_
+- [manual R1] Fila resuelta → grilla limpia con mensaje de línea resuelta. _(`test_pending_row_selected_resolved_row_clears_grid`)_
+- [manual R1] Ambigua sin cache → grilla limpia sugiriendo búsqueda manual. _(`test_pending_row_selected_ambiguous_without_candidates_clears_grid`)_
+- [ADR 0003] Fila sin candidatos en el índice → grilla limpia, se adopta al confirmar. _(`test_pending_row_selected_no_candidates_row_clears_grid`)_
+- Deseleccionar (o un evento sin fila usable) no toca la grilla ni el estado. _(`test_pending_row_selected_deselection_is_a_noop`)_
 - [rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_ambiguous`)_
 - [ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo. _(`test_app_ingest_confirm_adopts_no_candidate_line`)_
 - [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_
