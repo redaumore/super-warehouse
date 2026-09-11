@@ -23,10 +23,12 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.backoffice.app import (
+    _SUPPLIER_PLACEHOLDER,
     _ingest_assign,
     _ingest_confirm,
     _ingest_manual_search,
     _ingest_parse,
+    _ingest_resolve,
 )
 from src.backoffice.ingestion import ReceiptLine, ResolvedLine
 from src.barcode.decoder import BarcodeLookupKind, decode_image, lookup_barcode
@@ -167,7 +169,8 @@ def test_e2e_receipt_flow_writes_stock_with_node_id_provenance(supplier, tmp_pat
     session = supplier["session"]
     rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
 
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert len(grid) == 1
     assert grid[0][4] == "CLV-PRS-2 — Clavos Paris 2 Pulgadas"
     assert not state[0].pending
@@ -202,7 +205,8 @@ def test_e2e_unmatched_line_confirms_and_adopts_definitive_product(supplier, tmp
         exact={"CLV-PRS-2": (_clavos_product(),)},
         hybrid=(),
     )
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert grid[0][4] == "CLV-PRS-2 — Clavos Paris 2 Pulgadas"
     assert grid[1][4] == "NUEVO (por confirmar)"  # no candidates, not a blocker
 
@@ -257,7 +261,8 @@ def test_e2e_ambiguous_line_blocks_confirm_and_creates_nothing(supplier, tmp_pat
         exact={"CLV-PRS-2": (_clavos_product(), duplicate)},
         hybrid=(),
     )
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert grid[0][4] == "PENDIENTE"  # ambiguous: manual assignment required
 
     blocked = _ingest_confirm(state, 1, _embedder())
@@ -295,7 +300,8 @@ def test_e2e_manual_assignment_resolves_pending_and_adopts(supplier, tmp_path):
     )
     rag = FakeRag(parse_lines=(paint_line,), exact={}, hybrid=(paint_product,))
 
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     # Automatic hybrid fallback resolves it directly (exactly 1 candidate).
     assert grid[0][4] == "PINT-001 — Pintura Látex Blanco"
     assert not state[0].pending
@@ -337,7 +343,8 @@ def test_e2e_manual_search_and_assign_fixes_pending_line(supplier, tmp_path):
         node_id="node_pint_001",
     )
     rag = FakeRag(parse_lines=(paint_line,), exact={}, hybrid=())
-    _grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    _grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert state[0].pending
 
     candidates_grid, candidates, _status = _ingest_manual_search(rag, 1, "PINT-001", 1)
@@ -362,9 +369,8 @@ def test_e2e_rag_down_shows_honest_error_and_writes_nothing(supplier, tmp_path):
         def parse_document(self, *, filename, content, codigo_proveedor):
             raise RagProductError("connection refused")
 
-    grid, state, message = _ingest_parse(DownRag(), _image(tmp_path), 1)
-    assert grid == []
-    assert state == ()
+    parsed, message = _ingest_parse(DownRag(), _image(tmp_path), 1)
+    assert parsed == ()
     assert "RAG no disponible" in message
     # zero writes: only the seeded Inventory row exists, unchanged
     inventory_rows = session.scalars(select(Inventory)).all()
@@ -404,7 +410,8 @@ def test_e2e_embedding_failure_rolls_back_full_ingestion(supplier, tmp_path):
         def embed(self, texts):
             raise RuntimeError("openai down")
 
-    _grid, state, _message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    _grid, state, _message = _ingest_resolve(_mixed_lines_rag(), parsed, 1, (), "")
     message = _ingest_confirm(state, 1, FailingEmbedder())
     assert "no se guardó nada" in message
 
@@ -427,7 +434,8 @@ def test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion(supplier, tmp_p
         def embed(self, texts):
             return [[0.0] * 10 for _ in texts]
 
-    _grid, state, _message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(_mixed_lines_rag(), _image(tmp_path), 1)
+    _grid, state, _message = _ingest_resolve(_mixed_lines_rag(), parsed, 1, (), "")
     message = _ingest_confirm(state, 1, WrongDimEmbedder())
     assert "no se guardó nada" in message
 
@@ -445,9 +453,8 @@ def test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion(supplier, tmp_p
 def test_e2e_document_without_usable_lines_writes_nothing(supplier, tmp_path):
     """Documento sin líneas utilizables → mensaje honesto y cero escrituras."""
     session = supplier["session"]
-    grid, state, message = _ingest_parse(FakeRag(), _image(tmp_path), 1)
-    assert grid == []
-    assert state == ()
+    parsed, message = _ingest_parse(FakeRag(), _image(tmp_path), 1)
+    assert parsed == ()
     assert "No se extrajeron líneas legibles" in message
 
     existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-CLV-PRS-2"))
@@ -471,9 +478,8 @@ def test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing(supplier, tmp
         exact={"CLV-PRS-2": (_clavos_product(),)},
         hybrid=(),
     )
-    grid, state, message = _ingest_parse(rag, _image(tmp_path), 1)
-    assert grid == []
-    assert state == ()  # guard trips before RAG parse; no lines resolved
+    parsed, message = _ingest_parse(rag, _image(tmp_path), 1)
+    assert parsed == ()  # guard trips before RAG parse; nothing parsed
     assert message == "Error: supplier 1 is INACTIVO"
 
     # A caller bypassing UI gating still hits the guard at confirm time.
@@ -499,6 +505,100 @@ def test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing(supplier, tmp
     assert session.scalar(
         select(StockAdjustment).where(StockAdjustment.reason == "receipt_ingestion")
     ) is None
+
+
+def test_e2e_supplier_change_re_resolves_parsed_lines_and_adopts(supplier, tmp_path):
+    """Cambiar el proveedor re-evalúa el remito ya parseado: confirmar adopta con el nuevo scope."""
+    session = supplier["session"]
+    session.add(
+        Supplier(
+            id=2,
+            code="XYZ",
+            business_name="XYZ Mayorista",
+            default_margin_pct=Decimal("0.10"),
+        )
+    )
+    session.commit()
+    paint_line = DocumentLine(
+        codigo_orig="PINT-001",
+        codigo=None,
+        descripcion="Pintura Látex Blanco",
+        cantidad=4,
+        costo=3200.0,
+        pagina=1,
+    )
+    paint_product = RagProduct(
+        sku="PINT-001",
+        name="Pintura Látex Blanco",
+        codigo_proveedor="XYZ",
+        price=3200.0,
+        currency="ARS",
+        node_id="node_pint_001",
+    )
+    rag = FakeRag(parse_lines=(paint_line,), exact={}, hybrid=(paint_product,))
+
+    # Parse ONCE (supplier-agnostic), resolve against supplier 1: its index has
+    # no PINT-001 candidates, so the line stays pending.
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid_a, state_a, _message_a = _ingest_resolve(rag, parsed, 1, (), "")
+    assert grid_a[0][4] == "NUEVO (por confirmar)"
+    assert state_a[0].pending
+
+    # The owner switches the dropdown to supplier 2 (change event): the same
+    # parsed lines re-evaluate against supplier 2's scope — no re-upload.
+    grid_b, state_b, message_b = _ingest_resolve(rag, parsed, 2, state_a, _message_a)
+    assert grid_b[0][4] == "PINT-001 — Pintura Látex Blanco"
+    assert not state_b[0].pending
+    assert state_b[0].product.node_id == "node_pint_001"
+    assert "1 líneas." in message_b
+
+    result_message = _ingest_confirm(state_b, 2, _embedder())
+    assert result_message == "Ingresado: 0 actualizados, 1 nuevos."
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "XYZ-PINT-001"))
+    assert created is not None
+    assert created.origen is not None and "rag" in created.origen
+    created_inventory = session.scalar(
+        select(Inventory).where(Inventory.sku_id == "XYZ-PINT-001")
+    )
+    assert created_inventory.quantity_on_hand == 4
+    # Supplier 1's scope never wrote anything.
+    assert session.scalar(
+        select(Catalogo).where(Catalogo.codigo_interno == "MSA-PINT-001")
+    ) is None
+
+
+def test_e2e_placeholder_supplier_parses_without_evaluating_and_blocks_confirm(
+    supplier, tmp_path
+):
+    """Con el placeholder: parsea sin evaluar; cambiar proveedor y confirmar respetan el guard."""
+    session = supplier["session"]
+    rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
+
+    parsed, parse_message = _ingest_parse(rag, _image(tmp_path), _SUPPLIER_PLACEHOLDER)
+    assert len(parsed) == 1  # parse is supplier-agnostic: it still runs
+    assert parse_message == "Documento parseado: 1 líneas. Seleccioná un proveedor para evaluarlo."
+
+    # The dropdown still on the placeholder: resolution keeps state, no RAG calls.
+    grid, state, resolve_message = _ingest_resolve(
+        rag, parsed, _SUPPLIER_PLACEHOLDER, (), parse_message
+    )
+    assert grid == []  # nothing evaluated yet
+    assert state == ()
+    assert resolve_message == "Seleccioná un proveedor para evaluar el documento."
+    assert rag.query_calls == []  # the placeholder guard fires before any lookup
+
+    # Confirm is blocked while no supplier is chosen: zero writes.
+    confirm_message = _ingest_confirm(state, _SUPPLIER_PLACEHOLDER, _embedder())
+    assert confirm_message == "Seleccioná un proveedor antes de confirmar."
+    assert session.scalars(select(StockAdjustment)).all() == []
+
+    # Selecting supplier 1 evaluates the SAME parsed lines and confirm adopts.
+    grid2, state2, _message2 = _ingest_resolve(rag, parsed, 1, state, resolve_message)
+    assert grid2[0][4] == "CLV-PRS-2 — Clavos Paris 2 Pulgadas"
+    assert not state2[0].pending
+    assert _ingest_confirm(state2, 1, _embedder()) == "Ingresado: 1 actualizados, 0 nuevos."
+    inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-PRS-2"))
+    assert inventory.quantity_on_hand == 60  # 50 + 10
 
 
 def test_e2e_barcode_stock_query_decodes_and_resolves(supplier, tmp_path):
@@ -530,7 +630,8 @@ def test_e2e_receipt_without_po_bumps_stock_with_full_audit(supplier, tmp_path):
     session = supplier["session"]
     rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
 
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert len(grid) == 1
     assert not state[0].pending
 
@@ -564,7 +665,8 @@ def test_e2e_receipt_with_open_po_ingests_and_leaves_po_untouched(supplier, tmp_
     session.commit()
 
     rag = FakeRag(parse_lines=(_clavos_line(),), exact={"CLV-PRS-2": (_clavos_product(),)}, hybrid=())
-    grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
+    parsed, _parse_message = _ingest_parse(rag, _image(tmp_path), 1)
+    grid, state, _message = _ingest_resolve(rag, parsed, 1, (), "")
     assert len(grid) == 1
     result_message = _ingest_confirm(state, 1, _embedder())
     assert result_message == "Ingresado: 1 actualizados, 0 nuevos."

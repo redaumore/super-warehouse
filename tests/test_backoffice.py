@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import OperationalError
 
 from src.backoffice.adoption import (
@@ -25,6 +25,7 @@ from src.backoffice.adoption import (
     OwnerContext,
 )
 from src.backoffice.app import (
+    _SUPPLIER_PLACEHOLDER,
     _active_supplier_choices,
     _adoption_confirm,
     _adoption_row_selected,
@@ -38,11 +39,15 @@ from src.backoffice.app import (
     _ingest_manual_search,
     _ingest_mark_new,
     _ingest_parse,
+    _ingest_resolve,
+    _ingesta_supplier_choices,
     _load_provider_documents,
     _order_row_selected,
     _pending_row_selected,
     _register_client,
+    _resolved_grid,
     _save_exchange_rate,
+    _selected_supplier_id,
     build_app,
 )
 from src.backoffice.catalog import list_products, update_margin, update_price, update_stock
@@ -200,6 +205,7 @@ class FakeRag:
         self.parse_lines = parse_lines
         self.exact = exact
         self.hybrid = hybrid
+        self.parse_codes: list[str] = []  # codigo_proveedor passed to each parse
         self.exact_calls: list[tuple[str, str]] = []
         self.query_calls: list[str] = []
 
@@ -1025,18 +1031,24 @@ def test_active_supplier_choices_lists_activo_by_business_name(shop_ctx):
     shop_ctx["session"].commit()
     choices = _active_supplier_choices()
     assert choices == [("Mayorista SA", 1)]  # business_name → id; ACTIVO only
+    assert _SUPPLIER_PLACEHOLDER not in [label for label, _id in choices]
 
 
-def test_app_ingest_parse_returns_grid_with_resolved_and_pending(shop_ctx, tmp_path):
-    """[backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes."""
+def test_active_supplier_choices_prepends_placeholder_when_requested(shop_ctx):
+    """El placeholder "seleccionar proveedor" es la primera opción del tab Ingesta."""
     shop_ctx["session"].commit()
-    image = tmp_path / "remito.jpg"
-    image.write_bytes(b"fake")
+    choices = _ingesta_supplier_choices()
+    assert choices[0] == (_SUPPLIER_PLACEHOLDER, _SUPPLIER_PLACEHOLDER)  # literal sentinel
+    assert choices[1:] == [("Mayorista SA", 1)]  # active suppliers keep their order
 
+
+def _clavos_document_rag(**kwargs: object) -> FakeRag:
+    """FakeRag que parsea un remito de dos líneas (CLV-001 y AT-5044)."""
     from src.integrations.rag import DocumentLine
 
     class _ParsingRag(FakeRag):
         def parse_document(self, *, filename, content, codigo_proveedor):
+            self.parse_codes.append(codigo_proveedor)
             return (
                 DocumentLine(
                     codigo_orig="CLV-001",
@@ -1056,44 +1068,185 @@ def test_app_ingest_parse_returns_grid_with_resolved_and_pending(shop_ctx, tmp_p
                 ),
             )
 
-    rag = _ParsingRag(exact=(), hybrid=())
-    grid, state, message = _ingest_parse(rag, image, 1)
+    return _ParsingRag(**kwargs)  # type: ignore[arg-type]
+
+
+def test_app_ingest_parse_returns_receipt_lines_without_resolving(shop_ctx, tmp_path):
+    """[backoffice R1][rag-doc R4] Parsear guarda ReceiptLines y NO resuelve ni toca el catálogo."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+
+    rag = _clavos_document_rag()
+    parsed, message = _ingest_parse(rag, image, 1)
+    assert len(parsed) == 2
+    assert parsed[0].codigo_orig == "CLV-001"
+    assert parsed[0].source_file == "remito.jpg"  # provenance carried for adoption
+    assert message == "Documento parseado: 2 líneas. Evaluando con Mayorista SA..."
+    # Parse is supplier-independent: no resolution queries hit the RAG client.
+    assert rag.exact_calls == []
+    assert rag.query_calls == []
+    # No catalog/inventory writes: the seeded rows are the only ones.
+    assert shop_ctx["session"].scalar(select(func.count()).select_from(Catalogo)) == 1
+    assert shop_ctx["session"].scalar(select(func.count()).select_from(Inventory)) == 0
+
+
+def test_app_ingest_parse_placeholder_supplier_still_parses(shop_ctx, tmp_path):
+    """Con el placeholder seleccionado el parse corre igual (es agnóstico) y pide elegir proveedor."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+
+    rag = _clavos_document_rag(exact=(), hybrid=())
+    parsed, message = _ingest_parse(rag, image, _SUPPLIER_PLACEHOLDER)
+    assert len(parsed) == 2
+    assert rag.parse_codes == [""]  # empty supplier code: parse is supplier-agnostic
+    assert message == "Documento parseado: 2 líneas. Seleccioná un proveedor para evaluarlo."
+    # Placeholder also comes through as the None-mapped dropdown value.
+    parsed2, message2 = _ingest_parse(rag, image, None)
+    assert len(parsed2) == 2
+    assert "Seleccioná un proveedor" in message2
+    assert rag.parse_codes == ["", ""]
+
+
+def test_app_ingest_parse_rag_down_returns_error_tuple(shop_ctx, tmp_path):
+    """RAG caído → (estado vacío, mensaje de error honesto)."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+
+    class _DownRag(FakeRag):
+        def parse_document(self, *, filename, content, codigo_proveedor):
+            raise RagProductError("connection refused")
+
+    parsed, message = _ingest_parse(_DownRag(), image, 1)
+    assert parsed == ()
+    assert message == "Error: RAG no disponible (connection refused)"
+
+
+def test_app_ingest_resolve_returns_grid_with_pending_lines(shop_ctx, tmp_path):
+    """[backoffice R1][rag-doc R4] Resolver → grilla con líneas resueltas/pendientes."""
+    shop_ctx["session"].commit()
+    image = tmp_path / "remito.jpg"
+    image.write_bytes(b"fake")
+
+    parsed, _parse_message = _ingest_parse(_clavos_document_rag(), image, 1)
+    grid, state, message = _ingest_resolve(_clavos_document_rag(exact=(), hybrid=()), parsed, 1, (), "")
     assert len(grid) == 2
     assert grid[0][0] == "CLV-001"
     assert grid[0][1] == "Clavos Paris 2 Pulgadas"
     assert grid[0][4] == "NUEVO (por confirmar)"  # no candidates → definitive on confirm
     assert grid[1][4] == "NUEVO (por confirmar)"
-    assert len(state) == 2  # both lines no-candidates: exact miss + no hybrid candidates
+    assert len(state) == 2
     assert all(line.pending for line in state)
     assert "2 líneas; 2 sin match en el índice (se adoptan al confirmar)" in message
 
 
-def test_app_ingest_parse_exact_resolves_line(shop_ctx, tmp_path):
-    """[rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla."""
+def test_app_ingest_resolve_re_scopes_when_supplier_changes(shop_ctx):
+    """Cambiar el proveedor re-evalúa las mismas líneas parseadas con el nuevo scope."""
+    shop_ctx["session"].add(
+        Supplier(
+            id=2,
+            code="XYZ",
+            business_name="XYZ Mayorista",
+            default_margin_pct=Decimal("0.10"),
+        )
+    )
     shop_ctx["session"].commit()
-    image = tmp_path / "remito.jpg"
-    image.write_bytes(b"fake")
+    parsed = (_receipt(),)  # CLV-001, 5 unidades
+    supplier_a_rag = FakeRag(exact=(_product(),), hybrid=())
+    grid_a, state_a, message_a = _ingest_resolve(supplier_a_rag, parsed, 1, (), "")
+    assert grid_a[0][4] == "CLV-001 — Clavos Paris 2 Pulgadas"
+    assert not state_a[0].pending
 
-    from src.integrations.rag import DocumentLine
+    supplier_b_rag = FakeRag(
+        exact=(),
+        hybrid=(
+            RagProduct(
+                sku="AT-5044",
+                name="Tarugo Fischer 8mm",
+                codigo_proveedor="XYZ",
+                node_id="n-tar",
+            ),
+        ),
+    )
+    grid_b, state_b, message_b = _ingest_resolve(supplier_b_rag, parsed, 2, state_a, message_a)
+    assert grid_b[0][4] == "AT-5044 — Tarugo Fischer 8mm"
+    assert not state_b[0].pending
+    assert state_b[0].product.sku == "AT-5044"  # re-scoped to supplier B's catalog
+    assert "1 líneas." in message_b
 
-    class _ParsingRag(FakeRag):
-        def parse_document(self, *, filename, content, codigo_proveedor):
-            return (
-                DocumentLine(
-                    codigo_orig="CLV-001",
-                    codigo=None,
-                    descripcion="Clavos Paris 2 Pulgadas",
-                    cantidad=5,
-                    costo=95.0,
-                    pagina=1,
-                ),
-            )
 
-    rag = _ParsingRag(exact=(_product(),), hybrid=())
-    grid, state, _message = _ingest_parse(rag, image, 1)
-    assert grid[0][4] == "CLV-001 — Clavos Paris 2 Pulgadas"
-    assert len(state) == 1
-    assert not state[0].pending
+def test_app_ingest_resolve_placeholder_keeps_state_and_asks_supplier(shop_ctx):
+    """Con el placeholder, la resolución no toca RAG ni DB y mantiene el estado previo."""
+    shop_ctx["session"].commit()
+    parsed = (_receipt(),)
+    current = (ResolvedLine(receipt=_receipt(codigo_orig=None)),)
+    rag = FakeRag(exact=(), hybrid=())
+    for raw in (_SUPPLIER_PLACEHOLDER, None, ""):
+        grid, state, message = _ingest_resolve(rag, parsed, raw, current, "")
+        assert message == "Seleccioná un proveedor para evaluar el documento."
+        assert state == current  # untouched: no wipe of previous resolution
+        assert grid == _resolved_grid(current)
+    assert rag.exact_calls == []  # placeholder guard runs BEFORE any RAG call
+
+
+def test_app_ingest_resolve_without_parsed_document_asks_to_upload(shop_ctx):
+    """Sin documento parseado → el estado se mantiene y se pide subir el remito."""
+    shop_ctx["session"].commit()
+    current = (ResolvedLine(receipt=_receipt(codigo_orig=None)),)
+    grid, state, message = _ingest_resolve(FakeRag(), (), 1, current, "")
+    assert message == "Primero subí un documento."
+    assert state == current
+    assert grid == _resolved_grid(current)
+
+
+def test_app_ingest_resolve_keeps_chained_parse_error_message(shop_ctx):
+    """Un error de parse encadenado no lo pisa 'Primero subí un documento'."""
+    shop_ctx["session"].commit()
+    error = "Error: RAG no disponible (connection refused)"
+    _grid, state, message = _ingest_resolve(FakeRag(), (), 1, (), error)
+    assert message == error
+    assert state == ()
+
+
+def test_selected_supplier_id_extracts_id_or_placeholder_none():
+    """El helper devuelve el ID real, o None para el placeholder / basura / vacío."""
+    assert _selected_supplier_id(_SUPPLIER_PLACEHOLDER) is None
+    assert _selected_supplier_id(None) is None
+    assert _selected_supplier_id("") is None
+    assert _selected_supplier_id("  ") is None
+    assert _selected_supplier_id(1) == 1
+    assert _selected_supplier_id("1") == 1
+    assert _selected_supplier_id(" 3 ") == 3
+    assert _selected_supplier_id("seleccionar otra cosa") is None
+    assert _selected_supplier_id("abc") is None
+    assert _selected_supplier_id("1.5") is None
+
+
+def test_app_ingest_manual_search_placeholder_blocks_without_db_or_rag(shop_ctx):
+    """Con el placeholder, la búsqueda manual no toca DB ni RAG y pide elegir proveedor."""
+    shop_ctx["session"].commit()
+    rag = FakeRag(exact=(_product(),))
+    for raw in (_SUPPLIER_PLACEHOLDER, None, ""):
+        rows, candidates, message = _ingest_manual_search(rag, 1, "CLV-001", raw)
+        assert rows == []
+        assert candidates == ()
+        assert message == "Seleccioná un proveedor para buscar candidatos."
+    assert rag.exact_calls == []  # guard fires BEFORE any lookup
+    assert rag.query_calls == []
+
+
+def test_app_ingest_confirm_placeholder_blocks_with_zero_writes(shop_ctx):
+    """Confirmar con el placeholder está bloqueado: mensaje claro y cero escrituras."""
+    shop_ctx["session"].commit()
+    resolved = ResolvedLine(receipt=_receipt(cantidad=5), product=_product())
+    for raw in (_SUPPLIER_PLACEHOLDER, None, ""):
+        message = _ingest_confirm((resolved,), raw, _embedder())
+        assert message == "Seleccioná un proveedor antes de confirmar."
+    with SessionLocal() as session:
+        assert session.scalar(select(Inventory)) is None  # zero writes
+        assert session.scalar(select(func.count()).select_from(Catalogo)) == 1
 
 
 def test_app_ingest_manual_search_and_assign_fix_pending(shop_ctx):
@@ -1234,12 +1387,69 @@ def test_pending_row_selected_deselection_is_a_noop(shop_ctx):
     assert message == ""
 
 
+def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):
+    """[rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista."""
+    shop_ctx["session"].commit()
+    pending = ResolvedLine(
+        receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"),
+        pending_reason=PendingReason.AMBIGUOUS,
+    )
+    message = _ingest_confirm((pending,), 1, _embedder())
+    assert "bloqueado" in message
+    assert "asignación manual" in message
+    assert "AT-5044" in message
+    with SessionLocal() as session:
+        assert session.scalar(select(Inventory)) is None  # zero writes while blocked
+
+
+def test_app_ingest_confirm_adopts_no_candidate_line(shop_ctx):
+    """[ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo."""
+    shop_ctx["session"].commit()
+    no_candidate = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=1,
+            source_file="remito.jpg",
+        ),
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    message = _ingest_confirm((no_candidate,), 1, _embedder())
+    assert message == "Ingresado: 0 actualizados, 1 nuevos."
+    with SessionLocal() as session:
+        created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+        assert created is not None
+        assert created.origen is not None and "remito" in created.origen
+        assert (
+            session.scalar(
+                select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")
+            ).quantity_on_hand
+            == 4
+        )
+
+
+def test_app_ingest_confirm_unblocked_when_all_resolved(shop_ctx):
+    """[rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id."""
+    session = shop_ctx["session"]
+    _seed_receipt_product(session)
+    session.commit()
+    resolved = ResolvedLine(receipt=_receipt(cantidad=3), product=_product())
+    message = _ingest_confirm((resolved,), 1, _embedder())
+    assert message == "Ingresado: 1 actualizados, 0 nuevos."
+    with SessionLocal() as session:
+        inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-001"))
+        assert inventory is not None
+        assert inventory.quantity_on_hand == 3  # 0 + 3 (no pre-existing row)
+
+
 def test_app_ingest_mark_new_reclassifies_ambiguous_and_confirm_adopts(shop_ctx):
-    """[ADR 0003] Línea ambigua marcada como nueva → NO_CANDIDATES y se adopta al confirmar."""
+    """[ADR 0003] Marcar una ambigua como nueva: sin candidatos, se adopta al confirmar."""
     shop_ctx["session"].commit()
     cached = (
-        RagProduct(sku="SM-1", name="Ducha A", codigo_proveedor="MSA", node_id="n-a"),
-        RagProduct(sku="SM-2", name="Ducha B", codigo_proveedor="MSA", node_id="n-b"),
+        RagProduct(sku="SM-1", name="Arrancador", codigo_proveedor="MSA", node_id="n-a"),
+        RagProduct(sku="SM-2", name="Grasa", codigo_proveedor="MSA", node_id="n-b"),
     )
     ambiguous = ResolvedLine(
         receipt=ReceiptLine(
@@ -1315,63 +1525,6 @@ def test_app_ingest_mark_new_rejects_zero_quantity_line(shop_ctx):
     assert "nunca se ingesta" in status
     assert state == original
     assert grid[0][4] == "PENDIENTE"
-
-
-def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):
-    """[rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista."""
-    shop_ctx["session"].commit()
-    pending = ResolvedLine(
-        receipt=_receipt(codigo_orig="AT-5044", descripcion="Tarugo 8mm"),
-        pending_reason=PendingReason.AMBIGUOUS,
-    )
-    message = _ingest_confirm((pending,), 1, _embedder())
-    assert "bloqueado" in message
-    assert "asignación manual" in message
-    assert "AT-5044" in message
-    with SessionLocal() as session:
-        assert session.scalar(select(Inventory)) is None  # zero writes while blocked
-
-
-def test_app_ingest_confirm_adopts_no_candidate_line(shop_ctx):
-    """[ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo."""
-    shop_ctx["session"].commit()
-    no_candidate = ResolvedLine(
-        receipt=ReceiptLine(
-            codigo_orig="AT-5044",
-            descripcion="Tarugo 8mm",
-            cantidad=4,
-            costo=Decimal("95.00"),
-            pagina=1,
-            source_file="remito.jpg",
-        ),
-        pending_reason=PendingReason.NO_CANDIDATES,
-    )
-    message = _ingest_confirm((no_candidate,), 1, _embedder())
-    assert message == "Ingresado: 0 actualizados, 1 nuevos."
-    with SessionLocal() as session:
-        created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
-        assert created is not None
-        assert created.origen is not None and "remito" in created.origen
-        assert (
-            session.scalar(
-                select(Inventory).where(Inventory.sku_id == "MSA-AT-5044")
-            ).quantity_on_hand
-            == 4
-        )
-
-
-def test_app_ingest_confirm_unblocked_when_all_resolved(shop_ctx):
-    """[rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id."""
-    session = shop_ctx["session"]
-    _seed_receipt_product(session)
-    session.commit()
-    resolved = ResolvedLine(receipt=_receipt(cantidad=3), product=_product())
-    message = _ingest_confirm((resolved,), 1, _embedder())
-    assert message == "Ingresado: 1 actualizados, 0 nuevos."
-    with SessionLocal() as session:
-        inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "MSA-CLV-001"))
-        assert inventory is not None
-        assert inventory.quantity_on_hand == 3  # 0 + 3 (no pre-existing row)
 
 
 def test_app_rate_save_updates_timestamp_and_recomputes_pending_order(shop_ctx):

@@ -65,6 +65,7 @@ from src.backoffice.customer_orders import (
 )
 from src.backoffice.ingestion import (
     PendingReason,
+    ReceiptLine,
     ResolvedLine,
     UnresolvedLineError,
     hybrid_candidates,
@@ -281,6 +282,11 @@ def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: floa
 
 # ------------------------------------------------ ingestion tab (RAG receipts)
 
+# Literal first choice (and default value) of the "Ingesta de remitos"
+# supplier dropdown: forces an explicit selection before any resolution or
+# confirmation runs, preventing wrong-supplier ingestions.
+_SUPPLIER_PLACEHOLDER = "seleccionar proveedor"
+
 
 def _active_supplier_choices() -> list[tuple[str, int]]:
     """(business_name → id) pairs for ACTIVO suppliers — no free numeric ID.
@@ -297,13 +303,47 @@ def _active_supplier_choices() -> list[tuple[str, int]]:
         return [(supplier.business_name, supplier.id) for supplier in suppliers]
 
 
-def _supplier_choices_update() -> gr.Dropdown:
+def _ingesta_supplier_choices() -> list[tuple[str, int | str]]:
+    """ACTIVO suppliers prefixed with the literal ``"seleccionar proveedor"``.
+
+    The placeholder maps to its own literal (not ``None``) so Gradio accepts
+    it as the dropdown's default ``value`` without an invalid-choice warning;
+    ``_selected_supplier_id`` treats the literal as "nothing selected". Only
+    the Ingesta tab uses this — the other tabs' handlers expect a castable id.
+    """
+    return [(_SUPPLIER_PLACEHOLDER, _SUPPLIER_PLACEHOLDER), *_active_supplier_choices()]
+
+
+def _supplier_choices_update(include_placeholder: bool = False) -> gr.Dropdown:
     """Re-query ACTIVO suppliers so the dropdown reflects additions at runtime.
 
     Gradio freezes ``choices=`` evaluated at Blocks build time; returning a
-    component instance from a click handler updates only the given props.
+    component instance from a click handler updates only the given props (the
+    selected ``value`` is left untouched, so a refresh never wipes the parsed
+    remito's supplier choice).
     """
-    return gr.Dropdown(choices=_active_supplier_choices())
+    choices = (
+        _ingesta_supplier_choices() if include_placeholder else _active_supplier_choices()
+    )
+    return gr.Dropdown(choices=choices)
+
+
+def _selected_supplier_id(raw: object) -> int | None:
+    """Extract the selected supplier id, or ``None`` when nothing is chosen.
+
+    The Ingesta tab's dropdown starts on a literal placeholder ("seleccionar
+    proveedor", mapped to ``None``): that sentinel, an empty/blank value, or
+    non-numeric junk all yield ``None`` so handlers can guard BEFORE touching
+    the database (``int("seleccionar proveedor")`` would raise an uncaught
+    ``ValueError``).
+    """
+    text = str(raw).strip() if raw is not None else ""
+    if not text or text == _SUPPLIER_PLACEHOLDER:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
 
 
 def _resolved_grid(lines: Sequence[ResolvedLine]) -> list[list[object]]:
@@ -339,60 +379,110 @@ def _resolved_grid(lines: Sequence[ResolvedLine]) -> list[list[object]]:
 
 def _ingest_parse(
     client: RagProductClient, upload: object, supplier_id: object
-) -> tuple[list[list[object]], tuple[ResolvedLine, ...], str]:
-    """Upload → RAG parse → two-pass resolve → review grid. Zero writes.
+) -> tuple[tuple[ReceiptLine, ...], str]:
+    """Upload → RAG parse → supplier-independent ``ReceiptLine`` state. Zero writes.
 
-    RAG/Luna unavailability surfaces as an honest error and writes nothing
-    (spec: RAG down → no inventory/catalog write).
+    Parsing is supplier-agnostic (the rag-api parser ignores
+    ``codigo_proveedor``), so it runs even while the dropdown still shows the
+    placeholder — the code is passed as ``""`` and the owner selects the
+    supplier afterwards. Resolution is a separate step (``_ingest_resolve``)
+    so changing the supplier re-evaluates the same parsed lines without
+    re-uploading. RAG/Luna unavailability surfaces as an honest error and
+    writes nothing (spec: RAG down → no inventory/catalog write).
     """
     if upload is None:
-        return [], (), "Subí un remito o factura (PDF o foto)."
+        return (), "Subí un remito o factura (PDF o foto)."
     path = getattr(upload, "path", None) or str(upload)
     filename = os.path.basename(str(path))
     with open(str(path), "rb") as fh:
         content = fh.read()
-    with SessionLocal() as session:
-        try:
-            supplier = ensure_active_supplier(session, int(str(supplier_id)))
-        except (KeyError, SupplierInactiveError) as exc:
-            return [], (), f"Error: {exc}"
-        supplier_code = supplier.code
+    supplier_pk = _selected_supplier_id(supplier_id)
+    supplier_code = ""
+    supplier_name = ""
+    if supplier_pk is not None:
+        with SessionLocal() as session:
+            try:
+                supplier = ensure_active_supplier(session, supplier_pk)
+            except (KeyError, SupplierInactiveError) as exc:
+                return (), f"Error: {exc}"
+            supplier_code = supplier.code
+            supplier_name = supplier.business_name
     try:
         document_lines = client.parse_document(
             filename=filename, content=content, codigo_proveedor=supplier_code
         )
     except RagProductError as exc:
-        return [], (), f"Error: RAG no disponible ({exc})"
+        return (), f"Error: RAG no disponible ({exc})"
     receipt_lines = to_receipt_lines(document_lines, source_file=filename)
+    if not receipt_lines:
+        return receipt_lines, "No se extrajeron líneas legibles."
+    if supplier_pk is None:
+        return receipt_lines, (
+            f"Documento parseado: {len(receipt_lines)} líneas. "
+            "Seleccioná un proveedor para evaluarlo."
+        )
+    return receipt_lines, (
+        f"Documento parseado: {len(receipt_lines)} líneas. "
+        f"Evaluando con {supplier_name}..."
+    )
+
+
+def _ingest_resolve(
+    client: RagProductClient,
+    parsed: object,
+    supplier_id: object,
+    current: object,
+    previous_status: object = "",
+) -> tuple[list[list[object]], tuple[ResolvedLine, ...], str]:
+    """Re-evaluate the already-parsed remito against the SELECTED supplier.
+
+    Runs on dropdown change and chained after each parse: parsing is
+    supplier-independent, so switching the supplier re-scopes the same cached
+    ``ReceiptLine`` rows — no re-upload, and any previous manual assignments
+    are intentionally lost (different supplier scope). With no parsed
+    document or the placeholder supplier the current resolved state is kept
+    untouched; a chained parse error keeps its honest message instead of
+    being replaced.
+    """
+    lines = tuple(parsed) if isinstance(parsed, (tuple, list)) else ()
+    current_lines = tuple(current) if isinstance(current, (tuple, list)) else ()
+    if not lines:
+        if isinstance(previous_status, str) and previous_status.startswith("Error:"):
+            return _resolved_grid(current_lines), current_lines, previous_status
+        return _resolved_grid(current_lines), current_lines, "Primero subí un documento."
+    supplier_pk = _selected_supplier_id(supplier_id)
+    if supplier_pk is None:
+        return (
+            _resolved_grid(current_lines),
+            current_lines,
+            "Seleccioná un proveedor para evaluar el documento.",
+        )
     with SessionLocal() as session:
-        resolved = resolve_lines(
-            session, client, receipt_lines, supplier_id=int(str(supplier_id))
-        )
+        try:
+            resolved = resolve_lines(session, client, lines, supplier_id=supplier_pk)
+        except (KeyError, SupplierInactiveError) as exc:
+            return _resolved_grid(current_lines), current_lines, f"Error: {exc}"
     grid = _resolved_grid(resolved)
-    if grid:
-        parts = [f"{len(grid)} líneas"]
-        ambiguous = sum(
-            1
-            for line in resolved
-            if line.receipt.cantidad > 0
-            and line.pending
-            and line.pending_reason is PendingReason.AMBIGUOUS
-        )
-        new_products = sum(
-            1
-            for line in resolved
-            if line.receipt.cantidad > 0
-            and line.pending
-            and line.pending_reason is not PendingReason.AMBIGUOUS
-        )
-        if ambiguous:
-            parts.append(f"{ambiguous} ambigua(s) de asignar manualmente")
-        if new_products:
-            parts.append(f"{new_products} sin match en el índice (se adoptan al confirmar)")
-        message = "; ".join(parts) + "."
-    else:
-        message = "No se extrajeron líneas legibles."
-    return grid, resolved, message
+    parts = [f"{len(grid)} líneas"]
+    ambiguous = sum(
+        1
+        for line in resolved
+        if line.receipt.cantidad > 0
+        and line.pending
+        and line.pending_reason is PendingReason.AMBIGUOUS
+    )
+    new_products = sum(
+        1
+        for line in resolved
+        if line.receipt.cantidad > 0
+        and line.pending
+        and line.pending_reason is not PendingReason.AMBIGUOUS
+    )
+    if ambiguous:
+        parts.append(f"{ambiguous} ambigua(s) de asignar manualmente")
+    if new_products:
+        parts.append(f"{new_products} sin match en el índice (se adoptan al confirmar)")
+    return grid, resolved, "; ".join(parts) + "."
 
 
 def _candidate_rows(candidates: Sequence[RagProduct]) -> list[list[object]]:
@@ -418,6 +508,9 @@ def _ingest_manual_search(
     the hybrid endpoint returns irrelevant products, so an exact code match
     (even several — the owner picks) short-circuits the hybrid fallback.
     """
+    supplier_pk = _selected_supplier_id(supplier_id)
+    if supplier_pk is None:
+        return [], (), "Seleccioná un proveedor para buscar candidatos."
     line_idx = _as_index(line_index) - 1  # typed as a 1-based human line number
     if line_idx < 0:
         return [], (), "Seleccioná el número de línea pendiente (1-based)."
@@ -426,7 +519,7 @@ def _ingest_manual_search(
         return [], (), "Escribí un código o término de búsqueda."
     with SessionLocal() as session:
         try:
-            supplier = ensure_active_supplier(session, int(str(supplier_id)))
+            supplier = ensure_active_supplier(session, supplier_pk)
         except (KeyError, SupplierInactiveError) as exc:
             return [], (), f"Error: {exc}"
         supplier_code = supplier.code
@@ -584,6 +677,9 @@ def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> s
     Per ADR 0003 a NO_CANDIDATES line does not block: it is adopted as a
     definitive new product inside ``ingest_receipt_lines``.
     """
+    supplier_pk = _selected_supplier_id(supplier_id)
+    if supplier_pk is None:
+        return "Seleccioná un proveedor antes de confirmar."
     lines = list(state) if isinstance(state, (tuple, list)) else []
     if not lines:
         return "Primero parseá un documento."
@@ -603,7 +699,7 @@ def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> s
         try:
             result = ingest_receipt_lines(
                 session,
-                int(str(supplier_id)),
+                supplier_pk,
                 lines,
                 OwnerContext(owner_id="backoffice-ui"),
                 embedder,
@@ -2461,15 +2557,22 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             # Icon-only refresh beside the dropdown: scale=0 + sm keeps the
             # button compact instead of stretching to the container width.
             with gr.Row():
+                # Placeholder first AND default: Gradio auto-selects the first
+                # choice, and the literal maps to itself so the owner always
+                # sees "seleccionar proveedor" until an explicit pick happens.
                 supplier_selector = gr.Dropdown(
-                    choices=_active_supplier_choices(),
+                    choices=_ingesta_supplier_choices(),
+                    value=_SUPPLIER_PLACEHOLDER,
                     label="Proveedor (activo)",
                     scale=3,
                 )
                 supplier_refresh = gr.Button(
                     "🔄", variant="secondary", size="sm", scale=0, min_width=48
                 )
-            supplier_refresh.click(_supplier_choices_update, outputs=supplier_selector)
+            supplier_refresh.click(
+                partial(_supplier_choices_update, include_placeholder=True),
+                outputs=supplier_selector,
+            )
             upload = gr.UploadButton("Subir documento", file_types=["image", ".pdf"])
             preview_grid = gr.Dataframe(
                 headers=["Código", "Descripción", "Cantidad", "Costo", "Resolución"],
@@ -2477,6 +2580,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 label="Revisión (resueltas / pendientes)",
                 interactive=False,
             )
+            parsed_state = gr.State(())  # supplier-independent parsed ReceiptLine rows
             resolved_state = gr.State(())
             preview_status = gr.Textbox(label="Análisis", interactive=False)
             with gr.Row():
@@ -2501,6 +2605,27 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             upload.upload(
                 _ingest_parse,
                 inputs=[gr.State(_get_rag_client()), upload, supplier_selector],
+                outputs=[parsed_state, preview_status],
+            ).then(
+                _ingest_resolve,
+                inputs=[
+                    gr.State(_get_rag_client()),
+                    parsed_state,
+                    supplier_selector,
+                    resolved_state,
+                    preview_status,
+                ],
+                outputs=[preview_grid, resolved_state, preview_status],
+            )
+            supplier_selector.change(
+                _ingest_resolve,
+                inputs=[
+                    gr.State(_get_rag_client()),
+                    parsed_state,
+                    supplier_selector,
+                    resolved_state,
+                    preview_status,
+                ],
                 outputs=[preview_grid, resolved_state, preview_status],
             )
             preview_grid.select(

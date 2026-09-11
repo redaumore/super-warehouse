@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 509, agrupados en 34 dominios.
+**Total de escenarios:** 521, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,10 +36,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 107
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 117
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
-- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 13
+- [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 15
 - [Observabilidad y logs por sesión](#observabilidad-y-logs-por-sesión) — 11
 - [Trazabilidad de sesión en el pipeline](#trazabilidad-de-sesión-en-el-pipeline) — 1
 
@@ -626,8 +626,18 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Editar stock desde la UI persiste el cambio en Inventory (fuente única). _(`test_app_catalog_edit_persists_stock_change`)_
 - Un teléfono inválido desde la UI devuelve el error y no toca el formulario. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
 - [rag-doc R1] El dropdown lista solo ACTIVO por business_name y retiene el ID. _(`test_active_supplier_choices_lists_activo_by_business_name`)_
-- [backoffice R1][rag-doc R4] Parse → grilla con líneas resueltas y pendientes. _(`test_app_ingest_parse_returns_grid_with_resolved_and_pending`)_
-- [rag-doc R3] La resolución exacta marca la línea como resuelta en la grilla. _(`test_app_ingest_parse_exact_resolves_line`)_
+- El placeholder "seleccionar proveedor" es la primera opción del tab Ingesta. _(`test_active_supplier_choices_prepends_placeholder_when_requested`)_
+- [backoffice R1][rag-doc R4] Parsear guarda ReceiptLines y NO resuelve ni toca el catálogo. _(`test_app_ingest_parse_returns_receipt_lines_without_resolving`)_
+- Con el placeholder seleccionado el parse corre igual (es agnóstico) y pide elegir proveedor. _(`test_app_ingest_parse_placeholder_supplier_still_parses`)_
+- RAG caído → (estado vacío, mensaje de error honesto). _(`test_app_ingest_parse_rag_down_returns_error_tuple`)_
+- [backoffice R1][rag-doc R4] Resolver → grilla con líneas resueltas/pendientes. _(`test_app_ingest_resolve_returns_grid_with_pending_lines`)_
+- Cambiar el proveedor re-evalúa las mismas líneas parseadas con el nuevo scope. _(`test_app_ingest_resolve_re_scopes_when_supplier_changes`)_
+- Con el placeholder, la resolución no toca RAG ni DB y mantiene el estado previo. _(`test_app_ingest_resolve_placeholder_keeps_state_and_asks_supplier`)_
+- Sin documento parseado → el estado se mantiene y se pide subir el remito. _(`test_app_ingest_resolve_without_parsed_document_asks_to_upload`)_
+- Un error de parse encadenado no lo pisa 'Primero subí un documento'. _(`test_app_ingest_resolve_keeps_chained_parse_error_message`)_
+- El helper devuelve el ID real, o None para el placeholder / basura / vacío. _(`test_selected_supplier_id_extracts_id_or_placeholder_none`)_
+- Con el placeholder, la búsqueda manual no toca DB ni RAG y pide elegir proveedor. _(`test_app_ingest_manual_search_placeholder_blocks_without_db_or_rag`)_
+- Confirmar con el placeholder está bloqueado: mensaje claro y cero escrituras. _(`test_app_ingest_confirm_placeholder_blocks_with_zero_writes`)_
 - [manual R1] La búsqueda manual devuelve candidatos y asignar resuelve la línea. _(`test_app_ingest_manual_search_and_assign_fix_pending`)_
 - [manual R1] El código exacto hace lookup exacto: la híbrida ni se consulta. _(`test_app_ingest_manual_search_exact_hit_skips_hybrid`)_
 - [manual R1] Sin hit exacto cae a la híbrida scoped al proveedor. _(`test_app_ingest_manual_search_exact_miss_falls_back_to_hybrid`)_
@@ -637,14 +647,14 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [manual R1] Ambigua sin cache → grilla limpia sugiriendo búsqueda manual. _(`test_pending_row_selected_ambiguous_without_candidates_clears_grid`)_
 - [ADR 0003] Fila sin candidatos en el índice → grilla limpia, se adopta al confirmar. _(`test_pending_row_selected_no_candidates_row_clears_grid`)_
 - Deseleccionar (o un evento sin fila usable) no toca la grilla ni el estado. _(`test_pending_row_selected_deselection_is_a_noop`)_
-- [ADR 0003] Línea ambigua marcada como nueva → NO_CANDIDATES y se adopta al confirmar. _(`test_app_ingest_mark_new_reclassifies_ambiguous_and_confirm_adopts`)_
+- [rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_ambiguous`)_
+- [ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo. _(`test_app_ingest_confirm_adopts_no_candidate_line`)_
+- [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_
+- [ADR 0003] Marcar una ambigua como nueva: sin candidatos, se adopta al confirmar. _(`test_app_ingest_mark_new_reclassifies_ambiguous_and_confirm_adopts`)_
 - [ADR 0003] Una línea ya resuelta no se puede marcar como nueva. _(`test_app_ingest_mark_new_rejects_resolved_line`)_
 - [ADR 0003] Índice inválido → mensaje útil y estado intacto. _(`test_app_ingest_mark_new_rejects_invalid_index`)_
 - [ADR 0003] Marcar como nueva una línea ya NO_CANDIDATES es un éxito sin cambios. _(`test_app_ingest_mark_new_is_idempotent_on_no_candidates_line`)_
 - [ADR 0003] Línea con cantidad 0 nunca se ingesta: marcarla como nueva no aplica. _(`test_app_ingest_mark_new_rejects_zero_quantity_line`)_
-- [rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_ambiguous`)_
-- [ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo. _(`test_app_ingest_confirm_adopts_no_candidate_line`)_
-- [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_
 - The app-level rate save bumps updated_at and recomputes pending orders. _(`test_app_rate_save_updates_timestamp_and_recomputes_pending_order`)_
 - Solo las acciones legales del estado se ofrecen en el tab (backoffice spec). _(`test_legal_actions_per_state`)_
   - DRAFT
@@ -735,6 +745,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Embedding con dimensión inválida → rollback total, nada queda persistido. _(`test_e2e_wrong_dimension_embedding_rolls_back_full_ingestion`)_
 - Documento sin líneas utilizables → mensaje honesto y cero escrituras. _(`test_e2e_document_without_usable_lines_writes_nothing`)_
 - Proveedor INACTIVO al ingestar → el guard bloquea parse y confirm, nada escrito. _(`test_e2e_inactive_supplier_blocks_ingestion_and_writes_nothing`)_
+- Cambiar el proveedor re-evalúa el remito ya parseado: confirmar adopta con el nuevo scope. _(`test_e2e_supplier_change_re_resolves_parsed_lines_and_adopts`)_
+- Con el placeholder: parsea sin evaluar; cambiar proveedor y confirmar respetan el guard. _(`test_e2e_placeholder_supplier_parses_without_evaluating_and_blocks_confirm`)_
 - Una foto de código de barras decodifica y responde el stock disponible. _(`test_e2e_barcode_stock_query_decodes_and_resolves`)_
 - [R8][adr-0002] Remito sin PO vinculada → la ingesta bumpa stock con auditoría completa. _(`test_e2e_receipt_without_po_bumps_stock_with_full_audit`)_
 - [R8][adr-0002] Remito con PO en OPEN → la ingesta bumpa stock y la PO queda intacta. _(`test_e2e_receipt_with_open_po_ingests_and_leaves_po_untouched`)_
