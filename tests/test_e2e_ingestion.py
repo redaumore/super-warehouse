@@ -340,15 +340,15 @@ def test_e2e_manual_search_and_assign_fixes_pending_line(supplier, tmp_path):
     _grid, state, _message = _ingest_parse(rag, _image(tmp_path), 1)
     assert state[0].pending
 
-    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "PINT-001", 1)
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 1, "PINT-001", 1)
     assert len(candidates_grid) == 0  # manual search uses the same supplier-scoped query
 
     # Manual search with an owner-provided term returns the candidate...
     rag.hybrid = (paint_product,)
-    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "Pintura latex", 1)
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 1, "Pintura latex", 1)
     assert len(candidates_grid) == 1
 
-    new_state, _new_grid, assign_status = _ingest_assign(state, 0, 0, candidates)
+    new_state, _new_grid, assign_status = _ingest_assign(state, 1, 0, candidates)
     assert "asignada" in assign_status
     assert not new_state[0].pending
     assert new_state[0].product.node_id == "node_pint_001"

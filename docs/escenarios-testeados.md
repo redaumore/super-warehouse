@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 504, agrupados en 34 dominios.
+**Total de escenarios:** 509, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,7 +36,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 102
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 107
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 13
@@ -637,6 +637,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [manual R1] Ambigua sin cache → grilla limpia sugiriendo búsqueda manual. _(`test_pending_row_selected_ambiguous_without_candidates_clears_grid`)_
 - [ADR 0003] Fila sin candidatos en el índice → grilla limpia, se adopta al confirmar. _(`test_pending_row_selected_no_candidates_row_clears_grid`)_
 - Deseleccionar (o un evento sin fila usable) no toca la grilla ni el estado. _(`test_pending_row_selected_deselection_is_a_noop`)_
+- [ADR 0003] Línea ambigua marcada como nueva → NO_CANDIDATES y se adopta al confirmar. _(`test_app_ingest_mark_new_reclassifies_ambiguous_and_confirm_adopts`)_
+- [ADR 0003] Una línea ya resuelta no se puede marcar como nueva. _(`test_app_ingest_mark_new_rejects_resolved_line`)_
+- [ADR 0003] Índice inválido → mensaje útil y estado intacto. _(`test_app_ingest_mark_new_rejects_invalid_index`)_
+- [ADR 0003] Marcar como nueva una línea ya NO_CANDIDATES es un éxito sin cambios. _(`test_app_ingest_mark_new_is_idempotent_on_no_candidates_line`)_
+- [ADR 0003] Línea con cantidad 0 nunca se ingesta: marcarla como nueva no aplica. _(`test_app_ingest_mark_new_rejects_zero_quantity_line`)_
 - [rag-doc R4] Confirmación bloqueada solo por líneas AMBIGUAS; mensaje las lista. _(`test_app_ingest_confirm_blocked_while_ambiguous`)_
 - [ADR 0003] Línea sin match NO bloquea: confirmar crea el producto definitivo. _(`test_app_ingest_confirm_adopts_no_candidate_line`)_
 - [rag-doc R4/R5] Todas resueltas → confirma y escribe stock con node_id. _(`test_app_ingest_confirm_unblocked_when_all_resolved`)_

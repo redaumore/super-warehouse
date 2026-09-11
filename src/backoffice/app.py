@@ -418,7 +418,7 @@ def _ingest_manual_search(
     the hybrid endpoint returns irrelevant products, so an exact code match
     (even several — the owner picks) short-circuits the hybrid fallback.
     """
-    line_idx = _as_index(line_index)
+    line_idx = _as_index(line_index) - 1  # typed as a 1-based human line number
     if line_idx < 0:
         return [], (), "Seleccioná el número de línea pendiente (1-based)."
     text = str(query_text or "").strip()
@@ -511,7 +511,7 @@ def _ingest_assign(
 ) -> tuple[tuple[ResolvedLine, ...], list[list[object]], str]:
     """Attach the selected candidate to the pending line (node_id provenance)."""
     lines = list(state) if isinstance(state, (tuple, list)) else []
-    line_idx = _as_index(line_index)
+    line_idx = _as_index(line_index) - 1  # typed as a 1-based human line number
     cand_idx = _as_index(candidate_index)
     if line_idx < 0 or line_idx >= len(lines):
         return tuple(lines), _resolved_grid(lines), "Seleccioná una línea pendiente válida."
@@ -532,6 +532,50 @@ def _ingest_assign(
     )
     updated = tuple(lines)
     return updated, _resolved_grid(updated), f"Línea {line_idx + 1} asignada: {product.sku}"
+
+
+def _ingest_mark_new(
+    state: object,
+    line_index: object,
+) -> tuple[tuple[ResolvedLine, ...], list[list[object]], str]:
+    """Reclassify an AMBIGUOUS pending line as new (owner override, ADR 0003).
+
+    When none of the retrieved candidates is the actual product (e.g. the
+    product's source page was never ingested), the owner can force the line
+    into the ``NO_CANDIDATES`` path: it stops gating confirmation and is
+    adopted as a definitive product with ``origen={"remito": ...}`` at confirm
+    time. The cached candidates are dropped — keeping them would mislead the
+    row-select flow into offering assignments for a line already marked new.
+    """
+    lines = list(state) if isinstance(state, (tuple, list)) else []
+    line_idx = _as_index(line_index) - 1  # typed as a 1-based human line number
+    if line_idx < 0 or line_idx >= len(lines):
+        return tuple(lines), _resolved_grid(lines), "Seleccioná una línea pendiente válida."
+    current = lines[line_idx]
+    if not current.pending:
+        return tuple(lines), _resolved_grid(lines), "Esa línea ya está resuelta."
+    if current.receipt.cantidad <= 0:
+        return tuple(lines), _resolved_grid(lines), (
+            "Las líneas con cantidad cero o negativa nunca se ingesta: "
+            "marcarlas como nuevo no aplica."
+        )
+    if current.pending_reason is PendingReason.NO_CANDIDATES:
+        return tuple(lines), _resolved_grid(lines), (
+            f"La línea {line_idx + 1} ya está marcada como producto nuevo."
+        )
+    if current.pending_reason is not PendingReason.AMBIGUOUS:
+        return tuple(lines), _resolved_grid(lines), (
+            "Esa línea pendiente no es ambigua: no se puede marcar como nueva."
+        )
+    lines[line_idx] = ResolvedLine(
+        receipt=current.receipt, pending_reason=PendingReason.NO_CANDIDATES
+    )
+    updated = tuple(lines)
+    return updated, _resolved_grid(updated), (
+        f"Línea {line_idx + 1} marcada como producto nuevo: se adoptará como "
+        "definitivo al confirmar. Esta decisión anula la ambigüedad del RAG "
+        "(ningún candidato recuperado es el producto)."
+    )
 
 
 def _ingest_confirm(state: object, supplier_id: object, embedder: Embedder) -> str:
@@ -2449,7 +2493,9 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             manual_results_state = gr.State(())
             manual_candidate_index = gr.State(None)
             manual_status = gr.Textbox(label="Búsqueda manual", interactive=False)
-            assign_btn = gr.Button("Asignar seleccionado a la línea", variant="secondary")
+            with gr.Row():
+                assign_btn = gr.Button("Asignar seleccionado a la línea", variant="secondary")
+                mark_new_btn = gr.Button("➕ Marcar como nuevo", variant="secondary")
             confirm_button = gr.Button("Confirmar e Ingresar a Inventario", variant="primary")
             confirm_status = gr.Textbox(label="Ingreso", interactive=False)
             upload.upload(
@@ -2485,6 +2531,11 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     manual_candidate_index,
                     manual_results_state,
                 ],
+                outputs=[resolved_state, preview_grid, manual_status],
+            )
+            mark_new_btn.click(
+                _ingest_mark_new,
+                inputs=[resolved_state, pending_line_index],
                 outputs=[resolved_state, preview_grid, manual_status],
             )
             confirm_button.click(

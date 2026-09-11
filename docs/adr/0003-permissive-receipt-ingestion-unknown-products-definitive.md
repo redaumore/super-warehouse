@@ -69,6 +69,25 @@ RAG row to assign.
    adoption happens inside `ingest_receipt_lines` during confirm, in the same
    single transaction (session-in / caller-commits).
 
+### Owner override (2026-09-11)
+
+The owner can reclassify an `AMBIGUOUS` line as new from the UI ("➕ Marcar
+como nuevo" in the receipt-ingestion tab). Real case: the line `SM 0048-84`
+(ducha flexible) resolved as `AMBIGUOUS` against 3 semantically related but
+wrong candidates (arrancador, grasa, monocomando) because the product's source
+page was never ingested into the RAG index — none of the retrieved candidates
+was the actual product, yet only `NO_CANDIDATES` lines could proceed.
+
+The override replaces the line with a `NO_CANDIDATES` `ResolvedLine`
+(`product=None`, cached candidates dropped) purely in UI state — no domain
+change. The confirm gate blocks only `AMBIGUOUS`, so the reclassified line
+stops blocking and the existing adopt path creates the definitive product with
+`origen={"remito": ...}` at confirm. Guard rails: resolved lines are rejected,
+invalid indexes leave state untouched, already-`NO_CANDIDATES` lines are
+idempotent, and zero/negative-quantity lines are refused (they are never
+ingested). The reclassification is recorded by the grid label
+`NUEVO (por confirmar)` and the remito provenance written at confirm.
+
 ## Alternatives considered
 
 | Alternative | Why rejected |

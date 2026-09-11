@@ -36,6 +36,7 @@ from src.backoffice.app import (
     _ingest_assign,
     _ingest_confirm,
     _ingest_manual_search,
+    _ingest_mark_new,
     _ingest_parse,
     _load_provider_documents,
     _order_row_selected,
@@ -1102,11 +1103,11 @@ def test_app_ingest_manual_search_and_assign_fix_pending(shop_ctx):
     rag = FakeRag(
         hybrid=(RagProduct(sku="AT-5044", name="Tarugo Fischer 8mm", codigo_proveedor="MSA", node_id="n-tar"),)
     )
-    candidates_grid, candidates, _status = _ingest_manual_search(rag, 0, "AT-5044", 1)
+    candidates_grid, candidates, _status = _ingest_manual_search(rag, 1, "AT-5044", 1)
     assert len(candidates_grid) == 1
     assert candidates_grid[0][0] == "AT-5044"
     assert candidates_grid[0][4] == "n-tar"
-    new_state, grid, assign_status = _ingest_assign((pending,), 0, 0, candidates)
+    new_state, grid, assign_status = _ingest_assign((pending,), 1, 0, candidates)
     assert "asignada" in assign_status
     assert new_state[0].product.node_id == "n-tar"
     assert grid[0][4] == "AT-5044 — Tarugo Fischer 8mm"
@@ -1124,7 +1125,7 @@ def test_app_ingest_manual_search_exact_hit_skips_hybrid(shop_ctx):
             raise AssertionError("hybrid query must not run when exact lookup hits")
 
     rag = _ExplodingHybridRag(exact=(exact_product,))
-    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "SM 0048-84", 1)
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 1, "SM 0048-84", 1)
     assert len(candidates_grid) == 1
     assert candidates_grid[0][4] == "n-ducha"
     assert candidates == (exact_product,)
@@ -1138,7 +1139,7 @@ def test_app_ingest_manual_search_exact_miss_falls_back_to_hybrid(shop_ctx):
         sku="AT-5044", name="Tarugo Fischer 8mm", codigo_proveedor="MSA", node_id="n-tar"
     )
     rag = FakeRag(exact=(), hybrid=(hybrid_product,))
-    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "tarugo 8mm", 1)
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 1, "tarugo 8mm", 1)
     assert len(candidates_grid) == 1
     assert candidates == (hybrid_product,)
     assert "exacta" not in status
@@ -1157,7 +1158,7 @@ def test_app_ingest_manual_search_exact_multi_hit_returns_all(shop_ctx):
             raise AssertionError("hybrid query must not run when exact lookup hits")
 
     rag = _ExplodingHybridRag(exact=(dup_a, dup_b))
-    candidates_grid, candidates, status = _ingest_manual_search(rag, 0, "SM-1", 1)
+    candidates_grid, candidates, status = _ingest_manual_search(rag, 1, "SM-1", 1)
     assert [row[4] for row in candidates_grid] == ["n-a", "n-b"]
     assert candidates == (dup_a, dup_b)
     assert "exacta" in status
@@ -1231,6 +1232,89 @@ def test_pending_row_selected_deselection_is_a_noop(shop_ctx):
     assert rows == []
     assert candidates == ()
     assert message == ""
+
+
+def test_app_ingest_mark_new_reclassifies_ambiguous_and_confirm_adopts(shop_ctx):
+    """[ADR 0003] Línea ambigua marcada como nueva → NO_CANDIDATES y se adopta al confirmar."""
+    shop_ctx["session"].commit()
+    cached = (
+        RagProduct(sku="SM-1", name="Ducha A", codigo_proveedor="MSA", node_id="n-a"),
+        RagProduct(sku="SM-2", name="Ducha B", codigo_proveedor="MSA", node_id="n-b"),
+    )
+    ambiguous = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="SM 0048-84",
+            descripcion="Ducha flexible",
+            cantidad=2,
+            costo=Decimal("95.00"),
+            pagina=1,
+            source_file="remito.jpg",
+        ),
+        pending_reason=PendingReason.AMBIGUOUS,
+        candidates=cached,
+    )
+    new_state, grid, status = _ingest_mark_new((ambiguous,), 1)
+    assert "marcada como producto nuevo" in status
+    assert new_state[0].pending
+    assert new_state[0].pending_reason is PendingReason.NO_CANDIDATES
+    assert new_state[0].candidates == ()  # cached candidates dropped: misleading now
+    assert grid[0][4] == "NUEVO (por confirmar)"
+    message = _ingest_confirm(new_state, 1, _embedder())
+    assert message == "Ingresado: 0 actualizados, 1 nuevos."
+    with SessionLocal() as session:
+        created = session.scalar(
+            select(Catalogo).where(Catalogo.codigo_interno == "MSA-SM-0048-84")
+        )
+        assert created is not None
+        assert created.origen is not None and "remito" in created.origen
+
+
+def test_app_ingest_mark_new_rejects_resolved_line(shop_ctx):
+    """[ADR 0003] Una línea ya resuelta no se puede marcar como nueva."""
+    shop_ctx["session"].commit()
+    resolved = ResolvedLine(receipt=_receipt(cantidad=2), product=_product())
+    state, grid, status = _ingest_mark_new((resolved,), 1)
+    assert status == "Esa línea ya está resuelta."
+    assert state[0].product is not None
+    assert grid[0][4] == "CLV-001 — Clavos Paris 2 Pulgadas"
+
+
+def test_app_ingest_mark_new_rejects_invalid_index(shop_ctx):
+    """[ADR 0003] Índice inválido → mensaje útil y estado intacto."""
+    shop_ctx["session"].commit()
+    ambiguous = ResolvedLine(
+        receipt=_receipt(cantidad=2), pending_reason=PendingReason.AMBIGUOUS
+    )
+    original = (ambiguous,)
+    for bad_index in (-1, 0, 5, None, ""):
+        state, _grid, status = _ingest_mark_new(original, bad_index)
+        assert status == "Seleccioná una línea pendiente válida."
+        assert state == original
+        assert state[0].pending_reason is PendingReason.AMBIGUOUS
+
+
+def test_app_ingest_mark_new_is_idempotent_on_no_candidates_line(shop_ctx):
+    """[ADR 0003] Marcar como nueva una línea ya NO_CANDIDATES es un éxito sin cambios."""
+    shop_ctx["session"].commit()
+    no_candidate = ResolvedLine(
+        receipt=_receipt(cantidad=2), pending_reason=PendingReason.NO_CANDIDATES
+    )
+    original = (no_candidate,)
+    state, grid, status = _ingest_mark_new(original, 1)
+    assert "ya está marcada como producto nuevo" in status
+    assert state == original
+    assert grid[0][4] == "NUEVO (por confirmar)"
+
+
+def test_app_ingest_mark_new_rejects_zero_quantity_line(shop_ctx):
+    """[ADR 0003] Línea con cantidad 0 nunca se ingesta: marcarla como nueva no aplica."""
+    shop_ctx["session"].commit()
+    zero_qty = ResolvedLine(receipt=_receipt(cantidad=0))
+    original = (zero_qty,)
+    state, grid, status = _ingest_mark_new(original, 1)
+    assert "nunca se ingesta" in status
+    assert state == original
+    assert grid[0][4] == "PENDIENTE"
 
 
 def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):
