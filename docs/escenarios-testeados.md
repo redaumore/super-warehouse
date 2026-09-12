@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 522, agrupados en 34 dominios.
+**Total de escenarios:** 524, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -36,7 +36,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 118
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 120
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 15
@@ -621,9 +621,11 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Loading a rate recomputes a pending RAG order and clears its flag. _(`test_recompute_pending_conversion_clears_flag_and_fills_totals`)_
 - The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_
 - Approval registration refuses an order until its prices are converted. _(`test_pending_conversion_order_is_blocked_at_approval`)_
-- La grilla del catálogo renderiza los productos sembrados. _(`test_app_catalog_grid_renders_seeded_products`)_
+- La grilla del catálogo muestra proveedor + código mapeado, no el SKU interno. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente recarga la grilla y limpia el formulario. _(`test_app_register_client_returns_success_message`)_
 - Editar stock desde la UI persiste el cambio en Inventory (fuente única). _(`test_app_catalog_edit_persists_stock_change`)_
+- El campo de edición resuelve códigos de proveedor, no solo el SKU interno. _(`test_app_catalog_edit_resolves_supplier_code`)_
+- Código desconocido: el error menciona SKU interno y código de proveedor. _(`test_app_catalog_edit_unknown_code_mentions_both_options`)_
 - Un teléfono inválido desde la UI devuelve el error y no toca el formulario. _(`test_app_register_client_surfaces_error_for_bad_phone`)_
 - [rag-doc R1] El dropdown lista solo ACTIVO por business_name y retiene el ID. _(`test_active_supplier_choices_lists_activo_by_business_name`)_
 - El placeholder "seleccionar proveedor" es la primera opción del tab Ingesta. _(`test_active_supplier_choices_prepends_placeholder_when_requested`)_

@@ -36,6 +36,7 @@ from src.backoffice.adoption import (
 )
 from src.backoffice.catalog import (
     list_products,
+    resolve_product_code,
     search_rag_products,
     update_margin,
     update_price,
@@ -125,7 +126,8 @@ def _catalog_grid() -> list[list[object]]:
         rows = list_products(session)
     return [
         [
-            r["codigo_interno"],
+            r["supplier_code"],
+            r["supplier_sku_code"],
             r["codigo_barras"],
             r["nombre_oficial"],
             r["costo_proveedor"],
@@ -265,9 +267,17 @@ def _register_client(
     return "Cliente registrado", _clients_grid(), "", "", None, 0
 
 
-def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: float | None) -> str:
+def _catalog_edit(code: str, stock: int | None, price: float | None, margin: float | None) -> str:
+    """Apply stock/price/margin edits to the product the typed code resolves to.
+
+    The box accepts the opaque internal SKU (fallback) or any supplier's
+    mapped code; the resolved product is what gets edited, the confirmation
+    echoes the code the owner typed (codigo_interno stays out of the UI).
+    """
     with SessionLocal() as session:
         try:
+            product = resolve_product_code(session, code)
+            sku = product.codigo_interno
             if stock is not None:
                 update_stock(session, sku, int(stock))
             if price is not None:
@@ -277,7 +287,7 @@ def _catalog_edit(sku: str, stock: int | None, price: float | None, margin: floa
             session.commit()
         except Exception as exc:  # noqa: BLE001 — surfaced in the UI
             return f"Error: {exc}"
-    return f"Guardado: {sku}"
+    return f"Guardado: {code}"
 
 
 # ------------------------------------------------ ingestion tab (RAG receipts)
@@ -1618,7 +1628,7 @@ def _manual_product_search(
     grid = [
         [
             hit["source"],
-            hit["sku"],
+            hit["display_code"],
             hit["name"],
             hit["marca"] or "—",
             hit["categoria"] or "—",
@@ -1997,7 +2007,8 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             gr.Markdown("### Catálogo y stock")
             catalog_grid = gr.Dataframe(
                 headers=[
-                    "SKU",
+                    "Proveedor",
+                    "Código proveedor",
                     "Código barras",
                     "Nombre",
                     "Costo",
@@ -2005,12 +2016,15 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     "Precio lista",
                     "Stock",
                 ],
-                datatype=["str", "str", "str", "str", "str", "str", "number"],
+                datatype=["str", "str", "str", "str", "str", "str", "str", "number"],
                 value=_catalog_grid,
                 label="Productos",
             )
             with gr.Row():
-                edit_sku = gr.Textbox(label="SKU", placeholder="CLV-001")
+                edit_sku = gr.Textbox(
+                    label="Código de proveedor o SKU",
+                    placeholder="AX 302-8 o CLV-001",
+                )
                 edit_stock = gr.Number(label="Stock", precision=0)
                 edit_price = gr.Number(label="Precio lista")
                 edit_margin = gr.Number(label="Margen %")
@@ -2448,7 +2462,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     manual_search_grid = gr.Dataframe(
                         headers=[
                             "Origen",
-                            "SKU",
+                            "Código",
                             "Nombre",
                             "Marca",
                             "Categoría",

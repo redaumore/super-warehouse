@@ -973,12 +973,14 @@ def test_pending_conversion_order_is_blocked_at_approval(shop_ctx):
 
 
 def test_app_catalog_grid_renders_seeded_products(shop_ctx):
-    """La grilla del catálogo renderiza los productos sembrados."""
+    """La grilla del catálogo muestra proveedor + código mapeado, no el SKU interno."""
     shop_ctx["session"].add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     shop_ctx["session"].commit()
     rows = _catalog_grid()
-    assert any(row[0] == "CLV-001" for row in rows)
-    assert any(row[6] == 10 for row in rows)  # on-hand column (Inventory)
+    assert any(row[0] == "MSA" for row in rows)  # supplier code leads the row
+    assert any(row[1] == "" for row in rows)  # unmapped product: blank supplier code
+    assert any(row[7] == 10 for row in rows)  # on-hand column (Inventory)
+    assert all("CLV-001" not in [str(cell) for cell in row] for row in rows)
 
 
 def test_app_register_client_returns_success_message(shop_ctx):
@@ -1006,6 +1008,30 @@ def test_app_catalog_edit_persists_stock_change(shop_ctx):
         inventory = session.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
         assert inventory is not None
         assert inventory.quantity_on_hand == 25
+
+
+def test_app_catalog_edit_resolves_supplier_code(shop_ctx):
+    """El campo de edición resuelve códigos de proveedor, no solo el SKU interno."""
+    from src.backoffice.sku_mappings import record_supplier_sku
+
+    session = shop_ctx["session"]
+    record_supplier_sku(session, 1, "AX 302-8", "CLV-001")
+    session.commit()
+
+    message = _catalog_edit("  ax  302-8 ", 30, None, None)
+    assert message == "Guardado:   ax  302-8 "  # echoes the typed code, not the SKU
+    with SessionLocal() as fresh:
+        inventory = fresh.scalar(select(Inventory).where(Inventory.sku_id == "CLV-001"))
+        assert inventory is not None
+        assert inventory.quantity_on_hand == 30
+
+
+def test_app_catalog_edit_unknown_code_mentions_both_options(shop_ctx):
+    """Código desconocido: el error menciona SKU interno y código de proveedor."""
+    shop_ctx["session"].commit()
+    message = _catalog_edit("ZZZ-404", 5, None, None)
+    assert message.startswith("Error:")
+    assert "SKU interno" in message and "código de proveedor" in message
 
 
 def test_app_register_client_surfaces_error_for_bad_phone(shop_ctx):

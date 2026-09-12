@@ -17,8 +17,9 @@ from functools import lru_cache
 from sqlalchemy import Column, Integer, MetaData, Numeric, String, Table, and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from src.backoffice.sku_mappings import find_product_by_any_supplier_code, primary_supplier_codes
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory
+from src.db.models import Catalogo, Inventory, Supplier
 from src.pricing.engine import compute_base
 
 _CENT = Decimal("0.01")
@@ -42,21 +43,31 @@ def _folded(column) -> object:
 
 
 def list_products(session: Session) -> list[dict[str, object]]:
-    """Every product row for the catalog grid: SKU, barcode, name, prices, stock.
+    """Every product row for the catalog grid.
 
-    Stock comes from the canonical ``Inventory.quantity_on_hand`` (ADR 0002);
-    a product with no Inventory row displays zero.
+    ``codigo_interno`` is an OPAQUE internal identifier (user-approved design):
+    the grid leads with the SUPPLIER code + the product's primary mapped
+    supplier code instead. Stock comes from the canonical
+    ``Inventory.quantity_on_hand`` (ADR 0002); a product with no Inventory row
+    displays zero. The primary supplier code is the mapping with the highest
+    confidence (earliest id on ties), fetched in one extra query — empty
+    string when the product is unmapped.
     """
-    rows = []
     results = session.execute(
-        select(Catalogo, Inventory.quantity_on_hand)
+        select(Catalogo, Inventory.quantity_on_hand, Supplier.code)
+        .join(Catalogo.supplier)  # every catalog row has a supplier (non-null FK)
         .outerjoin(Inventory, Inventory.sku_id == Catalogo.codigo_interno)
         .order_by(Catalogo.codigo_interno)
     )
-    for product, on_hand in results:
+    products = list(results)
+    primary_codes = primary_supplier_codes(session, [p.codigo_interno for p, _, _ in products])
+    rows = []
+    for product, on_hand, supplier_code in products:
         rows.append(
             {
                 "codigo_interno": product.codigo_interno,
+                "supplier_code": supplier_code,
+                "supplier_sku_code": primary_codes.get(product.codigo_interno, ""),
                 "codigo_barras": product.codigo_barras or "",
                 "nombre_oficial": product.nombre_oficial,
                 "costo_proveedor": str(product.costo_proveedor),
@@ -66,6 +77,26 @@ def list_products(session: Session) -> list[dict[str, object]]:
             }
         )
     return rows
+
+
+def resolve_product_code(session: Session, code: str) -> Catalogo:
+    """Resolve a typed code to a catalog product for the Productos edit box.
+
+    Resolution order: (a) exact ``codigo_interno`` match first (cheap, keeps
+    the internal identifier usable as a fallback), else (b) the code as a
+    mapped supplier code across ALL suppliers. Raises ``KeyError`` when
+    neither matches, with a message that mentions both options (surfaced in
+    the UI status box).
+    """
+    text = (code or "").strip()
+    product = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == text)) if text else None
+    if product is None:
+        product = find_product_by_any_supplier_code(session, text)
+    if product is None:
+        raise KeyError(
+            "Producto no encontrado: ingresá el SKU interno o el código de proveedor del producto."
+        )
+    return product
 
 
 def _product_by_sku(session: Session, sku: str) -> Catalogo:
