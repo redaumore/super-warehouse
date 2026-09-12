@@ -543,20 +543,28 @@ def _ingest_manual_search(
 
 
 def _pending_row_selected(
-    evt: gr.SelectData, state: object
-) -> tuple[list[list[object]], tuple[RagProduct, ...], str]:
+    evt: gr.SelectData, state: object, current_index: object
+) -> tuple[list[list[object]], tuple[RagProduct, ...], str, object]:
     """Populate the candidate grid from the cached candidates of a pending row.
 
     Selecting a row in the main resolved grid maps 1:1 to the line index; an
     AMBIGUOUS line whose resolution cached RAG candidates shows them right
-    away — no re-search. Read-only: no COMMIT, pure UI state.
+    away — no re-search. The 4th return value keeps the "Línea pendiente (nº)"
+    Number field in sync with the clicked row (the owner's mental model is
+    "click the row, then act"): a PENDING line with a positive quantity writes
+    its 1-based number — with cached candidates so the owner can assign right
+    away, or NO_CANDIDATES so "Marcar como nuevo" hits the right line. Every
+    other path (resolved row, ambiguous without cached candidates, zero
+    quantity, deselection, invalid index) passes ``current_index`` through
+    UNCHANGED so a number the owner typed manually is never clobbered.
+    Read-only: no COMMIT, pure UI state.
     """
     lines = list(state) if isinstance(state, (tuple, list)) else []
     if not getattr(evt, "selected", False):
-        return [], (), ""
+        return [], (), "", current_index
     idx = _manual_row_selected(evt)  # same click → index mapping as the candidate grid
     if idx is None or idx < 0 or idx >= len(lines):
-        return [], (), ""
+        return [], (), "", current_index
     line = lines[idx]
     if (
         line.pending
@@ -570,18 +578,23 @@ def _pending_row_selected(
                 f"{len(line.candidates)} candidatos recuperados para la línea {idx + 1}. "
                 "Seleccioná uno y asignalo."
             ),
+            idx + 1,
         )
     if line.pending and line.pending_reason is PendingReason.AMBIGUOUS:
         return [], (), (
             f"La línea {idx + 1} es ambigua pero no tiene candidatos cacheados: "
             "usá la búsqueda manual."
-        )
+        ), current_index
     if line.pending:
+        # NO_CANDIDATES or zero-quantity pending: adoption path. Only a
+        # positive-quantity line is actionable ("Marcar como nuevo"), so only
+        # that one syncs the typed line number.
+        number = idx + 1 if line.receipt.cantidad > 0 else current_index
         return [], (), (
             f"La línea {idx + 1} no tiene candidatos en el índice: al confirmar se "
             "adopta como producto nuevo. Solo las ambiguas requieren asignación."
-        )
-    return [], (), f"La línea {idx + 1} ya está resuelta: no requiere asignación."
+        ), number
+    return [], (), f"La línea {idx + 1} ya está resuelta: no requiere asignación.", current_index
 
 
 def _manual_row_selected(evt: gr.SelectData) -> int | None:
@@ -2630,8 +2643,8 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             )
             preview_grid.select(
                 _pending_row_selected,
-                [resolved_state],
-                [manual_results, manual_results_state, manual_status],
+                [resolved_state, pending_line_index],
+                [manual_results, manual_results_state, manual_status, pending_line_index],
             )
             manual_search_btn.click(
                 _ingest_manual_search,

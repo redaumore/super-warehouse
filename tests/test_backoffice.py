@@ -1332,20 +1332,22 @@ def test_pending_row_selected_fills_grid_from_cached_candidates(shop_ctx):
         ),
     )
     evt = SimpleNamespace(selected=True, index=[1])
-    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    rows, candidates, message, line_number = _pending_row_selected(evt, state, 7)  # type: ignore[arg-type]
     assert [row[4] for row in rows] == ["n-a", "n-b"]
     assert candidates == cached
     assert "2 candidatos recuperados para la línea 2" in message
+    assert line_number == 2  # syncs the clicked row's 1-based number, not the typed 7
 
 
 def test_pending_row_selected_resolved_row_clears_grid(shop_ctx):
     """[manual R1] Fila resuelta → grilla limpia con mensaje de línea resuelta."""
     state = (ResolvedLine(receipt=_receipt(cantidad=2), product=_product()),)
     evt = SimpleNamespace(selected=True, index=[0])
-    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    rows, candidates, message, line_number = _pending_row_selected(evt, state, 7)  # type: ignore[arg-type]
     assert rows == []
     assert candidates == ()
     assert "ya está resuelta" in message
+    assert line_number == 7  # passthrough: a resolved row never clobbers the typed number
 
 
 def test_pending_row_selected_ambiguous_without_candidates_clears_grid(shop_ctx):
@@ -1357,10 +1359,11 @@ def test_pending_row_selected_ambiguous_without_candidates_clears_grid(shop_ctx)
         ),
     )
     evt = SimpleNamespace(selected=True, index=[0])
-    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    rows, candidates, message, line_number = _pending_row_selected(evt, state, 7)  # type: ignore[arg-type]
     assert rows == []
     assert candidates == ()
     assert "búsqueda manual" in message
+    assert line_number == 7  # no cached candidates → the typed number is left untouched
 
 
 def test_pending_row_selected_no_candidates_row_clears_grid(shop_ctx):
@@ -1372,19 +1375,36 @@ def test_pending_row_selected_no_candidates_row_clears_grid(shop_ctx):
         ),
     )
     evt = SimpleNamespace(selected=True, index=[0])
-    rows, candidates, message = _pending_row_selected(evt, state)  # type: ignore[arg-type]
+    rows, candidates, message, line_number = _pending_row_selected(evt, state, 7)  # type: ignore[arg-type]
     assert rows == []
     assert candidates == ()
     assert "no tiene candidatos" in message
+    assert line_number == 1  # actionable pending line → the click syncs its 1-based number
 
 
 def test_pending_row_selected_deselection_is_a_noop(shop_ctx):
     """Deseleccionar (o un evento sin fila usable) no toca la grilla ni el estado."""
     evt = SimpleNamespace(selected=False, index=[0])
-    rows, candidates, message = _pending_row_selected(evt, ())  # type: ignore[arg-type]
+    rows, candidates, message, line_number = _pending_row_selected(evt, (), 7)  # type: ignore[arg-type]
     assert rows == []
     assert candidates == ()
     assert message == ""
+    assert line_number == 7  # deselection passes the typed number through unchanged
+
+
+def test_pending_row_selected_zero_quantity_pending_keeps_typed_number(shop_ctx):
+    """Línea pendiente con cantidad 0 no se ingesta: el número tipeado no se pisa."""
+    state = (
+        ResolvedLine(
+            receipt=_receipt(codigo_orig="XX-2", descripcion="Muestra sin cargo", cantidad=0),
+            pending_reason=PendingReason.NONE,
+        ),
+    )
+    evt = SimpleNamespace(selected=True, index=[0])
+    rows, candidates, _message, line_number = _pending_row_selected(evt, state, 7)  # type: ignore[arg-type]
+    assert rows == []
+    assert candidates == ()
+    assert line_number == 7  # zero-qty lines are never ingested → passthrough
 
 
 def test_app_ingest_confirm_blocked_while_ambiguous(shop_ctx):
