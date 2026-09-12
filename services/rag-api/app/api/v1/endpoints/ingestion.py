@@ -125,7 +125,12 @@ def _row_to_product(row: dict[str, Any]) -> ProductLookupResponse:
 )
 def parse_document(
     file: UploadFile = File(..., description="Remito/factura (PDF o imagen)"),
-    codigo_proveedor: str = Form(..., description="Código del proveedor (3 caracteres)"),
+    # Optional: the parser is supplier-agnostic (it never reads this value).
+    # Required was a contract bug — FastAPI treats an empty multipart Form
+    # value as MISSING, so supplier-less parses (placeholder selection) 422ed.
+    codigo_proveedor: str | None = Form(
+        None, description="Código del proveedor (opcional; el parser no lo usa)"
+    ),
 ) -> DocumentParseResponse:
     """Parse an uploaded supplier document into structured lines. No writes."""
     content = file.file.read()  # bytes in memory — the endpoint never persists

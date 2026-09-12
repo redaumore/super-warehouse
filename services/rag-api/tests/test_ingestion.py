@@ -169,6 +169,22 @@ def test_ingest_parse_success_returns_lines_and_writes_nothing(monkeypatch: pyte
     assert _uploads_count() == before  # never persisted
 
 
+def test_ingest_parse_without_supplier_code_succeeds(monkeypatch: pytest.MonkeyPatch):
+    """[ADR 0003] Parse without codigo_proveedor (placeholder selection) → 200, zero writes."""
+    _patch_parser(
+        monkeypatch,
+        [{"codigo_orig": "AT-5044", "descripcion": "Tarugo Fischer 8mm", "cantidad": 10, "costo": 135.5}],
+    )
+    before = _uploads_count()
+    response = client.post(
+        "/api/v1/ingest/parse",
+        files={"file": ("remito.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 200
+    assert len(response.json()["document"]["lines"]) == 1
+    assert _uploads_count() == before  # never persisted
+
+
 def test_ingest_parse_failure_returns_structured_error_and_writes_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ):
