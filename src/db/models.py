@@ -143,7 +143,8 @@ class Supplier(Base):
     user-editable before save and immutable once linked (guarded in
     ``src/backoffice/suppliers.py``). ``cuit`` is nullable (legacy rows may lack
     it) and backed by a partial unique index; ``status`` is the soft-delete
-    lifecycle (default ACTIVO).
+    lifecycle (default ACTIVO). ``moneda`` is the currency the supplier bills
+    its catalog in (null = bills in ARS / not declared).
     """
 
     __tablename__ = "suppliers"
@@ -165,6 +166,7 @@ class Supplier(Base):
     default_margin_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, default=Decimal(0)
     )
+    moneda: Mapped[str | None] = mapped_column(String(3), nullable=True)
     terms: Mapped[str | None] = mapped_column(Text, nullable=True)
     cuit: Mapped[str | None] = mapped_column(String(13), nullable=True)
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)

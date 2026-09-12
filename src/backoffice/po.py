@@ -16,7 +16,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import SupplierPurchaseOrder
+from src.backoffice.sku_mappings import primary_supplier_codes
+from src.db.models import Catalogo, SupplierPurchaseOrder
 from src.purchasing.state import cancel_po, receive_po, send_po
 
 
@@ -25,6 +26,44 @@ def _po(session: Session, po_id: int) -> SupplierPurchaseOrder:
     if po is None:
         raise KeyError(f"unknown purchase order: {po_id}")
     return po
+
+
+def po_detail(session: Session, po_id: int) -> dict[str, object]:
+    """One purchase order and its product lines for the detail grid.
+
+    ``codigo_proveedor`` resolves each line's internal SKU through the supplier
+    SKU mappings (batch query — no N+1); ``name`` comes from ``Catalogo`` in
+    the same batch and falls back to "—" for delisted products. Raises
+    ``KeyError`` for an unknown PO so the UI handler can clear the grid.
+    """
+    po = _po(session, po_id)
+    items = list(po.items)
+    skus = [item.sku for item in items]
+    primary_codes = primary_supplier_codes(session, skus)
+    names: dict[str, str | None] = {}
+    if skus:
+        rows = session.execute(
+            select(Catalogo.codigo_interno, Catalogo.nombre_oficial).where(
+                Catalogo.codigo_interno.in_(set(skus))
+            )
+        )
+        names = {sku: name for sku, name in rows}
+    lines = [
+        {
+            "sku": item.sku,
+            "codigo_proveedor": primary_codes.get(item.sku, ""),
+            "name": names.get(item.sku) or "—",
+            "quantity": int(item.quantity),
+            "received_quantity": int(item.received_quantity),
+        }
+        for item in items
+    ]
+    return {
+        "po_id": po.po_id,
+        "estado": po.estado.value,
+        "supplier": po.supplier.business_name if po.supplier else str(po.supplier_id),
+        "lines": lines,
+    }
 
 
 def list_purchase_orders(session: Session) -> list[dict[str, object]]:

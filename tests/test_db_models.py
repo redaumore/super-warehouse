@@ -136,6 +136,7 @@ def test_supplier_model_has_master_data_columns():
         "contact_name",
         "phone",
         "default_margin_pct",
+        "moneda",
         "terms",
         "cuit",
         "address",
@@ -410,5 +411,97 @@ def test_migration_seeded_default_margin_is_read_by_pricing(db_engine, clean_sch
                 default_margin=_default_margin(session),
             )
             assert priced.lines[0].base_ars == Decimal("100.00")
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_migration_creates_supplier_moneda_column(db_inspector):
+    """La migración deja suppliers.moneda como varchar(3) nullable."""
+    col = next(c for c in db_inspector.get_columns("suppliers") if c["name"] == "moneda")
+    assert col["nullable"] is True
+    assert "3" in str(col["type"])
+
+
+def test_supplier_moneda_roundtrip(db_engine, clean_schema):
+    """suppliers.moneda persiste y se lee redondo; NULL cuando no se declara."""
+    Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+    with Session() as session:
+        session.add(
+            Supplier(
+                id=1,
+                code="SCO",
+                business_name="SCO",
+                default_margin_pct=Decimal(0),
+                moneda="USD",
+            )
+        )
+        session.add(
+            Supplier(id=2, code="MSA", business_name="Mayorista SA", default_margin_pct=Decimal(0))
+        )
+        session.commit()
+    with Session() as session:
+        assert session.get(Supplier, 1).moneda == "USD"
+        assert session.get(Supplier, 2).moneda is None
+
+
+def test_supplier_currency_migration_backfills_sco_and_catalogo(db_engine, clean_schema):
+    """La migración de moneda backfillea SCO=USD y su catálogo sin moneda.
+
+    Seeded at the previous revision (934d98c5d1b2, before the column exists),
+    the upgrade must set suppliers.moneda='USD' for SCO and propagate it to
+    that supplier's catalog rows carrying no currency — generically, per
+    supplier — while suppliers without a declared currency stay NULL.
+    """
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    config = AlembicConfig(str(alembic_ini))
+
+    command.downgrade(config, "934d98c5d1b2")
+    try:
+        # Core inserts (not ORM): the mapped Supplier/Catalogo models already
+        # carry `moneda`, which does not exist at this revision — Core inserts
+        # only include the columns explicitly provided.
+        with db_engine.begin() as conn:
+            conn.execute(
+                Supplier.__table__.insert().values(
+                    id=1, code="SCO", business_name="SCO", default_margin_pct=Decimal(0)
+                )
+            )
+            conn.execute(
+                Supplier.__table__.insert().values(
+                    id=2, code="MSA", business_name="Mayorista SA", default_margin_pct=Decimal(0)
+                )
+            )
+            conn.execute(
+                Catalogo.__table__.insert().values(
+                    id=1,
+                    codigo_interno="SCO-SM-0048-84",
+                    supplier_id=1,
+                    nombre_oficial="Pinta SCO",
+                    costo_proveedor=Decimal("10.00"),
+                    margen_aplicado_pct=Decimal(0),
+                    precio_lista_base=Decimal("10.00"),
+                    sinonimos=[],
+                )
+            )
+            conn.execute(
+                Catalogo.__table__.insert().values(
+                    id=2,
+                    codigo_interno="MSA-CLV-001",
+                    supplier_id=2,
+                    nombre_oficial="Clavos",
+                    costo_proveedor=Decimal("10.00"),
+                    margen_aplicado_pct=Decimal(0),
+                    precio_lista_base=Decimal("10.00"),
+                    sinonimos=[],
+                )
+            )
+        command.upgrade(config, "head")
+        Session = sessionmaker(bind=db_engine, expire_on_commit=False)
+        with Session() as session:
+            assert session.get(Supplier, 1).moneda == "USD"
+            assert session.get(Supplier, 2).moneda is None
+            # SCO's product inherits USD; the other supplier's product stays NULL.
+            assert session.get(Catalogo, 1).moneda == "USD"
+            assert session.get(Catalogo, 2).moneda is None
     finally:
         command.upgrade(config, "head")

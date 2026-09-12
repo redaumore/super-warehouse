@@ -27,8 +27,79 @@ def test_local_lines_use_cost_and_applied_margin_not_list_price():
 
     assert order.lines[0].base_ars == Decimal("135.00")
     assert order.lines[0].final_ars == Decimal("121.50")
+    assert order.lines[0].moneda == "ARS"
     assert order.subtotal == Decimal("270.00")
     assert order.total == Decimal("243.00")
+
+
+def test_local_usd_lines_convert_marked_up_base_with_supplier_rate():
+    """A LOCAL line in a non-ARS currency converts after the markup.
+
+    Cost 2 × margin 15% = 2.30 USD, × rate 100 → 230.00 AR$ base.
+    """
+    order = compute_order(
+        [
+            PricingLine(
+                sku="LOCAL-USD",
+                cantidad=1,
+                source="LOCAL",
+                name="USD catalog item",
+                cost=Decimal("2.00"),
+                margin=Decimal("0.15"),
+                currency="USD",
+            )
+        ],
+        rate={"USD": Decimal("100.00")},
+        list_discount=Decimal("0.10"),
+    )
+
+    assert order.lines[0].base_ars == Decimal("230.00")
+    assert order.lines[0].final_ars == Decimal("207.00")
+    assert order.lines[0].moneda == "USD"
+    assert order.lines[0].precio_original == Decimal("2.00")
+    assert order.total == Decimal("207.00")
+
+
+def test_local_usd_line_missing_rate_raises():
+    """A LOCAL line in USD cannot be priced without its exchange rate."""
+    with pytest.raises(MissingRateError, match="USD"):
+        compute_order(
+            [
+                PricingLine(
+                    sku="LOCAL-USD",
+                    cantidad=1,
+                    source="LOCAL",
+                    cost=Decimal("2.00"),
+                    margin=Decimal("0.15"),
+                    currency="USD",
+                )
+            ],
+            rate=lambda _currency: None,
+        )
+
+
+def test_pending_local_usd_line_stays_at_zero_without_rate():
+    """allow_missing_rate persists a pending LOCAL USD line at zero ARS."""
+    from src.pricing.order_pricing import pending_order
+
+    priced = pending_order(
+        [
+            PricingLine(
+                sku="LOCAL-USD",
+                cantidad=1,
+                source="LOCAL",
+                name="USD catalog item",
+                cost=Decimal("2.00"),
+                margin=Decimal("0.15"),
+                currency="USD",
+            )
+        ],
+        rate=lambda _currency: None,
+    )
+
+    assert priced.conversion_pending is True
+    assert priced.lines[0].base_ars == Decimal("0.00")
+    assert priced.lines[0].moneda == "USD"
 
 
 def test_rag_lines_never_apply_supplier_or_default_margin():

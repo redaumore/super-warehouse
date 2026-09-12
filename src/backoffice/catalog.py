@@ -11,7 +11,7 @@ can consult indexed products with field filters — no LLM call involved.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 
 from sqlalchemy import Column, Integer, MetaData, Numeric, String, Table, and_, func, or_, select
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.backoffice.sku_mappings import find_product_by_any_supplier_code, primary_supplier_codes
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, Supplier
+from src.db.models import Catalogo, ExchangeRate, Inventory, Supplier
 from src.pricing.engine import compute_base
 
 _CENT = Decimal("0.01")
@@ -42,6 +42,33 @@ def _folded(column) -> object:
     return func.translate(column, _ACCENTED, _PLAIN)
 
 
+def _list_price_ars(
+    product: Catalogo, usd_rate: Decimal | None
+) -> Decimal | None:
+    """Display-time AR$ list price: cost × (1 + margin) × currency rate.
+
+    ``precio_lista_base`` is stored unconverted, so when the product's cost is
+    in a non-ARS currency (``Catalogo.moneda == "USD"``) the supplier rate is
+    applied here — the stored column is never mutated. A missing USD rate falls
+    back to rate 1 (display degrades gracefully instead of crashing). Returns
+    ``None`` only when the cost itself is missing.
+    """
+    if product.costo_proveedor is None:
+        return None
+    currency = (product.moneda or "ARS").strip().upper()
+    rate = Decimal(1)
+    if currency == "USD" and usd_rate is not None:
+        rate = usd_rate
+    # ``margen_aplicado_pct`` is stored as percentage POINTS (15.00 = 15%),
+    # matching the fraction coercion the order-pricing engine applies
+    # (``_as_fraction``): values > 1 are divided by 100 before the markup.
+    margin = product.margen_aplicado_pct
+    if margin is not None and margin.copy_abs() > 1:
+        margin = margin / Decimal(100)
+    base = compute_base(product.costo_proveedor, margin)
+    return (base * rate).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
 def list_products(session: Session) -> list[dict[str, object]]:
     """Every product row for the catalog grid.
 
@@ -52,6 +79,9 @@ def list_products(session: Session) -> list[dict[str, object]]:
     displays zero. The primary supplier code is the mapping with the highest
     confidence (earliest id on ties), fetched in one extra query — empty
     string when the product is unmapped.
+
+    ``precio_lista_ars`` is a display-time computation (cost × margin ×
+    supplier-currency rate); the stored ``precio_lista_base`` is never touched.
     """
     results = session.execute(
         select(Catalogo, Inventory.quantity_on_hand, Supplier.code)
@@ -61,16 +91,24 @@ def list_products(session: Session) -> list[dict[str, object]]:
     )
     products = list(results)
     primary_codes = primary_supplier_codes(session, [p.codigo_interno for p, _, _ in products])
+    usd_rate = session.scalar(
+        select(ExchangeRate.rate_to_ars).where(ExchangeRate.currency == "USD")
+    )
     rows = []
     for product, on_hand, supplier_code in products:
+        precio_ars = _list_price_ars(product, usd_rate)
         rows.append(
             {
                 "codigo_interno": product.codigo_interno,
                 "supplier_code": supplier_code,
                 "supplier_sku_code": primary_codes.get(product.codigo_interno, ""),
-                "codigo_barras": product.codigo_barras or "",
                 "nombre_oficial": product.nombre_oficial,
                 "costo_proveedor": str(product.costo_proveedor),
+                "moneda": product.moneda or "",
+                "marca": product.marca or "",
+                "categoria": product.categoria or "",
+                "subcategoria": product.subcategoria or "",
+                "precio_lista_ars": str(precio_ars) if precio_ars is not None else "",
                 "margen_aplicado_pct": str(product.margen_aplicado_pct),
                 "precio_lista_base": str(product.precio_lista_base),
                 "on_hand": int(on_hand or 0),

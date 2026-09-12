@@ -2,7 +2,7 @@
 
 Documento generado automáticamente desde los docstrings de los tests. No lo edites a mano: si un escenario cambia, actualizá la primera línea del docstring del test y volvé a correr `make test-docs`.
 
-**Total de escenarios:** 524, agrupados en 34 dominios.
+**Total de escenarios:** 539, agrupados en 34 dominios.
 
 > Cada ítem lista el comportamiento que se valida en lenguaje natural, seguido (entre paréntesis) del nombre técnico del test.
 
@@ -24,19 +24,19 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [Integración con OpenAI](#integración-con-openai) — 9
 - [Búsqueda en catálogo](#búsqueda-en-catálogo) — 10
 - [Calibración de búsqueda (queries cortas)](#calibración-de-búsqueda-queries-cortas) — 3
-- [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 17
+- [Adopción de productos RAG (use case de backoffice)](#adopción-de-productos-rag-use-case-de-backoffice) — 20
 - [Autenticación de adopción (HMAC y allowlist de owners)](#autenticación-de-adopción-hmac-y-allowlist-de-owners) — 10
 - [Vencimiento de reservas (scheduler)](#vencimiento-de-reservas-scheduler) — 6
 - [Canales de entrada (Telegram/WhatsApp)](#canales-de-entrada-telegram-whatsapp) — 4
 - [Canal WhatsApp Cloud API](#canal-whatsapp-cloud-api) — 11
 - [Webhook de entrada](#webhook-de-entrada) — 6
 - [Intake y trabajo en background](#intake-y-trabajo-en-background) — 3
-- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 23
+- [Modelo de datos y migraciones](#modelo-de-datos-y-migraciones) — 26
 - [Teléfonos y clientes](#teléfonos-y-clientes) — 3
 - [Registro en Google Sheets](#registro-en-google-sheets) — 6
 - [Códigos de barras](#códigos-de-barras) — 11
 - [OCR de documentos de proveedor](#ocr-de-documentos-de-proveedor) — 11
-- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 120
+- [Backoffice (catálogo, clientes, monitor, ingesta)](#backoffice-catálogo-clientes-monitor-ingesta) — 129
 - [Feature flags por fase](#feature-flags-por-fase) — 7
 - [E2E: pedido completo](#e2e-pedido-completo) — 4
 - [E2E: ingesta de documentos](#e2e-ingesta-de-documentos) — 15
@@ -438,6 +438,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La moneda se guarda en mayúsculas; ausente queda None. _(`test_moneda_se_normaliza_a_mayusculas`)_
   - usd / USD
   - ARS / ARS
+- DTO sin moneda → hereda la moneda declarada del proveedor (fallback). _(`test_moneda_ausente_hereda_la_del_proveedor`)_
+- La moneda del DTO RAG es primaria: pisa la declarada del proveedor. _(`test_moneda_del_dto_pisa_la_del_proveedor`)_
+- DTO y proveedor sin moneda → el producto queda NULL (factura en ARS). _(`test_moneda_null_cuando_nadie_la_declara`)_
 - El embedding compone nombre+marca+categoria+subcategoria normalizados. _(`test_composicion_del_embedding_texto_normalizado`)_
 - Un embedder que falla revierte la adopción: nada se persiste (502). _(`test_embedding_falla_y_rollback_total`)_
 - Stock <= 0 se rechaza con error de validación y no persiste nada. _(`test_stock_no_positivo_rechazado`)_
@@ -535,6 +538,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - La extensión pgvector queda instalada en el esquema migrado. _(`test_migration_enables_pgvector_extension`)_
 - The order-state-machine migration downgrades safely and re-upgrades. _(`test_order_state_machine_migration_downgrade_safety`)_
 - A freshly migrated DB seeds default_margin_pct=20 and pricing consumes it. _(`test_migration_seeded_default_margin_is_read_by_pricing`)_
+- La migración deja suppliers.moneda como varchar(3) nullable. _(`test_migration_creates_supplier_moneda_column`)_
+- suppliers.moneda persiste y se lee redondo; NULL cuando no se declara. _(`test_supplier_moneda_roundtrip`)_
+- La migración de moneda backfillea SCO=USD y su catálogo sin moneda. _(`test_supplier_currency_migration_backfills_sco_and_catalogo`)_
 
 ## Teléfonos y clientes
 
@@ -590,6 +596,8 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El tab Catálogo warn del reemplazo total y expone el flujo completo. _(`test_build_app_catalogo_tab_has_warning_and_flow_components`)_
 - La pestaña Catalog expone la grilla de productos y el botón de guardado. _(`test_build_app_catalog_tab_has_product_grid`)_
 - La grilla de catálogo devuelve todos los campos por producto. _(`test_catalog_list_products_returns_expected_fields`)_
+- A USD catalog product multiplies its AR$ list price by the USD rate. _(`test_catalog_list_products_usd_cost_converts_with_supplier_rate`)_
+- Sin cotización USD cargada, el precio AR$ cae a la tasa 1 sin crashear. _(`test_catalog_list_products_usd_missing_rate_falls_back_to_one`)_
 - Editar stock y precio se refleja en la grilla. _(`test_catalog_update_stock_and_price`)_
 - Cambiar el margen recalcula el precio de lista con el motor de precios. _(`test_catalog_update_margin_recomputes_base_price`)_
 - Registrar un cliente normaliza el teléfono al formato canónico. _(`test_clients_create_normalizes_phone`)_
@@ -607,6 +615,10 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - [rag-doc R5] SKU existente: bump + Inventory + StockAdjustment, origen intacto. _(`test_ingest_updates_existing_stock_keeps_origen_and_audits`)_
 - [rag-doc R5] Solo-en-RAG: se adopta con origen {"rag": {node_id, ...}}. _(`test_ingest_adopts_new_product_with_rag_origen_dict`)_
 - [ADR 0003] Línea sin match en el índice → producto DEFINITIVO con origen remito. _(`test_ingest_no_candidate_adopts_definitive_product_with_remito_origen`)_
+- [moneda] Proveedor que factura en USD → el producto adoptado hereda USD. _(`test_ingest_no_candidate_adopts_product_with_supplier_moneda`)_
+- [moneda] Proveedor sin moneda declarada → el producto adoptado queda NULL. _(`test_ingest_no_candidate_keeps_moneda_null_without_supplier_currency`)_
+- [moneda] RAG sin moneda → la adopción RAG hereda la moneda del proveedor. _(`test_ingest_rag_adoption_falls_back_to_supplier_moneda`)_
+- [moneda] La moneda del RAG es primaria: pisa la del proveedor cuando viene. _(`test_ingest_rag_adoption_keeps_rag_currency_over_supplier`)_
 - [ADR 0003] El SKU calculado ya existe en el catálogo local → bump, no duplicado. _(`test_ingest_no_candidate_local_sku_collision_bumps_existing`)_
 - [ADR 0003] Sin codigo_orig el SKU sale de la descripción normalizada. _(`test_ingest_no_candidate_without_code_builds_sku_from_description`)_
 - [ADR 0003] Fallo del embedder NO bloquea: se adopta el producto sin vector. _(`test_ingest_no_candidate_embedding_failure_adopts_without_vector`)_
@@ -617,6 +629,9 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - El monitor lista pedidos con estado y estado de sincronización Sheets. _(`test_monitor_lists_orders_with_state_and_sheets_status`)_
 - Customer Orders returns persisted order totals and frozen line fields. _(`test_customer_orders_list_and_detail_include_ars_totals_and_snapshots`)_
 - Margin % derives from original vs base price: LOCAL markup, RAG 0.00. _(`test_order_line_margin_pct_derivation`)_
+- LOCAL lines with a catalog row show the applied margin, not a derivation. _(`test_order_line_local_margin_pct_shows_catalog_margin`)_
+- A delisted LOCAL product falls back to the derived markup. _(`test_order_line_local_margin_pct_falls_back_without_catalog_row`)_
+- RAG lines render 0.00 when priced, and "—" when a snapshot price is gone. _(`test_order_line_rag_margin_pct_is_zero_only_with_both_prices`)_
 - ARS cannot be edited while a USD rate is stored with a timestamp. _(`test_exchange_rate_rejects_ars_and_persists_usd`)_
 - Loading a rate recomputes a pending RAG order and clears its flag. _(`test_recompute_pending_conversion_clears_flag_and_fills_totals`)_
 - The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_

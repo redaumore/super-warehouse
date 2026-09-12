@@ -356,6 +356,58 @@ def test_create_manual_order_rag_usd_with_rate_prices_conversion(rag_table, shop
     assert order.total == Decimal("39000.00")
 
 
+def test_create_manual_order_local_usd_catalog_prices_with_rate(rag_table, shop_ctx):
+    """A LOCAL line from a USD catalog product converts after the markup.
+
+    Cost 2.00 USD × margin 0.50 = 3.00 USD → × rate 1000 = 3000.00 AR$; the
+    stored snapshot keeps the product's own currency and the USD cost.
+    """
+    shop_ctx.add(
+        Catalogo(
+            id=4,
+            codigo_interno="USD-1",
+            supplier_id=1,
+            nombre_oficial="Producto importado en USD",
+            costo_proveedor=Decimal("2.00"),
+            margen_aplicado_pct=Decimal("0.50"),
+            precio_lista_base=Decimal("3.00"),
+            sinonimos=[],
+            moneda="USD",
+        )
+    )
+    shop_ctx.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
+    shop_ctx.flush()
+    order = create_manual_order(shop_ctx, 1, [ManualLineInput(sku="USD-1", cantidad=2)])
+
+    item = shop_ctx.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.base_price == Decimal("3000.00")  # (2.00 × 1.50) × 1000
+    assert item.final_price == Decimal("3000.00")
+    assert item.moneda == "USD"
+    assert item.precio_original == Decimal("2.0000")
+    assert order.total == Decimal("6000.00")
+
+
+def test_create_manual_order_local_usd_catalog_without_rate_is_refused(rag_table, shop_ctx):
+    """A LOCAL USD catalog line without an exchange rate is refused, no writes."""
+    shop_ctx.add(
+        Catalogo(
+            id=4,
+            codigo_interno="USD-1",
+            supplier_id=1,
+            nombre_oficial="Producto importado en USD",
+            costo_proveedor=Decimal("2.00"),
+            margen_aplicado_pct=Decimal("0.50"),
+            precio_lista_base=Decimal("3.00"),
+            sinonimos=[],
+            moneda="USD",
+        )
+    )
+    shop_ctx.flush()
+    with pytest.raises(ManualOrderError, match="exchange rate"):
+        create_manual_order(shop_ctx, 1, [ManualLineInput(sku="USD-1", cantidad=1)])
+    assert shop_ctx.scalar(select(func.count(Order.order_id))) == 0
+
+
 def test_create_manual_order_unknown_rag_product_is_refused(rag_table, shop_ctx):
     """An RAG SKU missing from the indexed table is a domain error, no writes."""
     _seed_rag(shop_ctx)

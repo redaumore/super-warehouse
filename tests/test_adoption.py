@@ -233,6 +233,30 @@ def test_moneda_se_normaliza_a_mayusculas(db_session, moneda, esperada):
     assert product.moneda == esperada
 
 
+def test_moneda_ausente_hereda_la_del_proveedor(db_session):
+    """DTO sin moneda → hereda la moneda declarada del proveedor (fallback)."""
+    supplier = _seed_supplier(db_session, code="SCO")
+    supplier.moneda = "USD"
+    product = adopt_product(db_session, _dto(codigo_proveedor="SCO", moneda=None), OWNER, FakeEmbedder())
+    assert product.moneda == "USD"
+
+
+def test_moneda_del_dto_pisa_la_del_proveedor(db_session):
+    """La moneda del DTO RAG es primaria: pisa la declarada del proveedor."""
+    supplier = _seed_supplier(db_session, code="SCO")
+    supplier.moneda = "USD"
+    product = adopt_product(db_session, _dto(codigo_proveedor="SCO", moneda="ars"), OWNER, FakeEmbedder())
+    assert product.moneda == "ARS"
+
+
+def test_moneda_null_cuando_nadie_la_declara(db_session):
+    """DTO y proveedor sin moneda → el producto queda NULL (factura en ARS)."""
+    supplier = _seed_supplier(db_session, code="MSA")
+    assert supplier.moneda is None
+    product = adopt_product(db_session, _dto(codigo_proveedor="MSA", moneda=None), OWNER, FakeEmbedder())
+    assert product.moneda is None
+
+
 def test_composicion_del_embedding_texto_normalizado(db_session):
     """El embedding compone nombre+marca+categoria+subcategoria normalizados."""
     _seed_supplier(db_session)

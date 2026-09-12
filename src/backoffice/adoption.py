@@ -145,8 +145,11 @@ def adopt_product(
 
     Orden del data flow: stock → proveedor ACTIVO → SKU + colisión → node_id
     fail-closed → precio/moneda → embedding (antes de cualquier escritura) →
-    filas Catalogo + Inventory + StockAdjustment → flush. El embedding falla
-    cerrado: el caller revierte y no persiste nada.
+    filas Catalogo + Inventory + StockAdjustment → flush. La moneda del
+    producto es la del DTO RAG cuando viene; si el DTO no trae moneda, hereda
+    la moneda declarada del proveedor (``Supplier.moneda``; None si tampoco el
+    proveedor declaró una). El embedding falla cerrado: el caller revierte y
+    no persiste nada.
     """
     if dto.stock <= 0:
         raise InvalidStockError(f"stock must be positive, got {dto.stock}")
@@ -158,6 +161,9 @@ def adopt_product(
         raise MissingProvenanceError("node_id is required (fail closed)")
     precio = _coerce_precio(dto.precio)
     moneda = dto.moneda.strip().upper() if dto.moneda and dto.moneda.strip() else None
+    if not moneda:
+        # RAG DTO without currency: inherit the supplier's declared currency.
+        moneda = supplier.moneda
     text = _compose_embedding_text(dto)
     try:
         vectors = embedder.embed([text])

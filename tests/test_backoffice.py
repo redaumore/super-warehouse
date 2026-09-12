@@ -330,6 +330,51 @@ def test_catalog_list_products_returns_expected_fields(shop_ctx):
     assert rows[0]["codigo_interno"] == "CLV-001"
     assert rows[0]["on_hand"] == 10
     assert rows[0]["precio_lista_base"] == "135.00"
+    # Catalog metadata columns (nullable → rendered as empty string).
+    assert rows[0]["marca"] == ""
+    assert rows[0]["categoria"] == ""
+    assert rows[0]["subcategoria"] == ""
+    assert rows[0]["moneda"] == ""
+    # Display-time AR$ list price: cost 100 × margin 0.35, ARS rate 1.
+    assert rows[0]["precio_lista_ars"] == "135.00"
+    # The stored base price column is never mutated by the display computation.
+    assert rows[0]["precio_lista_base"] == "135.00"
+
+
+def test_catalog_list_products_usd_cost_converts_with_supplier_rate(shop_ctx):
+    """A USD catalog product multiplies its AR$ list price by the USD rate."""
+    from src.db.models import ExchangeRate
+
+    session = shop_ctx["session"]
+    product = session.get(Catalogo, 1)
+    product.moneda = "USD"
+    product.marca = "Fischer"
+    product.categoria = "Anclajes"
+    product.subcategoria = "Tarugos"
+    session.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1530.0000")))
+    session.flush()
+
+    row = list_products(session)[0]
+    # base = 100 × 1.35 = 135.00 USD → 135 × 1530 = 206,550.00 AR$
+    assert row["precio_lista_ars"] == "206550.00"
+    assert row["moneda"] == "USD"
+    assert row["marca"] == "Fischer"
+    assert row["categoria"] == "Anclajes"
+    assert row["subcategoria"] == "Tarugos"
+    # The stored column is untouched by the display computation.
+    assert product.precio_lista_base == Decimal("135.00")
+
+
+def test_catalog_list_products_usd_missing_rate_falls_back_to_one(shop_ctx):
+    """Sin cotización USD cargada, el precio AR$ cae a la tasa 1 sin crashear."""
+    session = shop_ctx["session"]
+    product = session.get(Catalogo, 1)
+    product.moneda = "USD"
+    session.flush()
+
+    row = list_products(session)[0]
+    assert row["precio_lista_ars"] == "135.00"
+    assert row["moneda"] == "USD"
 
 
 def test_catalog_update_stock_and_price(shop_ctx):
@@ -625,6 +670,107 @@ def test_ingest_no_candidate_adopts_definitive_product_with_remito_origen(shop_c
     )
 
 
+def test_ingest_no_candidate_adopts_product_with_supplier_moneda(shop_ctx):
+    """[moneda] Proveedor que factura en USD → el producto adoptado hereda USD."""
+    session = shop_ctx["session"]
+    session.get(Supplier, 1).moneda = "USD"
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=3,
+            source_file="remito-2026-09-10.jpg",
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.moneda == "USD"
+
+
+def test_ingest_no_candidate_keeps_moneda_null_without_supplier_currency(shop_ctx):
+    """[moneda] Proveedor sin moneda declarada → el producto adoptado queda NULL."""
+    session = shop_ctx["session"]
+    assert session.get(Supplier, 1).moneda is None  # shop_ctx seeds no currency
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044",
+            descripcion="Tarugo Fischer 8mm",
+            cantidad=4,
+            costo=Decimal("95.00"),
+            pagina=3,
+        ),
+        product=None,
+        pending_reason=PendingReason.NO_CANDIDATES,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.moneda is None
+
+
+def test_ingest_rag_adoption_falls_back_to_supplier_moneda(shop_ctx):
+    """[moneda] RAG sin moneda → la adopción RAG hereda la moneda del proveedor."""
+    session = shop_ctx["session"]
+    session.get(Supplier, 1).moneda = "USD"
+    product = RagProduct(
+        sku="AT-5044",
+        name="Tarugo Fischer 8mm",
+        codigo_proveedor="MSA",
+        brand="Fischer",
+        price=135.5,
+        currency=None,
+        source_file="catalogo-2024.pdf",
+        page=12,
+        node_id="node-prod-AT-5044",
+    )
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044", descripcion="Tarugo Fischer 8mm", cantidad=4, costo=None, pagina=1
+        ),
+        product=product,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.moneda == "USD"
+
+
+def test_ingest_rag_adoption_keeps_rag_currency_over_supplier(shop_ctx):
+    """[moneda] La moneda del RAG es primaria: pisa la del proveedor cuando viene."""
+    session = shop_ctx["session"]
+    session.get(Supplier, 1).moneda = "USD"
+    product = RagProduct(
+        sku="AT-5044",
+        name="Tarugo Fischer 8mm",
+        codigo_proveedor="MSA",
+        brand="Fischer",
+        price=135.5,
+        currency="ARS",
+        source_file="catalogo-2024.pdf",
+        page=12,
+        node_id="node-prod-AT-5044",
+    )
+    line = ResolvedLine(
+        receipt=ReceiptLine(
+            codigo_orig="AT-5044", descripcion="Tarugo Fischer 8mm", cantidad=4, costo=None, pagina=1
+        ),
+        product=product,
+    )
+    result = ingest_receipt_lines(session, 1, [line], OwnerContext(owner_id="t"), _embedder())
+    assert result == IngestResult(updated=0, created=1)
+    created = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == "MSA-AT-5044"))
+    assert created is not None
+    assert created.moneda == "ARS"
+
+
 def test_ingest_no_candidate_local_sku_collision_bumps_existing(shop_ctx):
     """[ADR 0003] El SKU calculado ya existe en el catálogo local → bump, no duplicado."""
     session = shop_ctx["session"]
@@ -810,8 +956,8 @@ def test_customer_orders_list_and_detail_include_ars_totals_and_snapshots(shop_c
     assert line["source"] == "LOCAL"
     assert line["base_price"] == "135.00"
     assert line["precio_original"] == "100.00"
-    # Derived: markup (135 / 100 − 1) × 100; final 128.25 × qty 2.
-    assert line["margin_pct"] == "35.00"
+    # LOCAL with a live catalog row: the applied margin (0.35), verbatim.
+    assert line["margin_pct"] == "0.35"
     assert line["line_total"] == "256.50"
 
 
@@ -888,11 +1034,119 @@ def test_order_line_margin_pct_derivation(shop_ctx):
     db_session.flush()
 
     lines = order_detail(db_session, order.order_id)["lines"]
-    assert lines[0]["margin_pct"] == "25.00"  # (125 / 100 − 1) × 100
+    assert lines[0]["margin_pct"] == "25.00"  # LOCAL without catalog row: (125/100 − 1) × 100
     assert lines[1]["margin_pct"] == "0.00"  # RAG: base == original × rate
     assert lines[2]["margin_pct"] is None
     assert lines[3]["margin_pct"] is None
     assert lines[1]["line_total"] == "475.00"  # 237.50 × 2
+    # Supplier codes: LOCAL resolves through the mappings (unmapped → ""),
+    # RAG already carries the provider code in the snapshot.
+    assert lines[0]["codigo_proveedor"] == ""
+    assert lines[1]["codigo_proveedor"] == "MSA"
+
+
+def test_order_line_local_margin_pct_shows_catalog_margin(shop_ctx):
+    """LOCAL lines with a catalog row show the applied margin, not a derivation."""
+    db_session = shop_ctx["session"]
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, conversion_pending=False)
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="CLV-001",
+            cantidad=1,
+            base_price=Decimal("135.00"),
+            final_price=Decimal("128.25"),
+            adjustment=Decimal(0),
+            name="Clavos Paris 2 Pulgadas",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal("100.00"),
+        )
+    )
+    db_session.flush()
+
+    line = order_detail(db_session, order.order_id)["lines"][0]
+    assert line["margin_pct"] == "0.35"  # Catalogo.margen_aplicado_pct, verbatim
+    assert line["moneda"] == "ARS"
+    assert line["codigo_proveedor"] == ""  # no supplier mapping seeded
+
+
+def test_order_line_local_margin_pct_falls_back_without_catalog_row(shop_ctx):
+    """A delisted LOCAL product falls back to the derived markup."""
+    db_session = shop_ctx["session"]
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, conversion_pending=False)
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="DELISTED-1",
+            cantidad=1,
+            base_price=Decimal("125.00"),
+            final_price=Decimal("118.75"),
+            adjustment=Decimal(0),
+            name="Delisted item",
+            source="LOCAL",
+            supplier="MSA",
+            moneda="ARS",
+            precio_original=Decimal("100.00"),
+        )
+    )
+    db_session.flush()
+
+    line = order_detail(db_session, order.order_id)["lines"][0]
+    assert line["margin_pct"] == "25.00"  # derived: (125/100 − 1) × 100
+
+
+def test_order_line_rag_margin_pct_is_zero_only_with_both_prices(shop_ctx):
+    """RAG lines render 0.00 when priced, and "—" when a snapshot price is gone."""
+    db_session = shop_ctx["session"]
+    order = Order(customer_id=1, estado=OrderEstado.DRAFT, conversion_pending=False)
+    db_session.add(order)
+    db_session.flush()
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-USD",
+            cantidad=1,
+            base_price=Decimal("15300.00"),
+            final_price=Decimal("14535.00"),
+            adjustment=Decimal(0),
+            name="RAG USD item",
+            source="RAG",
+            supplier="SCO",
+            moneda="USD",
+            precio_original=Decimal("10.0000"),
+        )
+    )
+    db_session.add(
+        OrderItem(
+            order_id=order.order_id,
+            sku="RAG-PENDING",
+            cantidad=1,
+            base_price=Decimal(0),
+            final_price=Decimal(0),
+            adjustment=Decimal(0),
+            name="RAG pending item",
+            source="RAG",
+            supplier="SCO",
+            moneda="USD",
+            precio_original=Decimal("10.0000"),
+        )
+    )
+    db_session.flush()
+
+    lines = order_detail(db_session, order.order_id)["lines"]
+    # Before the fix this derived (15300/10 − 1) × 100 = 152900.00 across
+    # currencies; the RAG semantics are "no margin".
+    assert lines[0]["margin_pct"] == "0.00"
+    assert lines[0]["codigo_proveedor"] == "SCO"
+    assert lines[0]["moneda"] == "USD"
+    # Pending conversion (base 0, no rate yet): no margin to show.
+    assert lines[1]["margin_pct"] is None
 
 
 def test_exchange_rate_rejects_ars_and_persists_usd(shop_ctx):
@@ -979,8 +1233,10 @@ def test_app_catalog_grid_renders_seeded_products(shop_ctx):
     rows = _catalog_grid()
     assert any(row[0] == "MSA" for row in rows)  # supplier code leads the row
     assert any(row[1] == "" for row in rows)  # unmapped product: blank supplier code
-    assert any(row[7] == 10 for row in rows)  # on-hand column (Inventory)
-    assert all("CLV-001" not in [str(cell) for cell in row] for row in rows)
+    assert any(row[2] == "Clavos Paris 2 Pulgadas" for row in rows)  # Nombre column
+    assert any(row[4] == 10 for row in rows)  # Stock column (Inventory)
+    assert any(row[6] == "100.00" for row in rows)  # Costo column
+    assert any(row[7] == "135.00" for row in rows)  # Precio lista (AR$) column
 
 
 def test_app_register_client_returns_success_message(shop_ctx):
@@ -1992,14 +2248,17 @@ def test_order_row_selected_returns_state_label_diagram_and_lines(shop_ctx):
     assert lines == [
         [
             "CLV-001",
+            "",  # LOCAL without a supplier mapping → blank provider code
             "Clavos Paris 2 Pulgadas",
             2,
+            "ARS",
             "100.00",
-            "35.00",
-            "135.00",
-            "256.50",
+            "0.35",  # catalog applied margin (LOCAL)
+            "135.00",  # base price = AR$ list price
+            "128.25",  # final after customer list discount
+            "256.50",  # 128.25 × 2
         ],
-        ["RAG-2", "RAG item", 1, "—", "—", "1100.00", "1045.00"],
+        ["RAG-2", "RS", "RAG item", 1, "USD", "—", "—", "1100.00", "1045.00", "1045.00"],
     ]
 
 

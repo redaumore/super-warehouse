@@ -383,7 +383,10 @@ def _adopt_new(
     """Adopt a RAG-only product into ``catalogo`` with provenance (no creation
     from model output: identity and provenance come from the RAG row).
 
-    The embedding runs BEFORE any write and fails closed: on error the caller
+    The product's currency is the RAG row's ``currency`` when present; when the
+    RAG row carries none, the supplier's declared billing currency
+    (``Supplier.moneda``) is inherited via one cheap scalar lookup. The
+    embedding runs BEFORE any write and fails closed: on error the caller
     rolls back and nothing is persisted (mirrors ``adopt_product``).
     """
     product = resolved.product
@@ -391,6 +394,13 @@ def _adopt_new(
     assert product is not None
     if not product.node_id:
         raise MissingProvenanceError("node_id is required (fail closed)")
+    moneda = product.currency or None
+    if not moneda:
+        # RAG row without currency: inherit the supplier's declared currency.
+        # session.get prefers the identity map (no extra query when the caller
+        # already loaded the supplier) and stays correct with autoflush off.
+        supplier_row = session.get(Supplier, supplier_id)
+        moneda = supplier_row.moneda if supplier_row else None
     text = _compose_embedding_text(product)
     try:
         vectors = embedder.embed([text])
@@ -420,7 +430,7 @@ def _adopt_new(
         marca=product.brand,
         categoria=product.categoria,
         subcategoria=product.subcategoria,
-        moneda=product.currency,
+        moneda=moneda,
         origen=origen,
         embedding=embedding,
     )
@@ -461,10 +471,12 @@ def _adopt_from_document(
     Identity comes from the document itself (``codigo_orig`` — or the
     description when the line carries no code), never from a fabricated
     ``node_id``: provenance is ``origen={"remito": {...}}`` with the parsed
-    line snapshot. The embedding is best-effort: any embedder failure (or a
-    wrong-dimension vector) adopts the product WITHOUT a vector — the nullable
-    ``embedding`` column exists for exactly this — and must never block
-    ingestion.
+    line snapshot. The new product's currency is the supplier's declared
+    billing currency (``Supplier.moneda``) — nullable passthrough, so it stays
+    None when the supplier has not declared one. The embedding is best-effort:
+    any embedder failure (or a wrong-dimension vector) adopts the product
+    WITHOUT a vector — the nullable ``embedding`` column exists for exactly
+    this — and must never block ingestion.
     """
     costo = receipt.costo if receipt.costo is not None else Decimal("0.00")
     text = normalize_text(receipt.descripcion)
@@ -500,6 +512,7 @@ def _adopt_from_document(
         sinonimos=[receipt.descripcion]
         if receipt.descripcion
         else ([receipt.codigo_orig] if receipt.codigo_orig else []),
+        moneda=supplier.moneda,
         origen=origen,
         embedding=embedding,
     )

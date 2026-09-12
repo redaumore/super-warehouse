@@ -237,6 +237,41 @@ def test_update_supplier_revalidates_contact_fields(db_session):
         update_supplier(db_session, supplier.id, phone="nope")
 
 
+def test_create_supplier_persists_moneda_normalized(db_session):
+    """La moneda se guarda normalizada a mayúsculas (3 letras)."""
+    supplier = create_supplier(db_session, business_name="Mayorista SA", moneda="usd")
+    assert db_session.get(Supplier, supplier.id).moneda == "USD"
+
+
+def test_create_supplier_moneda_empty_stores_null(db_session):
+    """Moneda vacía/ausente = proveedor no declaró divisa → NULL."""
+    supplier = create_supplier(db_session, business_name="Mayorista SA", moneda="  ")
+    assert db_session.get(Supplier, supplier.id).moneda is None
+
+
+@pytest.mark.parametrize("moneda", ["EURO", "USDD", "12D", "US"])
+def test_create_supplier_rejects_invalid_moneda(db_session, moneda: str):
+    with pytest.raises(InvalidSupplierDataError, match="invalid currency code"):
+        create_supplier(db_session, business_name="Ferre SRL", moneda=moneda)
+
+
+def test_update_supplier_moneda_semantics(db_session):
+    """Omitir moneda no la toca; string vacío la limpia a NULL."""
+    supplier = create_supplier(db_session, business_name="Mayorista SA", moneda="USD")
+    update_supplier(db_session, supplier.id, contact_name="Juan")  # omitted → untouched
+    assert db_session.get(Supplier, supplier.id).moneda == "USD"
+    update_supplier(db_session, supplier.id, moneda="")  # explicit empty → clears
+    assert db_session.get(Supplier, supplier.id).moneda is None
+    update_supplier(db_session, supplier.id, moneda="ars")  # re-set normalizes
+    assert db_session.get(Supplier, supplier.id).moneda == "ARS"
+
+
+def test_update_supplier_rejects_invalid_moneda(db_session):
+    supplier = create_supplier(db_session, business_name="Mayorista SA")
+    with pytest.raises(InvalidSupplierDataError, match="invalid currency code"):
+        update_supplier(db_session, supplier.id, moneda="EURO")
+
+
 def test_duplicate_cuit_rejected_by_database(db_session):
     """La base rechaza dos suppliers con el mismo CUIT no nulo."""
     db_session.add(Supplier(business_name="A", code="AAA", cuit="20111111112"))
@@ -268,7 +303,7 @@ def test_multiple_suppliers_with_null_cuit_allowed(db_session):
 
 def test_save_supplier_handler_persists_new_row():
     """Guardar un supplier nuevo desde la UI persiste la fila con su código."""
-    message, *_ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
+    message, *_ = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "", "")
     assert message == "Supplier created (code MSA)"
     with SessionLocal() as session:
         suppliers = session.scalars(select(Supplier)).all()
@@ -278,21 +313,21 @@ def test_save_supplier_handler_persists_new_row():
 
 
 def test_save_supplier_handler_returns_output_arity_matching_wiring():
-    """El retorno calza con los 14 outputs del click (status, grid, state, 11 campos)."""
-    result = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "")
-    assert len(result) == 14
+    """El retorno calza con los 15 outputs del click (status, grid, state, 12 campos)."""
+    result = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "", "", "", 0.0, "", "")
+    assert len(result) == 15
     assert result[0] == "Supplier created (code MSA)"
     assert result[2] == 0
 
 
 def test_save_supplier_wiring_outputs_match_handler_return_arity():
-    """El wiring del click declara 14 outputs y 13 inputs (regresión de la UI)."""
+    """El wiring del click declara 15 outputs y 14 inputs (regresión de la UI)."""
     demo = build_app()
     save_fn = next(
         bf for bf in demo.fns.values() if getattr(bf.fn, "__name__", "") == "_save_supplier"
     )
-    assert len(save_fn.outputs) == 14
-    assert len(save_fn.inputs) == 13
+    assert len(save_fn.outputs) == 15
+    assert len(save_fn.inputs) == 14
 
 
 def test_save_supplier_handler_clears_form_after_create():
@@ -310,11 +345,12 @@ def test_save_supplier_handler_clears_form_after_create():
         "RESPONSABLE_INSCRIPTO",
         10.0,
         "30 días",
+        "USD",
     )
     assert result[0] == "Supplier created (code DIS)"
     selected_id, *form_values = result[2:]
     assert selected_id == 0
-    assert tuple(form_values) == ("", "", "", "", "", "", "", "", "", 0.0, "")
+    assert tuple(form_values) == ("", "", "", "", "", "", "", "", "", 0.0, "", "")
 
 
 def test_save_supplier_handler_keeps_form_after_update():
@@ -324,7 +360,7 @@ def test_save_supplier_handler_keeps_form_after_update():
         session.commit()
         supplier_id = supplier.id
     result = _save_supplier(
-        supplier_id, "Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, ""
+        supplier_id, "Mayorista SA Renovada", "MSA", "", "", "", "", "", "", "", 0.0, "", "USD"
     )
     assert result[0] == "Supplier saved"
     selected_id, *form_values = result[2:]
@@ -340,15 +376,19 @@ def test_save_supplier_handler_keeps_form_after_update():
         "",
         0.0,
         "",
+        "USD",
     )
     assert selected_id == supplier_id
     with SessionLocal() as session:
         assert session.get(Supplier, supplier_id).business_name == "Mayorista SA Renovada"
+        assert session.get(Supplier, supplier_id).moneda == "USD"
 
 
 def test_save_supplier_handler_keeps_form_on_error():
     """Un alta con datos inválidos devuelve el error y deja el formulario como estaba."""
-    result = _save_supplier(0, "Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, "")
+    result = _save_supplier(
+        0, "Mayorista SA", "", "", "", "", "", "not-an-email", "", "", 0.0, "", ""
+    )
     assert result[0].startswith("Error:")
     selected_id, *form_values = result[2:]
     assert tuple(form_values) == (
@@ -362,6 +402,7 @@ def test_save_supplier_handler_keeps_form_on_error():
         "",
         "",
         0.0,
+        "",
         "",
     )
     assert selected_id == 0
@@ -399,3 +440,20 @@ def test_supplier_row_selected_reads_dataframe_with_headers():
     row = _supplier_row_selected(SimpleNamespace(index=[0]), df)
     assert row[0] == supplier_id
     assert row[2] == "Mayorista SA"
+    assert row[-1] == ""  # moneda: supplier has none declared
+
+
+def test_supplier_row_selected_populates_moneda():
+    """La selección de fila propaga la moneda declarada del supplier al formulario."""
+    with SessionLocal() as session:
+        supplier = create_supplier(
+            session, business_name="SCO SRL", code="SCO", moneda="USD"
+        )
+        session.commit()
+        supplier_id = supplier.id
+    df = pd.DataFrame(
+        [[supplier_id, "SCO", "SCO SRL", "", "", "", "", "", ""]],
+        columns=["ID", "Code", "Name", "CUIT", "Contact", "Phone", "Margin", "IVA", "Status"],
+    )
+    row = _supplier_row_selected(SimpleNamespace(index=[0]), df)
+    assert row[-1] == "USD"

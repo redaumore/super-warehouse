@@ -19,7 +19,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import AppSetting, ExchangeRate, Order, OrderEstado, Supplier
+from src.backoffice.sku_mappings import primary_supplier_codes
+from src.db.models import AppSetting, Catalogo, ExchangeRate, Order, OrderEstado, Supplier
 from src.orchestrator.approval import SheetsPort, confirm_and_register
 from src.order_lifecycle.state import (
     cancel_order,
@@ -58,19 +59,36 @@ def _margin_pct_text(base_price: Decimal | None, precio_original: Decimal | None
     """Derive the Markup % between the original price and the ARS base price.
 
     ``((base_price / precio_original) - 1) × 100``, quantized HALF_UP to two
-    decimals. LOCAL lines snapshot the cost as ``precio_original`` and price
-    as ``base = cost × (1 + margin/100)``, so the markup is the applied
-    margin; RAG lines carry no margin (``base = original × rate``) and
-    therefore naturally derive ``0.00``. List/particular discounts live
-    between base and final price and are NOT part of this percentage.
-    Returns ``None`` (rendered "—") when the original price is missing or
-    zero, or when the base price is missing (pending conversion), guarding
-    the division by zero.
+    decimals. Kept as the FALLBACK derivation for LOCAL lines whose catalog
+    row no longer exists — the order detail grid shows the catalog's applied
+    margin for LOCAL lines instead (see ``_catalog_margin_pcts``): deriving
+    base/precio_original across currencies produced nonsense like 152900.00
+    for USD lines. List/particular discounts live between base and final price
+    and are NOT part of this percentage. Returns ``None`` (rendered "—") when
+    the original price is missing or zero, or when the base price is missing
+    (pending conversion), guarding the division by zero.
     """
     if base_price is None or precio_original is None or precio_original == 0:
         return None
     markup = (base_price / precio_original - 1) * 100
     return str(markup.quantize(_CENT, rounding=ROUND_HALF_UP))
+
+
+def _catalog_margin_pcts(session: Session, skus: Sequence[str]) -> dict[str, Decimal | None]:
+    """Batch-fetch the applied margin for LOCAL line SKUs (one query, no N+1).
+
+    Products with no catalog row (or no stored margin) are absent / ``None`` —
+    the caller falls back to the derived markup.
+    """
+    unique = {sku for sku in skus if sku}
+    if not unique:
+        return {}
+    rows = session.execute(
+        select(Catalogo.codigo_interno, Catalogo.margen_aplicado_pct).where(
+            Catalogo.codigo_interno.in_(unique)
+        )
+    )
+    return {sku: margin for sku, margin in rows}
 
 
 def _line_total_text(final_price: Decimal | None, cantidad: int) -> str | None:
@@ -131,35 +149,81 @@ def _order_or_raise(session: Session, order_id: int) -> Order:
     return order
 
 
+def _rag_margin_pct(base_price: Decimal | None, precio_original: Decimal | None) -> str | None:
+    """Margin text for RAG lines: ``0.00`` when both prices exist, else "—".
+
+    RAG lines carry NO margin by design (base = original × rate), so the grid
+    shows an explicit ``0.00`` only when the line is actually priced
+    (``base_price > 0``) and the original snapshot exists (non-zero);
+    pending conversions and missing snapshots render "—".
+    """
+    if (
+        base_price is None
+        or precio_original is None
+        or precio_original == 0
+        or base_price <= 0
+    ):
+        return None
+    return "0.00"
+
+
+def _local_margin_pct(catalog_margin: Decimal | None, item: object) -> str | None:
+    """Margin text for LOCAL lines: the catalog's applied margin.
+
+    Prefers ``Catalogo.margen_aplicado_pct`` (the margin the pricing engine
+    actually applied); falls back to the derived markup
+    ``((base / precio_original) − 1) × 100`` only when the catalog row is gone.
+    """
+    if catalog_margin is not None:
+        return str(catalog_margin.quantize(_CENT, rounding=ROUND_HALF_UP))
+    return _margin_pct_text(
+        getattr(item, "base_price", None), getattr(item, "precio_original", None)
+    )
+
+
 def order_detail(session: Session, order_id: int) -> dict[str, object]:
     """Return one customer order and its frozen line snapshots.
 
     Every money field is display text quantized to 2 decimals (HALF_UP) —
     stored values are never mutated. ``margin_pct`` is a derived field, not
-    persisted: the markup between ``precio_original`` and the ARS base price
-    per unit (LOCAL lines snapshot the cost and price ``base = cost ×
-    (1 + margin/100)``, so the markup equals the applied margin; RAG lines
-    carry no margin and derive ``0.00``). List/particular discounts live
-    between base and final price and are not part of ``margin_pct``.
-    ``line_total`` is ``final_price × cantidad``, also derived for display.
+    persisted: LOCAL lines show the catalog's applied margin
+    (``Catalogo.margen_aplicado_pct``, batch-fetched in one query) with the
+    derived markup as fallback for delisted products; RAG lines carry no
+    margin and show ``0.00``. ``codigo_proveedor`` resolves LOCAL lines
+    through the supplier SKU mappings (batch, one query); RAG lines already
+    store the provider code in ``item.supplier``. ``line_total`` is
+    ``final_price × cantidad``, also derived for display.
     """
     order = _order_or_raise(session, order_id)
-    lines = [
-        {
-            "sku": item.sku,
-            "name": item.name,
-            "cantidad": item.cantidad,
-            "base_price": _money_text(item.base_price),
-            "final_price": _money_text(item.final_price),
-            "source": item.source,
-            "supplier": item.supplier,
-            "moneda": item.moneda,
-            "precio_original": _money_text(item.precio_original),
-            "margin_pct": _margin_pct_text(item.base_price, item.precio_original),
-            "line_total": _line_total_text(item.final_price, item.cantidad),
-        }
-        for item in order.items
-    ]
+    items = list(order.items)
+    local_skus = [item.sku for item in items if (item.source or "LOCAL").upper() == "LOCAL"]
+    catalog_margins = _catalog_margin_pcts(session, local_skus)
+    primary_codes = primary_supplier_codes(session, local_skus)
+    lines = []
+    for item in items:
+        source = (item.source or "LOCAL").upper()
+        if source == "RAG":
+            margin_pct = _rag_margin_pct(item.base_price, item.precio_original)
+            codigo_proveedor = item.supplier or ""
+        else:
+            margin_pct = _local_margin_pct(catalog_margins.get(item.sku), item)
+            codigo_proveedor = primary_codes.get(item.sku, "")
+        lines.append(
+            {
+                "sku": item.sku,
+                "name": item.name,
+                "cantidad": item.cantidad,
+                "base_price": _money_text(item.base_price),
+                "final_price": _money_text(item.final_price),
+                "source": item.source,
+                "supplier": item.supplier,
+                "moneda": item.moneda,
+                "precio_original": _money_text(item.precio_original),
+                "margin_pct": margin_pct,
+                "codigo_proveedor": codigo_proveedor,
+                "line_total": _line_total_text(item.final_price, item.cantidad),
+            }
+        )
     row = _order_row(order)
     row["lines"] = lines
     return row
@@ -283,7 +347,10 @@ def _pricing_lines(order: Order) -> tuple[PricingLine, ...]:
                     source=source,
                     name=item.name,
                     base_ars=item.base_price,
-                    currency="ARS",
+                    # A LOCAL line priced from a USD catalog product carries
+                    # moneda="USD": re-pricing must apply the supplier rate
+                    # again (accepted behavior change for pending orders).
+                    currency=item.moneda or "ARS",
                     supplier=item.supplier,
                 )
             )

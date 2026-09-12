@@ -86,12 +86,15 @@ def create_supplier(
     default_margin_pct: Decimal | float = 0,
     iva_condition: str | None = None,
     terms: str | None = None,
+    moneda: str | None = None,
 ) -> Supplier:
     """Create a supplier, validating contact fields and resolving the code.
 
     ``code`` is suggested from ``business_name`` when omitted and resolved to a
     free variant via ``resolve_code`` (collision rotates over A-Z0-9; the DB
-    unique index is the backstop). Status defaults to ACTIVO.
+    unique index is the backstop). Status defaults to ACTIVO. ``moneda`` is the
+    currency the supplier bills its catalog in (3-letter code, uppercase; empty
+    means ARS / not declared and is stored as NULL).
     """
     name = business_name.strip()
     if not name:
@@ -112,6 +115,7 @@ def create_supplier(
         default_margin_pct=_coerce_margin(default_margin_pct),
         iva_condition=_coerce_iva_condition(iva_condition),
         terms=terms.strip() if terms else None,
+        moneda=_coerce_moneda(moneda),
     )
     session.add(supplier)
     session.flush()
@@ -133,6 +137,7 @@ def update_supplier(
     default_margin_pct: object = _UNSET,
     iva_condition: object = _UNSET,
     terms: object = _UNSET,
+    moneda: object = _UNSET,
 ) -> Supplier:
     """Edit a supplier, re-validating contact fields on every change.
 
@@ -140,7 +145,8 @@ def update_supplier(
     empty string clears nullable fields. Changing ``code`` is refused while the
     supplier is linked to any catalog/PO/need/mapping row (immutability guard);
     resubmitting the supplier's own current code keeps it (the row itself is
-    excluded from the collision check).
+    excluded from the collision check). ``moneda`` follows the same semantics:
+    omitted = untouched, empty = clears to NULL (bills in ARS / not declared).
     Editing the margin never re-prices existing catalog rows (future
     ingestions only).
     """
@@ -176,6 +182,8 @@ def update_supplier(
         supplier.iva_condition = _coerce_iva_condition(_as_optional_text(iva_condition))
     if terms is not _UNSET:
         supplier.terms = _as_optional_text(terms)
+    if moneda is not _UNSET:
+        supplier.moneda = _coerce_moneda(_as_optional_text(moneda))
     session.flush()
     return supplier
 
@@ -263,6 +271,16 @@ def _coerce_iva_condition(value: str | None) -> IvaCondition | None:
         return IvaCondition(str(value).strip())
     except ValueError:
         raise InvalidSupplierDataError(f"invalid IVA condition: {value}") from None
+
+
+def _coerce_moneda(value: str | None) -> str | None:
+    """Normalize an optional 3-letter currency code to uppercase; empty → None."""
+    if value is None or not str(value).strip():
+        return None
+    cleaned = str(value).strip().upper()
+    if len(cleaned) != 3 or not cleaned.isalpha():
+        raise InvalidSupplierDataError(f"invalid currency code: {value}")
+    return cleaned
 
 
 def _assert_code_not_linked(session: Session, supplier: Supplier, new_code: str) -> None:

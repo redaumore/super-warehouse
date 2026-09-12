@@ -16,11 +16,13 @@ from sqlalchemy.exc import OperationalError
 from src.backoffice.po import (
     cancel_po_action,
     list_purchase_orders,
+    po_detail,
     receive_po_action,
     send_po_action,
 )
 from src.config import get_settings
 from src.db.models import (
+    Catalogo,
     Inventory,
     ListaPrecios,
     Supplier,
@@ -153,3 +155,58 @@ def test_send_after_receiving_is_rejected(po_ctx):
     receive_po_action(session, po_ctx["po_id"], "CLV-001", 10)
     with pytest.raises(Exception, match="cannot send"):
         send_po_action(session, po_ctx["po_id"])
+
+
+# ------------------------------------------------------- PO detail (row click)
+
+
+def test_po_detail_lists_lines_with_supplier_codes(po_ctx):
+    """The detail resolves supplier codes and catalog names in batch."""
+    session = po_ctx["session"]
+    session.add(
+        Catalogo(
+            codigo_interno="CLV-001",
+            supplier_id=1,
+            nombre_oficial="Clavos Paris 2 Pulgadas",
+            costo_proveedor=Decimal("100.00"),
+            margen_aplicado_pct=Decimal(0),
+            precio_lista_base=Decimal("100.00"),
+            sinonimos=[],
+        )
+    )
+    from src.backoffice.sku_mappings import record_supplier_sku
+
+    record_supplier_sku(session, 1, "CL-001-A", "CLV-001")
+    session.add(
+        SupplierPurchaseOrderItem(po_id=po_ctx["po_id"], sku="GONE-1", quantity=2, received_quantity=1)
+    )
+    session.flush()
+
+    detail = po_detail(session, po_ctx["po_id"])
+    assert detail["po_id"] == po_ctx["po_id"]
+    assert detail["estado"] == "OPEN"
+    assert detail["supplier"] == "Mayorista SA"
+    lines = detail["lines"]
+    assert [line["sku"] for line in lines] == ["CLV-001", "GONE-1"]
+    assert lines[0]["codigo_proveedor"] == "CL-001-A"
+    assert lines[0]["name"] == "Clavos Paris 2 Pulgadas"
+    assert (lines[0]["quantity"], lines[0]["received_quantity"]) == (10, 0)
+    # Delisted product: no mapping, no catalog row → graceful fallbacks.
+    assert lines[1]["codigo_proveedor"] == ""
+    assert lines[1]["name"] == "—"
+
+
+def test_po_detail_unknown_po_raises(po_ctx):
+    """An unknown PO id is a KeyError so the UI handler can clear the grid."""
+    with pytest.raises(KeyError, match="unknown purchase order"):
+        po_detail(po_ctx["session"], 9999)
+
+
+def test_po_detail_empty_po_returns_no_lines(po_ctx):
+    """A PO without lines renders an empty detail grid, not an error."""
+    po = SupplierPurchaseOrder(supplier_id=1, estado=SupplierPurchaseOrderState.OPEN)
+    po_ctx["session"].add(po)
+    po_ctx["session"].flush()
+
+    detail = po_detail(po_ctx["session"], po.po_id)
+    assert detail["lines"] == []

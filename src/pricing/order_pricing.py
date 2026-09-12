@@ -4,9 +4,12 @@ The module is deliberately free of database and network access. Callers provide
 exchange-rate and supplier-margin sources, which keeps the pricing rules easy to
 test and prevents the chat agent from re-deriving them ad hoc.
 
-LOCAL lines derive their base from cost + margin. RAG lines carry NO margin
-(owner decision): the converted offer price is both the base and the reference
-for discounts — no supplier margin and no default margin ever applies to them.
+LOCAL lines derive their base from cost + margin, expressed in the product's
+own currency: an ARS/absent currency prices directly in ARS, a non-ARS currency
+(e.g. a USD catalog product) multiplies the marked-up base by the supplier
+exchange rate. RAG lines carry NO margin (owner decision): the converted offer
+price is both the base and the reference for discounts — no supplier margin and
+no default margin ever applies to them.
 """
 
 from __future__ import annotations
@@ -50,7 +53,12 @@ PriceableLine = PricingLine
 
 @dataclass(frozen=True)
 class PricedLine:
-    """One order line after source-aware ARS conversion and discounts."""
+    """One order line after source-aware ARS conversion and discounts.
+
+    ``moneda`` is the product's own currency (LOCAL lines keep the catalog
+    currency, e.g. ``USD`` for a USD-denominated product), while ``base_ars`` /
+    ``final_ars`` are always ARS-converted.
+    """
 
     sku: str
     cantidad: int
@@ -211,13 +219,24 @@ def _price_line(
         cost = fields["cost"]
         if cost is None and fields["base_ars"] is None:
             raise ValueError(f"local line {sku} requires costo_proveedor")
-        base = (
-            _as_decimal(fields["base_ars"])
-            if cost is None
-            else compute_base(cost, _as_fraction(fields["margin"]))
-        )
+        currency = _currency_value(fields["currency"])
+        if cost is None:
+            base = _as_decimal(fields["base_ars"])
+        else:
+            # LOCAL lines may come from a non-ARS catalog product: the marked-up
+            # base is expressed in the product's own currency, so the supplier
+            # exchange rate applies exactly like the RAG path (missing rate →
+            # MissingRateError, or zero when persistence allows it).
+            base = compute_base(cost, _as_fraction(fields["margin"]))
+            if currency != "ARS":
+                conversion_rate = _resolve_rate(rate, currency)
+                if conversion_rate is None:
+                    if not allow_missing_rate:
+                        raise MissingRateError(currency)
+                    base = Decimal(0)
+                else:
+                    base = base * conversion_rate
         original = _as_decimal(cost) if cost is not None else None
-        currency = "ARS"
     elif source == "RAG":
         original_value = fields["price"]
         if original_value is None:
@@ -264,10 +283,12 @@ def compute_order(
 ) -> PricedOrder:
     """Compute source-aware line prices and ARS subtotal/total.
 
-    LOCAL lines use their catalog cost and applied margin. RAG lines carry NO
-    margin: the converted offer price is the base (the mapped supplier margin
-    and the fallback default never apply to them), and only list/particular
-    discounts still apply. Missing non-ARS rates raise :class:`MissingRateError`.
+    LOCAL lines use their catalog cost and applied margin, expressed in the
+    product's own currency (a non-ARS ``currency`` converts through the rate
+    source). RAG lines carry NO margin: the converted offer price is the base
+    (the mapped supplier margin and the fallback default never apply to them),
+    and only list/particular discounts still apply. Missing non-ARS rates raise
+    :class:`MissingRateError`.
     """
     priced = tuple(
         _price_line(
@@ -298,7 +319,9 @@ def pending_order(
 
     This is the persistence representation for a pending-conversion order. The
     original denomination price remains on each line and backoffice recomputes
-    ARS prices once the missing rate is available.
+    ARS prices once the missing rate is available. LOCAL lines in a non-ARS
+    catalog currency (e.g. USD) are treated the same way as RAG lines: without
+    the rate they persist at zero ARS.
     """
     priced = tuple(
         _price_line(

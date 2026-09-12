@@ -16,7 +16,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from decimal import Decimal
 from functools import lru_cache, partial
-from typing import cast
+from typing import Literal, cast
 
 import gradio as gr
 import pandas as pd
@@ -78,6 +78,7 @@ from src.backoffice.monitor import list_orders
 from src.backoffice.po import (
     cancel_po_action,
     list_purchase_orders,
+    po_detail,
     receive_po_action,
     send_po_action,
 )
@@ -121,6 +122,35 @@ _STATUS_CHOICES = ["All"] + [s.value for s in SupplierStatus]
 DEFAULT_DOCUMENTO_ID = "LISTA GENERAL"
 
 
+_CATALOG_GRID_HEADERS = [
+    "Proveedor",
+    "Código proveedor",
+    "Nombre",
+    "Marca",
+    "Stock",
+    "Moneda",
+    "Costo",
+    "Precio lista (AR$)",
+    "Margen",
+    "Categoría",
+    "Subcategoría",
+]
+
+_CATALOG_GRID_DATATYPES: tuple[Literal["str", "number"], ...] = (
+    "str",
+    "str",
+    "str",
+    "str",
+    "number",
+    "str",
+    "str",
+    "str",
+    "str",
+    "str",
+    "str",
+)
+
+
 def _catalog_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_products(session)
@@ -128,12 +158,15 @@ def _catalog_grid() -> list[list[object]]:
         [
             r["supplier_code"],
             r["supplier_sku_code"],
-            r["codigo_barras"],
             r["nombre_oficial"],
-            r["costo_proveedor"],
-            r["margen_aplicado_pct"],
-            r["precio_lista_base"],
+            r["marca"],
             r["on_hand"],
+            r["moneda"],
+            r["costo_proveedor"],
+            r["precio_lista_ars"],
+            r["margen_aplicado_pct"],
+            r["categoria"],
+            r["subcategoria"],
         ]
         for r in rows
     ]
@@ -211,6 +244,39 @@ def _po_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_purchase_orders(session)
     return [[r["po_id"], r["supplier"], r["estado"], r["items"], r["received"]] for r in rows]
+
+
+def _po_row_selected(evt: gr.SelectData) -> list[list[object]]:
+    """Populate the PO detail grid from the clicked row in the PO grid.
+
+    Same pattern as ``_order_row_selected``: the PO id lives at column 0 of the
+    row value (positional, labels never matter). Deselecting a row — or any
+    event without a usable row — clears the detail grid.
+    """
+    po_id = None
+    if getattr(evt, "selected", False) and getattr(evt, "row_value", None):
+        po_id = evt.row_value[0]  # "PO" column — positional
+    if po_id is None:
+        return []
+    try:
+        po_number = int(str(po_id))
+    except (TypeError, ValueError):
+        return []
+    with SessionLocal() as session:
+        try:
+            detail = po_detail(session, po_number)
+        except KeyError:
+            return []
+    return [
+        [
+            line["sku"],
+            line["codigo_proveedor"],
+            line["name"],
+            line["quantity"],
+            line["received_quantity"],
+        ]
+        for line in cast(list[dict[str, object]], detail["lines"])
+    ]
 
 
 def _po_send(po_id: object) -> str:
@@ -1112,7 +1178,7 @@ def _supplier_row_selected(evt: gr.SelectData, grid: pd.DataFrame) -> tuple[obje
     with SessionLocal() as session:
         supplier = session.get(Supplier, supplier_id)
     if supplier is None:
-        return (0, "", "", "", "", "", "", "", "", "", 0.0, "")
+        return (0, "", "", "", "", "", "", "", "", "", 0.0, "", "")
     return (
         supplier.id,
         supplier.code,
@@ -1126,6 +1192,7 @@ def _supplier_row_selected(evt: gr.SelectData, grid: pd.DataFrame) -> tuple[obje
         supplier.iva_condition.value if supplier.iva_condition else "",
         float(supplier.default_margin_pct),
         supplier.terms or "",
+        supplier.moneda or "",
     )
 
 
@@ -1134,9 +1201,10 @@ def _supplier_code_suggestion(business_name: str) -> str:
     return suggest_code(business_name)
 
 
-# Form fields (name/code/cuit/contact/phone/whatsapp/email/address/iva/margin/terms)
-# restored after a successful create so the next save starts a new supplier.
-_CLEARED_SUPPLIER_FORM = ("", "", "", "", "", "", "", "", "", 0.0, "")
+# Form fields (name/code/cuit/contact/phone/whatsapp/email/address/iva/margin/
+# terms/moneda) restored after a successful create so the next save starts a
+# new supplier.
+_CLEARED_SUPPLIER_FORM = ("", "", "", "", "", "", "", "", "", 0.0, "", "")
 
 
 def _save_supplier(
@@ -1152,12 +1220,13 @@ def _save_supplier(
     iva_condition: str,
     margin: float,
     terms: str,
+    moneda: str,
     status_filter: str = "ACTIVO",
 ) -> tuple[str, list[list[object]], tuple[object, ...], int]:
     """Save (create or update) a supplier and return the form state to render.
 
     Returns ``(message, grid, selected_id, *form_values)`` matching the
-    ``supplier_save.click`` outputs (status, grid, state, then the 11 form
+    ``supplier_save.click`` outputs (status, grid, state, then the 12 form
     fields in wiring order). A successful create clears the form and resets
     the selection to 0 so the next save is a new supplier; a successful update
     or a validation error echoes the submitted values back so the form stays
@@ -1175,6 +1244,7 @@ def _save_supplier(
         iva_condition,
         margin,
         terms,
+        moneda,
     )
     current_id = int(str(supplier_id or 0))
     with SessionLocal() as session:
@@ -1194,6 +1264,7 @@ def _save_supplier(
                     iva_condition=iva_condition,
                     default_margin_pct=Decimal(str(margin)),
                     terms=terms,
+                    moneda=moneda,
                 )
                 message = "Supplier saved"
                 form_values, selected_id = submitted, current_id
@@ -1211,6 +1282,7 @@ def _save_supplier(
                     iva_condition=iva_condition,
                     default_margin_pct=Decimal(str(margin)),
                     terms=terms,
+                    moneda=moneda,
                 )
                 message = f"Supplier created (code {created.code})"
                 form_values, selected_id = _CLEARED_SUPPLIER_FORM, 0
@@ -1559,11 +1631,14 @@ def _customer_order_detail_grid(order_id: object) -> list[list[object]]:
     return [
         [
             line["sku"],
+            line["codigo_proveedor"],
             line["name"] or "—",
             line["cantidad"],
+            line["moneda"] or "—",
             line["precio_original"] or "—",
             line["margin_pct"] or "—",
             line["base_price"] or "—",
+            line["final_price"] or "—",
             line["line_total"] or "—",
         ]
         for line in cast(list[dict[str, object]], detail["lines"])
@@ -2006,17 +2081,8 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
         with gr.Tab("Productos"):
             gr.Markdown("### Catálogo y stock")
             catalog_grid = gr.Dataframe(
-                headers=[
-                    "Proveedor",
-                    "Código proveedor",
-                    "Código barras",
-                    "Nombre",
-                    "Costo",
-                    "Margen",
-                    "Precio lista",
-                    "Stock",
-                ],
-                datatype=["str", "str", "str", "str", "str", "str", "str", "number"],
+                headers=_CATALOG_GRID_HEADERS,
+                datatype=_CATALOG_GRID_DATATYPES,
                 value=_catalog_grid,
                 label="Productos",
             )
@@ -2165,6 +2231,9 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 supplier_address = gr.Textbox(label="Dirección", scale=2)
                 supplier_iva = gr.Dropdown(choices=_IVA_CHOICES, value="", label="Condición IVA")
                 supplier_margin = gr.Number(label="Margen por defecto %", value=0.0)
+                supplier_moneda = gr.Textbox(
+                    label="Moneda (ARS/USD)", placeholder="USD", max_length=3
+                )
                 supplier_terms = gr.Textbox(label="Condiciones")
             supplier_status = gr.Textbox(label="Estado", interactive=False)
             with gr.Row():
@@ -2202,6 +2271,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_iva,
                     supplier_margin,
                     supplier_terms,
+                    supplier_moneda,
                 ],
             )
             supplier_save.click(
@@ -2219,6 +2289,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_iva,
                     supplier_margin,
                     supplier_terms,
+                    supplier_moneda,
                     supplier_status_filter,
                 ],
                 outputs=[
@@ -2236,6 +2307,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     supplier_iva,
                     supplier_margin,
                     supplier_terms,
+                    supplier_moneda,
                 ],
             )
             supplier_toggle.click(
@@ -2282,14 +2354,28 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     customer_order_detail_grid = gr.Dataframe(
                         headers=[
                             "SKU",
+                            "Código proveedor",
                             "Nombre producto",
                             "Cantidad",
+                            "Moneda",
                             "Precio original",
                             "Margen %",
-                            "Precio base/unit.",
-                            "Total / producto",
+                            "Precio lista (AR$)",
+                            "Precio final (AR$)",
+                            "Total línea (AR$)",
                         ],
-                        datatype=["str", "str", "number", "str", "str", "str", "str"],
+                        datatype=[
+                            "str",
+                            "str",
+                            "str",
+                            "number",
+                            "str",
+                            "str",
+                            "str",
+                            "str",
+                            "str",
+                            "str",
+                        ],
                         label="Líneas del pedido",
                     )
 
@@ -2566,6 +2652,18 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                     "🔄", variant="secondary", size="sm", scale=0, min_width=48
                 )
             po_refresh.click(_po_grid, outputs=po_grid)
+            po_detail_grid = gr.Dataframe(
+                headers=[
+                    "SKU",
+                    "Código proveedor",
+                    "Nombre producto",
+                    "Cantidad pedida",
+                    "Cantidad recibida",
+                ],
+                datatype=["str", "str", "str", "number", "number"],
+                label="Detalle de la orden",
+            )
+            po_grid.select(_po_row_selected, None, po_detail_grid)
             with gr.Row():
                 po_id = gr.Number(label="ID de PO", precision=0, value=1)
                 po_sku = gr.Textbox(label="SKU recibido", placeholder="CLV-001")

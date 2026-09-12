@@ -228,7 +228,10 @@ def _resolve_manual_pricing_lines(
                     name=product.nombre_oficial,
                     cost=product.costo_proveedor,
                     margin=product.margen_aplicado_pct,
-                    currency="ARS",
+                    # The cost is expressed in the catalog currency: a USD
+                    # product is priced in USD first, then converted through
+                    # the exchange rate by the pure engine (like RAG lines).
+                    currency=product.moneda or "ARS",
                     supplier=product.supplier.code if product.supplier else None,
                 )
             )
