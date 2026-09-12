@@ -49,6 +49,11 @@ from src.backoffice.adoption import (
     OwnerContext,
     build_sku,
 )
+from src.backoffice.sku_mappings import (
+    find_product_by_supplier_code,
+    normalize_supplier_code,
+    record_supplier_sku,
+)
 from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier
 from src.integrations.rag import DocumentLine, RagProduct, RagProductClient
 from src.pricing.engine import compute_base
@@ -247,13 +252,15 @@ def ingest_receipt_lines(
     ``UnresolvedLineError`` before a single write, so a caller that bypasses the
     UI gating can never persist partial data. A ``NO_CANDIDATES`` line does NOT
     block (ADR 0003): it is adopted as a definitive product during this same
-    transaction. Per line: exists in ``catalogo`` → stock bump + inventory
-    mirror + ``StockAdjustment`` (``origen`` untouched, write-once); only in
-    RAG → fail-closed embed + adopt-new ``Catalogo`` with
-    ``origen={"rag": {node_id, ...}}`` provenance; absent from the index →
-    adopt-new with document provenance and a best-effort embedding (embedder
-    failure adopts without a vector, never raises). One ``flush``; the caller
-    commits and rolls back on any exception.
+    transaction. Per line: resolves to an existing ``catalogo`` row (supplier
+    mappings first, ``build_sku`` fallback — see ``_find_existing_product``) →
+    stock bump + inventory mirror + ``StockAdjustment`` (``origen`` untouched,
+    write-once) plus a mapping for the receipt code so future remitos with the
+    same code hit the same product; only in RAG → fail-closed embed +
+    adopt-new ``Catalogo`` with ``origen={"rag": {node_id, ...}}`` provenance;
+    absent from the index → adopt-new with document provenance and a
+    best-effort embedding (embedder failure adopts without a vector, never
+    raises). One ``flush``; the caller commits and rolls back on any exception.
     """
     supplier = ensure_active_supplier(session, supplier_id)
     ambiguous = [
@@ -276,22 +283,54 @@ def ingest_receipt_lines(
         receipt = resolved.receipt
         if receipt.cantidad <= 0:
             continue
-        if resolved.product is not None:
-            sku = build_sku(supplier.code, receipt.codigo_orig or resolved.product.sku)
-        else:
-            sku = _sku_from_document(supplier.code, receipt)
-        existing = session.scalar(select(Catalogo).where(Catalogo.codigo_interno == sku))
+        existing = _find_existing_product(session, supplier, receipt, resolved)
         if existing is not None:
             _bump_stock(session, existing, receipt.cantidad, actor)
+            # "Assign to existing": the receipt's own code becomes a searchable
+            # mapping for the product it resolved to (idempotent, first wins).
+            if receipt.codigo_orig and receipt.codigo_orig.strip():
+                record_supplier_sku(
+                    session, supplier.id, receipt.codigo_orig, existing.codigo_interno
+                )
             updated += 1
         elif resolved.product is not None:
+            sku = build_sku(supplier.code, receipt.codigo_orig or resolved.product.sku)
             _adopt_new(session, supplier.id, supplier.default_margin_pct, sku, resolved, actor, embedder)
             created += 1
         else:
+            sku = _sku_from_document(supplier.code, receipt)
             _adopt_from_document(session, supplier, sku, receipt, actor, embedder)
             created += 1
     session.flush()
     return IngestResult(updated=updated, created=created)
+
+
+def _find_existing_product(
+    session: Session, supplier: Supplier, receipt: ReceiptLine, resolved: ResolvedLine
+) -> Catalogo | None:
+    """Existing-product detection: supplier mappings FIRST, ``build_sku`` last.
+
+    Prevents the duplicate-SKU bug where a second remito names the same product
+    with a different code and the deterministic SKU misses. Candidate keys, in
+    order — first one resolving to a live ``catalogo`` row wins:
+
+    1. mapping (supplier, receipt ``codigo_orig``) — the code on the document;
+    2. mapping (supplier, RAG product ``sku``) — the resolved row's code;
+    3. ``build_sku(supplier.code, receipt.codigo_orig or product.sku)`` exact
+       match on ``codigo_interno`` (legacy deterministic path).
+    """
+    if receipt.codigo_orig and receipt.codigo_orig.strip():
+        product = find_product_by_supplier_code(session, supplier.id, receipt.codigo_orig)
+        if product is not None:
+            return product
+    if resolved.product is not None:
+        product = find_product_by_supplier_code(session, supplier.id, resolved.product.sku)
+        if product is not None:
+            return product
+        sku = build_sku(supplier.code, receipt.codigo_orig or resolved.product.sku)
+    else:
+        sku = _sku_from_document(supplier.code, receipt)
+    return session.scalar(select(Catalogo).where(Catalogo.codigo_interno == sku))
 
 
 def _sku_from_document(supplier_code: str, receipt: ReceiptLine) -> str:
@@ -395,6 +434,18 @@ def _adopt_new(
             actor=actor,
         )
     )
+    # Both supplier codes the product is known by become searchable mappings:
+    # the RAG row's codigo_orig and the receipt's own code (when present and
+    # actually different — the same code must not map twice).
+    record_supplier_sku(session, supplier_id, product.sku, sku, raw_description=product.name)
+    if (
+        receipt.codigo_orig
+        and receipt.codigo_orig.strip()
+        and normalize_supplier_code(receipt.codigo_orig) != normalize_supplier_code(product.sku)
+    ):
+        record_supplier_sku(
+            session, supplier_id, receipt.codigo_orig, sku, raw_description=receipt.descripcion
+        )
 
 
 def _adopt_from_document(
@@ -454,6 +505,11 @@ def _adopt_from_document(
     )
     session.add(new_product)
     _bump_stock(session, new_product, receipt.cantidad, actor)
+    # The document's code becomes a searchable mapping for the new product.
+    if receipt.codigo_orig and receipt.codigo_orig.strip():
+        record_supplier_sku(
+            session, supplier.id, receipt.codigo_orig, sku, raw_description=receipt.descripcion
+        )
 
 
 def _compose_embedding_text(product: RagProduct) -> str:

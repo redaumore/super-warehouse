@@ -347,14 +347,17 @@ def search_order_products_action(
     """Search LOCAL inventory + RAG catalog for the manual order form (read-only).
 
     Thin wrapper over the ``search_order_products`` use case: rows are plain
-    dicts (Origen/SKU/... grid contract), LOCAL hits first, no dedup across
-    sources, and no commit — the search never writes.
+    dicts (Origen/Código/... grid contract), LOCAL hits first, no dedup across
+    sources, and no commit — the search never writes. ``sku`` stays the
+    internal identifier order lines are built from; ``display_code`` is what
+    the grid shows (supplier code for LOCAL, RAG code for RAG).
     """
 
     def _row(hit: ProductSearchHit) -> dict[str, object]:
         return {
             "source": hit.source,
             "sku": hit.sku,
+            "display_code": hit.display_code,
             "name": hit.name,
             "marca": hit.marca,
             "categoria": hit.categoria,

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.backoffice.sku_mappings import record_supplier_sku
 from src.db.models import Catalogo, Inventory, StockAdjustment, Supplier, SupplierStatus
 from src.pricing.engine import compute_base
 from src.shared.text_normalization import normalize_text
@@ -200,5 +201,8 @@ def adopt_product(
             actor=f"owner:{owner_ctx.owner_id}",
         )
     )
+    # The RAG codigo_orig becomes a searchable supplier code for this product
+    # (codigo_interno stays opaque; resolution goes through the mapping table).
+    record_supplier_sku(session, supplier.id, dto.sku, sku, raw_description=dto.nombre)
     session.flush()
     return product

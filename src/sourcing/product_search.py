@@ -39,8 +39,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from src.backoffice.sku_mappings import primary_supplier_codes
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, Supplier
+from src.db.models import Catalogo, Inventory, Supplier, SupplierSkuMapping
 
 _SEARCH_MAX_LIMIT = 1000
 
@@ -67,6 +68,12 @@ class ProductSearchHit:
     ``stock`` is only meaningful for LOCAL hits (None for RAG). ``price`` is
     the list base price for LOCAL and the original-denomination offer price
     for RAG (the currency lives in ``moneda``).
+
+    ``display_code`` is what the UI shows in the results grid: for LOCAL hits
+    the product's primary mapped supplier code (``codigo_interno`` is opaque;
+    fallback to it when the product is unmapped), for RAG hits the RAG
+    ``codigo_producto``. Order lines are always built from ``sku`` — the
+    display code never leaks into storage.
     """
 
     sku: str
@@ -78,6 +85,7 @@ class ProductSearchHit:
     supplier: str | None
     price: Decimal | None
     moneda: str | None
+    display_code: str
 
 
 def _compose_rag_name(marca: str | None, categoria: str | None, subcategoria: str | None) -> str:
@@ -131,8 +139,9 @@ def search_order_products(
     - ``marca``: case- and accent-insensitive substring.
     - ``categoria``: case- and accent-insensitive substring (LOCAL over
       ``categoria``/``subcategoria``; RAG over ``categoria``/``categoria_padre``).
-    - ``codigo``: substring over the internal SKU + barcode (LOCAL) or over
-      ``codigo_producto``/``codigo_orig`` (RAG).
+    - ``codigo``: substring over the internal SKU + barcode, or over any mapped
+      supplier code of the product (LOCAL); over ``codigo_producto``/
+      ``codigo_orig`` (RAG).
     - ``texto``: substring over ``nombre_oficial`` (LOCAL) or ``text_content``
       (RAG).
     - ``limit``: clamped to [1, 1000] and applied PER LEG so one source cannot
@@ -177,10 +186,22 @@ def _search_local(
         )
     if filters["codigo"]:
         pattern = f"%{_fold_accents(filters['codigo'])}%"
+        # A product also matches when one of its supplier's codes (the
+        # supplier_sku_mappings table) matches the typed code: codigo_interno
+        # is opaque, so the owner searches by the code on the price list.
+        # The mapping EXISTS is correlated to the row's own supplier only when
+        # a proveedor filter is active; otherwise any supplier's mapping counts.
+        mapping_match = and_(
+            SupplierSkuMapping.internal_sku == Catalogo.codigo_interno,
+            _folded(SupplierSkuMapping.supplier_sku_code).ilike(pattern),
+        )
+        if filters["proveedor"]:
+            mapping_match = and_(mapping_match, SupplierSkuMapping.supplier_id == Supplier.id)
         conditions.append(
             or_(
                 _folded(Catalogo.codigo_interno).ilike(pattern),
                 _folded(Catalogo.codigo_barras).ilike(pattern),
+                select(SupplierSkuMapping.id).where(mapping_match).exists(),
             )
         )
     if filters["texto"]:
@@ -196,6 +217,11 @@ def _search_local(
         .order_by(Catalogo.codigo_interno)
         .limit(limit)
     )
+    local_rows = list(session.execute(stmt))
+    # One extra query for every returned SKU (no N+1): the displayed code is
+    # the product's primary mapped supplier code, falling back to the opaque
+    # internal SKU when the product has no mapping (never silently blanked).
+    primary_codes = primary_supplier_codes(session, [p.codigo_interno for p, _ in local_rows])
     return [
         ProductSearchHit(
             sku=product.codigo_interno,
@@ -207,8 +233,9 @@ def _search_local(
             supplier=product.supplier.code if product.supplier else None,
             price=product.precio_lista_base,
             moneda="ARS",
+            display_code=primary_codes.get(product.codigo_interno, product.codigo_interno),
         )
-        for product, row_stock in session.execute(stmt)
+        for product, row_stock in local_rows
     ]
 
 
@@ -269,6 +296,7 @@ def _search_rag(
             supplier=row.codigo_proveedor,
             price=row.precio,
             moneda=row.moneda,
+            display_code=row.codigo_producto,
         )
         for row in session.execute(stmt)
     ]
