@@ -86,6 +86,7 @@ class IngestionResult:
     total_tokens_used: int
     total_elapsed_seconds: float
     output_files: Dict[str, str] = field(default_factory=dict)
+    warnings: List[str] = field(default_factory=list)
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -267,13 +268,20 @@ class RAGOrchestrator:
             logger.info("\n>>> [PASO 2/4] Ejecutando Fase 1: Chunking semántico y construcción de nodos...")
             fase_1_out = os.path.join(out_directory, f"{cod_prov}_nodes.json")
 
-            nodes, fase_1_json_path = run_chunking_pipeline(
+            nodes, fase_1_json_path, node_conflicts = run_chunking_pipeline(
                 input_path=fase_0_json_path,
                 output_path=fase_1_out,
                 encoding_name="cl100k_base",
                 codigo_proveedor=cod_prov,
                 documento_id=doc_id_norm
             )
+            ingest_warnings = [
+                (
+                    f"Código de producto duplicado en el PDF ({'; '.join(descs)}). "
+                    f"El node_id '{node_id}' se desambiguó con sufijo #N para no perder registros."
+                )
+                for node_id, descs in node_conflicts.items()
+            ]
             output_files["fase_1_nodes"] = fase_1_json_path
             total_nodes = len(nodes)
             logger.info(f"Fase 1 finalizada: {total_nodes} nodos generados.")
@@ -351,6 +359,8 @@ class RAGOrchestrator:
             logger.info("=" * 80)
             logger.info(f"¡INGESTA INTEGRAL FINALIZADA CON ÉXITO EN {total_elapsed:.2f}s!")
             logger.info(f"Productos: {total_products} | Nodos: {total_nodes} | Vectores indexados: {total_records_indexed}")
+            for warning in ingest_warnings:
+                logger.warning(f"[Aviso de ingesta] {warning}")
             logger.info("=" * 80)
 
             return IngestionResult(
@@ -366,7 +376,8 @@ class RAGOrchestrator:
                 total_records_indexed=total_records_indexed,
                 total_tokens_used=total_tokens,
                 total_elapsed_seconds=total_elapsed,
-                output_files=output_files
+                output_files=output_files,
+                warnings=ingest_warnings
             )
 
         except Exception as exc:

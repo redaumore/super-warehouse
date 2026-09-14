@@ -66,10 +66,13 @@ def _run_background_ingestion(job_id: str, params: Dict[str, Any]) -> None:
         )
 
         if res.status == "SUCCESS":
+            base_message = "Ingesta finalizada con éxito"
+            if res.warnings:
+                base_message = f"{base_message}. Aviso: {' '.join(res.warnings)}"
             job_manager.update_job(
                 job_id,
                 status="COMPLETED",
-                progress_message="Ingesta finalizada con éxito",
+                progress_message=base_message,
                 result=res.to_dict()
             )
             logger.info(f"[Job {job_id}] Ingesta completada con éxito.")

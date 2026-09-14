@@ -240,15 +240,58 @@ def process_product(
     }
 
 
+def disambiguate_node_ids(nodes: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """
+    Desambigua node_ids repetidos dentro de un mismo lote de nodos.
+
+    El node_id se deriva de (codigo_proveedor, codigo). Un proveedor puede
+    imprimir el mismo código para productos distintos en la misma página
+    (ej: SCO página 72, dos mechas distintas con el código 'SM 409 -86').
+    Sin desambiguación, el upsert ON CONFLICT (node_id) colapsaría ambas
+    filas en una, perdiendo un producto de forma silenciosa.
+
+    La primera aparición conserva el node_id original; las siguientes
+    reciben el sufijo '#N' (segunda -> #2, tercera -> #3) y se marca
+    metadata['node_id_suffix']. Devuelve el mapa de conflictos
+    (node_id original -> descripciones de cada aparición) para log/auditoría.
+    """
+    seen: Dict[str, List[Dict[str, Any]]] = {}
+    for node in nodes:
+        node_id = str(node.get("node_id") or "")
+        if not node_id:
+            continue
+        seen.setdefault(node_id, []).append(node)
+
+    conflicts: Dict[str, List[str]] = {}
+    for node_id, group in seen.items():
+        if len(group) <= 1:
+            continue
+        descs = []
+        for position, node in enumerate(group, start=1):
+            meta = node.get("metadata", {}) or {}
+            descs.append(f"codigo '{meta.get('codigo', '?')}' (página {meta.get('pagina', '?')})")
+            if position == 1:
+                continue
+            node["node_id"] = f"{node_id}#{position}"
+            node.setdefault("metadata", {})["node_id_suffix"] = position
+        conflicts[node_id] = descs
+
+    return conflicts
+
+
 def run_pipeline(
     input_path: str,
     output_path: Optional[str] = None,
     encoding_name: str = "cl100k_base",
     codigo_proveedor: Optional[str] = None,
     documento_id: Optional[str] = None
-) -> Tuple[List[Dict[str, Any]], str]:
+) -> Tuple[List[Dict[str, Any]], str, Dict[str, List[str]]]:
     """
     Ejecuta el pipeline completo de ingesta, transformación y persistencia.
+
+    Devuelve (nodes, output_path, conflicts) donde conflicts es el mapa de
+    node_ids duplicados desambiguados (node_id original -> descripciones de
+    cada aparición) para que el orquestador lo surface en el resultado del job.
     """
     in_file = Path(input_path)
     if not in_file.exists():
@@ -312,6 +355,16 @@ def run_pipeline(
 
         logger.info("Transformación completa: %d nodos generados exitosamente (%d errores).", len(nodes), errors)
 
+        conflicts = disambiguate_node_ids(nodes)
+        for node_id, descs in conflicts.items():
+            logger.warning(
+                "node_id '%s' compartido por %d productos del lote; se desambiguó "
+                "con sufijo #N conservando la primera aparición: %s",
+                node_id, len(descs), "; ".join(descs)
+            )
+        if conflicts:
+            logger.warning("Total de node_ids desambiguados: %d", len(conflicts))
+
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -320,7 +373,7 @@ def run_pipeline(
         json.dump(nodes, f, indent=2, ensure_ascii=False)
 
     logger.info("Archivo generado correctamente en %s", out_file)
-    return nodes, str(out_file)
+    return nodes, str(out_file), conflicts
 
 
 def main():
