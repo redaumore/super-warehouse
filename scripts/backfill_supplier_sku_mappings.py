@@ -27,11 +27,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.backoffice.catalog import _rag_products_table
 from src.backoffice.sku_mappings import normalize_supplier_code, record_supplier_sku
 from src.config import get_settings
 from src.db.models import Catalogo, SupplierSkuMapping
 from src.db.session import SessionLocal
+from src.sourcing.product_search import rag_products_table
 
 _BACKFILL_CONFIDENCE = Decimal(100)
 
@@ -52,7 +52,7 @@ def _supplier_codes(session: Session, product: Catalogo) -> list[tuple[str, str]
         codes.append((str(remito_code), "backfill:remito"))
     node_id = (origen.get("rag") or {}).get("node_id")
     if node_id and str(node_id).strip():
-        table = _rag_products_table(get_settings().rag_table_name)
+        table = rag_products_table(get_settings().rag_table_name)
         rag_row = session.execute(
             select(table.c.codigo_producto, table.c.codigo_orig).where(
                 table.c.node_id == str(node_id)

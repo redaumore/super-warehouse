@@ -3,43 +3,24 @@
 Pure DB operations behind the Gradio catalog tab: browse products, edit stock,
 price or margin. Margin edits recompute the list base price through the pure
 pricing engine (base = cost × (1 + margin)) so the backoffice never diverges
-from the pricing rules. Also exposes read-only queries over the RAG catalog
-table (supplier catalogs indexed by the rag-api service) so the Productos tab
-can consult indexed products with field filters — no LLM call involved.
+from the pricing rules. RAG catalog consultation moved to the unified search
+use case in ``src.sourcing.product_search`` (the Productos tab queries both
+sources through it).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from functools import lru_cache
 
-from sqlalchemy import Column, Integer, MetaData, Numeric, String, Table, and_, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.backoffice.sku_mappings import find_product_by_any_supplier_code, primary_supplier_codes
-from src.config import get_settings
 from src.db.models import Catalogo, ExchangeRate, Inventory, Supplier
 from src.pricing.engine import compute_base
 
 _CENT = Decimal("0.01")
-
-_RAG_SEARCH_MAX_LIMIT = 1000
-
-# Accent folding for text filters: ILIKE does not ignore accents, so a user
-# typing "griferias" would never match "Griferías". Both sides are folded
-# with translate() (Postgres char-by-char mapping); "ñ" is kept distinct to
-# avoid false positives (caño vs cano).
-_ACCENTED = "áéíóúüÁÉÍÓÚÜ"
-_PLAIN = "aeiouuAEIOUU"
-
-
-def _fold_accents(value: str) -> str:
-    return value.translate(str.maketrans(_ACCENTED, _PLAIN))
-
-
-def _folded(column) -> object:
-    return func.translate(column, _ACCENTED, _PLAIN)
 
 
 def _list_price_ars(
@@ -182,130 +163,3 @@ def update_margin(session: Session, sku: str, margin: Decimal | float) -> Catalo
     product.precio_lista_base = compute_base(product.costo_proveedor, margin)
     session.flush()
     return product
-
-
-# ---------------------------------------------------------------- RAG catalog query
-
-
-@lru_cache(maxsize=4)
-def _rag_products_table(table_name: str) -> Table:
-    """Lightweight read-only mapping of the RAG catalog table.
-
-    The table is created and owned by the rag-api ingestion service; it is never
-    created, migrated or written from the backoffice. Declared in its own
-    ``MetaData`` so it stays out of ``Base.metadata`` (Alembic/create_all must
-    not touch it) and only the columns this query needs are mapped — in
-    particular the ``embedding`` vector column is intentionally absent.
-    """
-    return Table(
-        table_name,
-        MetaData(),
-        Column("node_id", String, primary_key=True),
-        Column("codigo_producto", String),
-        Column("codigo_orig", String),
-        Column("nombre_proveedor", String),
-        Column("codigo_proveedor", String),
-        Column("marca", String),
-        Column("categoria_padre", String),
-        Column("categoria", String),
-        Column("subcategoria", String),
-        Column("precio", Numeric),
-        Column("moneda", String),
-        Column("pagina_origen", Integer),
-        Column("archivo_origen", String),
-        Column("text_content", String),
-    )
-
-
-def search_rag_products(
-    session: Session,
-    *,
-    codigo_proveedor: str | None = None,
-    marca: str | None = None,
-    categoria: str | None = None,
-    codigo: str | None = None,
-    texto: str | None = None,
-    limit: int = 100,
-) -> list[dict[str, object]]:
-    """Filter rows of the RAG catalog table with plain SQL — no LLM call.
-
-    Filter semantics (all optional, combined with AND):
-    - ``codigo_proveedor``: exact match after strip/upper (3-char supplier code).
-    - ``marca``: case- and accent-insensitive substring.
-    - ``categoria``: case- and accent-insensitive substring over ``categoria``
-      and ``categoria_padre``.
-    - ``codigo``: case- and accent-insensitive substring over
-      ``codigo_producto`` and ``codigo_orig``.
-    - ``texto``: case- and accent-insensitive substring over ``text_content``.
-    - ``limit``: clamped to [1, 1000]; default 100.
-
-    Raises ``ValueError`` when no filter is supplied, so the UI can never
-    trigger a full-table scan by accident.
-    """
-    filters = {
-        "codigo_proveedor": (codigo_proveedor or "").strip(),
-        "marca": (marca or "").strip(),
-        "categoria": (categoria or "").strip(),
-        "codigo": (codigo or "").strip(),
-        "texto": (texto or "").strip(),
-    }
-    if not any(filters.values()):
-        raise ValueError("Especificá al menos un filtro (proveedor, marca, categoría, código o texto).")
-
-    table = _rag_products_table(get_settings().rag_table_name)
-    conditions = []
-    if filters["codigo_proveedor"]:
-        conditions.append(table.c.codigo_proveedor == filters["codigo_proveedor"].upper())
-    if filters["marca"]:
-        pattern = f"%{_fold_accents(filters['marca'])}%"
-        conditions.append(_folded(table.c.marca).ilike(pattern))
-    if filters["categoria"]:
-        pattern = f"%{_fold_accents(filters['categoria'])}%"
-        conditions.append(
-            or_(_folded(table.c.categoria).ilike(pattern), _folded(table.c.categoria_padre).ilike(pattern))
-        )
-    if filters["codigo"]:
-        pattern = f"%{_fold_accents(filters['codigo'])}%"
-        conditions.append(
-            or_(_folded(table.c.codigo_producto).ilike(pattern), _folded(table.c.codigo_orig).ilike(pattern))
-        )
-    if filters["texto"]:
-        conditions.append(_folded(table.c.text_content).ilike(f"%{_fold_accents(filters['texto'])}%"))
-
-    stmt = (
-        select(
-            table.c.codigo_producto,
-            table.c.codigo_orig,
-            table.c.codigo_proveedor,
-            table.c.nombre_proveedor,
-            table.c.marca,
-            table.c.categoria,
-            table.c.subcategoria,
-            table.c.precio,
-            table.c.moneda,
-            table.c.pagina_origen,
-            table.c.archivo_origen,
-        )
-        .where(and_(*conditions))
-        .order_by(table.c.codigo_proveedor, table.c.codigo_producto)
-        .limit(max(1, min(int(limit), _RAG_SEARCH_MAX_LIMIT)))
-    )
-
-    rows: list[dict[str, object]] = []
-    for row in session.execute(stmt):
-        rows.append(
-            {
-                "codigo": row.codigo_producto,
-                "codigo_orig": row.codigo_orig,
-                "proveedor": row.codigo_proveedor,
-                "nombre_proveedor": row.nombre_proveedor,
-                "marca": row.marca,
-                "categoria": row.categoria,
-                "subcategoria": row.subcategoria,
-                "precio": float(row.precio) if row.precio is not None else None,
-                "moneda": row.moneda,
-                "pagina": row.pagina_origen,
-                "archivo": row.archivo_origen,
-            }
-        )
-    return rows

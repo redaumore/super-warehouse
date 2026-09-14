@@ -636,7 +636,7 @@ Documento generado automáticamente desde los docstrings de los tests. No lo edi
 - Loading a rate recomputes a pending RAG order and clears its flag. _(`test_recompute_pending_conversion_clears_flag_and_fills_totals`)_
 - The default RAG margin setting can be read and updated. _(`test_default_margin_round_trips`)_
 - Approval registration refuses an order until its prices are converted. _(`test_pending_conversion_order_is_blocked_at_approval`)_
-- La grilla del catálogo muestra proveedor + código mapeado, no el SKU interno. _(`test_app_catalog_grid_renders_seeded_products`)_
+- La grilla del catálogo muestra origen, proveedor y código mapeado. _(`test_app_catalog_grid_renders_seeded_products`)_
 - Registrar un cliente recarga la grilla y limpia el formulario. _(`test_app_register_client_returns_success_message`)_
 - Editar stock desde la UI persiste el cambio en Inventory (fuente única). _(`test_app_catalog_edit_persists_stock_change`)_
 - El campo de edición resuelve códigos de proveedor, no solo el SKU interno. _(`test_app_catalog_edit_resolves_supplier_code`)_

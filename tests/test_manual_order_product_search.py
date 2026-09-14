@@ -40,13 +40,18 @@ from src.db.models import (
     Supplier,
 )
 from src.db.session import SessionLocal
+from src.integrations.rag import RagProduct, RagProductError
 from src.sourcing.draft_order import (
     ManualLineInput,
     ManualOrderError,
     create_manual_order,
     update_manual_order,
 )
-from src.sourcing.product_search import search_order_products
+from src.sourcing.product_search import (
+    rag_products_table,
+    search_order_products,
+    search_products_unified,
+)
 
 
 def _postgres_up() -> bool:
@@ -172,8 +177,6 @@ def shop_ctx(db_session):
 
 def _seed_rag(session) -> None:
     """Seed indexed RAG rows, including one shared article with the LOCAL leg."""
-    from src.backoffice.catalog import _rag_products_table
-
     rows = [
         # shared article: same codigo in inventory AND RAG (dual result)
         ("node-1", "AT-5044", "AT-5044", "Tornimax", "AMX", "Fischer", "Fijaciones",
@@ -196,7 +199,7 @@ def _seed_rag(session) -> None:
         "marca", "categoria_padre", "categoria", "subcategoria", "precio", "moneda",
         "pagina_origen", "archivo_origen", "text_content",
     )
-    table = _rag_products_table(get_settings().rag_table_name)
+    table = rag_products_table(get_settings().rag_table_name)
     session.execute(table.insert().values([dict(zip(columns, row, strict=True)) for row in rows]))
     session.flush()
 
@@ -282,6 +285,205 @@ def test_search_with_no_matches_returns_empty_list(rag_table, shop_ctx):
     """Empty results come back as an empty list for the UI to handle."""
     _seed_rag(shop_ctx)
     assert search_order_products(shop_ctx, codigo="INEXISTENTE-99") == []
+
+
+# ------------------------------------------------- unified search (Productos)
+
+
+class _FakeVectorRag:
+    """RagProductClient stand-in with canned vector products (records queries)."""
+
+    def __init__(self, products: tuple[RagProduct, ...]) -> None:
+        self.products = tuple(products)
+        self.calls: list[str] = []
+
+    def query(self, text: str) -> tuple[RagProduct, ...]:
+        self.calls.append(text)
+        return self.products
+
+
+class _FailingVectorRag:
+    """RagProductClient stand-in whose vector query is unavailable."""
+
+    def query(self, text: str) -> tuple[RagProduct, ...]:
+        raise RagProductError("rag query failed for 'x': down")
+
+
+def _rag_product(**overrides) -> RagProduct:
+    """Canned RAG hit shape mirroring a real rag-api structured response."""
+    base = {
+        "sku": "SM 483-8",
+        "name": "Monocomando de cocina acero",
+        "codigo_proveedor": "SCO",
+        "brand": "GENERICA",
+        "price": 15.0,
+        "currency": "USD",
+        "categoria_padre": "Sanitarios y Grifería",
+        "categoria": "Griferías",
+        "subcategoria": "Monocomandos",
+    }
+    base.update(overrides)
+    return RagProduct(**base)
+
+
+def test_unified_search_filters_by_subcategoria_independently(rag_table, shop_ctx):
+    """Subcategoría is its own folded-substring filter (not the categoria OR)."""
+    _seed_rag(shop_ctx)
+
+    # LOCAL AT-5044 (subcategoria "Tarugos"); RAG rows have subcategoria
+    # "Plástico" even though their categoria column is "Tarugos" — the
+    # subcategoria filter must NOT reuse the categoria OR semantics.
+    hits, _notes = search_products_unified(shop_ctx, subcategoria="tarugos")
+    assert [(h.source, h.sku) for h in hits] == [("LOCAL", "AT-5044")]
+
+    hits, _notes = search_products_unified(shop_ctx, subcategoria="plastico")
+    assert [h.source for h in hits] == ["RAG"] * 3
+    assert all(h.subcategoria == "Plástico" for h in hits)
+
+
+def test_unified_search_scope_local_runs_only_local_leg(rag_table, shop_ctx):
+    """Scope LOCAL never touches the RAG table: only LOCAL hits come back."""
+    _seed_rag(shop_ctx)
+    hits, notes = search_products_unified(shop_ctx, marca="fischer", scope="local")
+    assert [(h.source, h.sku) for h in hits] == [("LOCAL", "AT-5044")]
+    assert notes == []
+
+
+def test_unified_search_scope_prov_runs_only_rag_leg(rag_table, shop_ctx):
+    """Scope PROV never touches the LOCAL catalog; hits keep source 'RAG'."""
+    _seed_rag(shop_ctx)
+    hits, notes = search_products_unified(shop_ctx, proveedor="amx", scope="prov")
+    assert [(h.source, h.sku) for h in hits] == [
+        ("RAG", "AMX-AMX-AT-9999"),
+        ("RAG", "AMX-AT-7777"),
+        ("RAG", "AT-5044"),
+    ]
+    assert notes == []
+
+
+def test_unified_search_rejects_unknown_scope(shop_ctx):
+    """Anything but local/prov/both is refused before any query runs."""
+    with pytest.raises(ValueError, match="Ámbito inválido"):
+        search_products_unified(shop_ctx, marca="x", scope="todo")
+
+
+def test_unified_search_guard_counts_nombre_and_subcategoria(shop_ctx):
+    """Zero filters is a guard error; nombre alone is a valid LOCAL filter."""
+    with pytest.raises(ValueError, match="al menos un filtro"):
+        search_products_unified(shop_ctx)
+
+    hits, notes = search_products_unified(shop_ctx, nombre="monocomando", scope="local")
+    assert [(h.source, h.sku) for h in hits] == [("LOCAL", "CLV-001")]
+    assert notes == []
+
+
+def test_unified_search_prov_nombre_uses_vector_client(rag_table, shop_ctx):
+    """With nombre set the PROV leg queries the vector service, not the table."""
+    _seed_rag(shop_ctx)
+    fake = _FakeVectorRag(
+        (
+            _rag_product(),
+            _rag_product(
+                sku="AT-9999",
+                name="Tarugo plástico 8mm",
+                codigo_proveedor="AMX",
+                brand="Fischer",
+                price=9.0,
+                currency="ARS",
+                categoria_padre="Fijaciones",
+                categoria="Tarugos",
+                subcategoria="Plástico",
+            ),
+        )
+    )
+    hits, notes = search_products_unified(
+        shop_ctx, nombre="monocomando", scope="prov", rag_client=fake
+    )
+
+    assert fake.calls == ["monocomando"]
+    assert [(h.source, h.sku, h.price, h.moneda) for h in hits] == [
+        ("RAG", "SM 483-8", Decimal("15.0"), "USD"),
+        ("RAG", "AT-9999", Decimal("9.0"), "ARS"),
+    ]
+    assert all(h.stock is None for h in hits)
+    assert notes == []
+
+
+def test_unified_search_vector_hits_postfiltered_by_fields(rag_table, shop_ctx):
+    """Field filters set together with nombre post-filter the vector results."""
+    _seed_rag(shop_ctx)
+    fake = _FakeVectorRag((_rag_product(), _rag_product(sku="AT-9999", brand="Fischer")))
+
+    hits, _notes = search_products_unified(
+        shop_ctx, nombre="monocomando", marca="GENERICA", scope="prov", rag_client=fake
+    )
+    assert [h.sku for h in hits] == ["SM 483-8"]
+
+    hits, _notes = search_products_unified(
+        shop_ctx, nombre="monocomando", subcategoria="plasticos", scope="prov", rag_client=fake
+    )
+    assert [h.sku for h in hits] == []  # fake hits carry subcategoria "Monocomandos"
+
+    hits, _notes = search_products_unified(
+        shop_ctx, nombre="monocomando", codigo="483", scope="prov", rag_client=fake
+    )
+    assert [h.sku for h in hits] == ["SM 483-8"]
+
+
+def test_unified_search_nombre_local_sql_and_prov_vector(rag_table, shop_ctx):
+    """Ambas scope with nombre: LOCAL SQL substring first, vector hits after."""
+    _seed_rag(shop_ctx)
+    fake = _FakeVectorRag((_rag_product(),))
+    hits, _notes = search_products_unified(
+        shop_ctx, nombre="monocomando", scope="both", rag_client=fake
+    )
+    assert [(h.source, h.sku) for h in hits] == [("LOCAL", "CLV-001"), ("RAG", "SM 483-8")]
+
+
+def test_unified_search_vector_failure_falls_back_to_sql_with_note(rag_table, shop_ctx):
+    """A down vector service degrades to the SQL table and reports a note."""
+    _seed_rag(shop_ctx)
+    hits, notes = search_products_unified(
+        shop_ctx, nombre="monocomando", scope="prov", rag_client=_FailingVectorRag()
+    )
+    assert [(h.source, h.sku) for h in hits] == [("RAG", "SM 483-8")]
+    assert len(notes) == 1
+    assert "no disponible" in notes[0]
+
+
+def test_unified_search_local_hit_carries_pricing_snapshot(shop_ctx):
+    """LOCAL hits expose cost, margin and the display AR$ list price."""
+    hits, _notes = search_products_unified(shop_ctx, codigo="CLV-001", scope="local")
+    hit = hits[0]
+    assert hit.costo == Decimal("100.00")
+    assert hit.margen_pct == Decimal("0.35")
+    assert hit.precio_lista_ars == Decimal("135.00")  # 100.00 × 1.35
+    assert hit.subcategoria == "Cocina"
+
+
+def test_unified_search_local_usd_hit_converts_list_price(shop_ctx):
+    """A USD catalog product converts its list price like the catalog grid."""
+    shop_ctx.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
+    shop_ctx.add(
+        Catalogo(
+            id=4,
+            codigo_interno="USD-1",
+            supplier_id=1,
+            nombre_oficial="Producto importado en USD",
+            costo_proveedor=Decimal("2.00"),
+            margen_aplicado_pct=Decimal("0.50"),
+            precio_lista_base=Decimal("3.00"),
+            sinonimos=[],
+            moneda="USD",
+        )
+    )
+    shop_ctx.flush()
+
+    hits, _notes = search_products_unified(shop_ctx, codigo="USD-1", scope="local")
+    hit = hits[0]
+    assert hit.precio_lista_ars == Decimal("3000.00")  # (2.00 × 1.50) × 1000
+    assert hit.moneda_original == "USD"
+    assert hit.moneda == "ARS"  # Pedidos contract keeps its fixed LOCAL label
 
 
 # ------------------------------------- source-aware manual creation (domain)

@@ -37,7 +37,6 @@ from src.backoffice.adoption import (
 from src.backoffice.catalog import (
     list_products,
     resolve_product_code,
-    search_rag_products,
     update_margin,
     update_price,
     update_stock,
@@ -104,6 +103,7 @@ from src.integrations.openai import OpenAIEmbedder
 from src.integrations.rag import RagProduct, RagProductClient, RagProductError
 from src.integrations.sheets import SheetsWriter
 from src.sourcing.draft_order import ManualLineInput
+from src.sourcing.product_search import ProductSearchHit, search_products_unified
 from src.supplier.guards import SupplierInactiveError, ensure_active_supplier
 from src.supplier.validation import suggest_code
 from src.tz import to_buenos_aires
@@ -150,12 +150,21 @@ _CATALOG_GRID_DATATYPES: tuple[Literal["str", "number"], ...] = (
     "str",
 )
 
+# Unified Productos grid: the catalog columns led by an "Origen" column
+# tagging each row LOCAL (inventory catalog) or PROV (supplier RAG catalog).
+_PRODUCTOS_GRID_HEADERS = ["Origen", *_CATALOG_GRID_HEADERS]
+_PRODUCTOS_GRID_DATATYPES: tuple[Literal["str", "number"], ...] = (
+    "str",
+    *_CATALOG_GRID_DATATYPES,
+)
+
 
 def _catalog_grid() -> list[list[object]]:
     with SessionLocal() as session:
         rows = list_products(session)
     return [
         [
+            "LOCAL",
             r["supplier_code"],
             r["supplier_sku_code"],
             r["nombre_oficial"],
@@ -172,41 +181,77 @@ def _catalog_grid() -> list[list[object]]:
     ]
 
 
-def _rag_search(
-    proveedor: str, marca: str, categoria: str, codigo: str, texto: str, limit: float | None
+def _productos_row(hit: ProductSearchHit) -> list[object]:
+    """One unified-grid row: Origen first, then the catalog-grid columns.
+
+    ``hit.source`` keeps the use-case vocabulary ("LOCAL" | "RAG"); the grid
+    displays RAG rows as PROV (catálogo de proveedores). Fields a source does
+    not carry stay empty: PROV rows have no stock, margin or local list price
+    (the offer price is the supplier cost, so it lands in the Costo column
+    with its own currency), while LOCAL rows show both the supplier cost and
+    the pricing-engine list price.
+    """
+    is_local = hit.source == "LOCAL"
+    costo = hit.costo if is_local else hit.price
+    moneda = hit.moneda_original or hit.moneda
+    return [
+        "LOCAL" if is_local else "PROV",
+        hit.supplier or "",
+        hit.display_code,
+        hit.name,
+        hit.marca or "",
+        hit.stock if hit.stock is not None else "",
+        moneda or "",
+        str(costo) if costo is not None else "",
+        str(hit.precio_lista_ars) if is_local and hit.precio_lista_ars is not None else "",
+        str(hit.margen_pct) if is_local and hit.margen_pct is not None else "",
+        hit.categoria or "",
+        hit.subcategoria or "",
+    ]
+
+
+def _productos_search(
+    codigo: str, proveedor: str, marca: str, categoria: str, subcategoria: str, nombre: str, scope: str
 ) -> tuple[list[list[object]], str]:
-    """Consulta el catálogo RAG con filtros SQL directos (sin LLM)."""
+    """Unified Productos search over both catalogs (LOCAL SQL + PROV SQL/vector).
+
+    ``nombre`` drives the vector query on the rag-api for the PROV leg; when
+    the service is unavailable the leg degrades to the indexed SQL table and
+    the fallback surfaces as a status note. The no-filter guard error is
+    surfaced in the status box — never a full scan.
+
+    The vector client is built per call (never the cached ``_get_rag_client()``
+    singleton): a real vector query builds the singleton's ``httpx.Client``,
+    and ``build_app`` deep-copies that same object into ``gr.State`` for the
+    Adoption tab — a built transport would make every later ``build_app()``
+    call fail. The client is only needed when ``nombre`` is set.
+    """
+    nombre_text = str(nombre or "").strip()
     try:
         with SessionLocal() as session:
-            rows = search_rag_products(
+            hits, notes = search_products_unified(
                 session,
-                codigo_proveedor=proveedor,
-                marca=marca,
-                categoria=categoria,
-                codigo=codigo,
-                texto=texto,
-                limit=int(limit) if limit else 100,
+                proveedor=str(proveedor or ""),
+                marca=str(marca or ""),
+                categoria=str(categoria or ""),
+                subcategoria=str(subcategoria or ""),
+                codigo=str(codigo or ""),
+                nombre=nombre_text,
+                scope=str(scope or "both"),
+                limit=100,
+                rag_client=RagProductClient() if nombre_text else None,
             )
     except ValueError as exc:
         return [], f"Error: {exc}"
-    if not rows:
-        return [], "Sin resultados para los filtros indicados."
-    grid = [
-        [
-            r["codigo"],
-            r["codigo_orig"],
-            r["proveedor"],
-            r["marca"],
-            r["categoria"],
-            r["subcategoria"],
-            r["precio"],
-            r["moneda"],
-            r["pagina"],
-            r["archivo"],
-        ]
-        for r in rows
-    ]
-    return grid, f"{len(rows)} producto(s) encontrado(s)."
+    rows = [_productos_row(hit) for hit in hits]
+    message = (
+        f"{len(rows)} producto(s) encontrado(s)."
+        if rows
+        else "Sin resultados para los filtros indicados."
+    )
+    if notes:
+        message += " " + " ".join(notes)
+    return rows, message
 
 
 def _clients_grid() -> list[list[object]]:
@@ -2079,13 +2124,56 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
             "Los datos van a la base local (Postgres + pgvector)."
         )
         with gr.Tab("Productos"):
-            gr.Markdown("### Catálogo y stock")
-            catalog_grid = gr.Dataframe(
-                headers=_CATALOG_GRID_HEADERS,
-                datatype=_CATALOG_GRID_DATATYPES,
+            gr.Markdown("### Búsqueda en catálogo (local y proveedores)")
+            with gr.Group():
+                with gr.Row():
+                    pf_codigo = gr.Textbox(label="Código", placeholder="483-8")
+                    pf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
+                    pf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
+                with gr.Row():
+                    pf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
+                    pf_subcategoria = gr.Textbox(label="Subcategoría", placeholder="Monocomandos")
+                with gr.Row():
+                    pf_nombre = gr.Textbox(
+                        label="Nombre",
+                        placeholder="monocomando de cocina (similitud en proveedores)",
+                        scale=3,
+                    )
+                    pf_scope = gr.Radio(
+                        choices=[
+                            ("Ambas", "both"),
+                            ("Local", "local"),
+                            ("Catálogo de proveedores", "prov"),
+                        ],
+                        value="both",
+                        label="Ámbito",
+                        scale=1,
+                    )
+                    productos_search_btn = gr.Button(
+                        "Buscar", variant="primary", scale=0, min_width=150
+                    )
+            productos_search_status = gr.Textbox(label="Estado búsqueda", interactive=False)
+            productos_grid = gr.Dataframe(
+                headers=_PRODUCTOS_GRID_HEADERS,
+                datatype=_PRODUCTOS_GRID_DATATYPES,
                 value=_catalog_grid,
                 label="Productos",
             )
+            productos_search_btn.click(
+                _productos_search,
+                inputs=[
+                    pf_codigo,
+                    pf_proveedor,
+                    pf_marca,
+                    pf_categoria,
+                    pf_subcategoria,
+                    pf_nombre,
+                    pf_scope,
+                ],
+                outputs=[productos_grid, productos_search_status],
+            )
+
+            gr.Markdown("### Catálogo y stock")
             with gr.Row():
                 edit_sku = gr.Textbox(
                     label="Código de proveedor o SKU",
@@ -2106,54 +2194,7 @@ def build_app(settings: Settings | None = None) -> gr.Blocks:
                 catalog_refresh = gr.Button(
                     "🔄", variant="secondary", size="sm", scale=0, min_width=48
                 )
-            catalog_refresh.click(_catalog_grid, outputs=catalog_grid)
-
-            gr.Markdown("### Consulta catálogo RAG (proveedores)")
-            with gr.Row():
-                ragf_proveedor = gr.Textbox(label="Proveedor (código)", placeholder="SCO")
-                ragf_marca = gr.Textbox(label="Marca", placeholder="Fischer")
-                ragf_categoria = gr.Textbox(label="Categoría", placeholder="Griferías")
-                ragf_codigo = gr.Textbox(label="Código", placeholder="483-8")
-            ragf_texto = gr.Textbox(
-                label="Texto en descripción (substring)",
-                placeholder="monocomando de cocina",
-            )
-            with gr.Row():
-                rag_search_btn = gr.Button("Buscar en RAG", variant="primary")
-                ragf_limit = gr.Number(label="Máx. resultados", value=100, precision=0)
-            rag_grid = gr.Dataframe(
-                headers=[
-                    "Código",
-                    "Cód. orig",
-                    "Proveedor",
-                    "Marca",
-                    "Categoría",
-                    "Subcategoría",
-                    "Precio",
-                    "Moneda",
-                    "Pág.",
-                    "Archivo",
-                ],
-                datatype=[
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                    "str",
-                    "number",
-                    "str",
-                    "number",
-                    "str",
-                ],
-                label="Resultados RAG (Productos)",
-            )
-            rag_status = gr.Textbox(label="Estado RAG", interactive=False)
-            rag_search_btn.click(
-                _rag_search,
-                inputs=[ragf_proveedor, ragf_marca, ragf_categoria, ragf_codigo, ragf_texto, ragf_limit],
-                outputs=[rag_grid, rag_status],
-            )
+            catalog_refresh.click(_catalog_grid, outputs=productos_grid)
 
         with gr.Tab("Clientes"):
             gr.Markdown("### Clientes y listas de precios")

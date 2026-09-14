@@ -1227,16 +1227,17 @@ def test_pending_conversion_order_is_blocked_at_approval(shop_ctx):
 
 
 def test_app_catalog_grid_renders_seeded_products(shop_ctx):
-    """La grilla del catálogo muestra proveedor + código mapeado, no el SKU interno."""
+    """La grilla del catálogo muestra origen, proveedor y código mapeado."""
     shop_ctx["session"].add(Inventory(sku_id="CLV-001", quantity_on_hand=10))
     shop_ctx["session"].commit()
     rows = _catalog_grid()
-    assert any(row[0] == "MSA" for row in rows)  # supplier code leads the row
-    assert any(row[1] == "" for row in rows)  # unmapped product: blank supplier code
-    assert any(row[2] == "Clavos Paris 2 Pulgadas" for row in rows)  # Nombre column
-    assert any(row[4] == 10 for row in rows)  # Stock column (Inventory)
-    assert any(row[6] == "100.00" for row in rows)  # Costo column
-    assert any(row[7] == "135.00" for row in rows)  # Precio lista (AR$) column
+    assert all(row[0] == "LOCAL" for row in rows)  # Origen column leads the row
+    assert any(row[1] == "MSA" for row in rows)  # supplier code leads the row
+    assert any(row[2] == "" for row in rows)  # unmapped product: blank supplier code
+    assert any(row[3] == "Clavos Paris 2 Pulgadas" for row in rows)  # Nombre column
+    assert any(row[5] == 10 for row in rows)  # Stock column (Inventory)
+    assert any(row[7] == "100.00" for row in rows)  # Costo column
+    assert any(row[8] == "135.00" for row in rows)  # Precio lista (AR$) column
 
 
 def test_app_register_client_returns_success_message(shop_ctx):
