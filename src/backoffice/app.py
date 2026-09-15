@@ -186,10 +186,13 @@ def _productos_row(hit: ProductSearchHit) -> list[object]:
 
     ``hit.source`` keeps the use-case vocabulary ("LOCAL" | "RAG"); the grid
     displays RAG rows as PROV (catálogo de proveedores). Fields a source does
-    not carry stay empty: PROV rows have no stock, margin or local list price
-    (the offer price is the supplier cost, so it lands in the Costo column
-    with its own currency), while LOCAL rows show both the supplier cost and
-    the pricing-engine list price.
+    not carry stay empty: PROV rows have no stock (the offer price is the
+    supplier cost, so it lands in the Costo column with its own currency).
+    The pricing snapshot (``precio_lista_ars`` + ``margen_pct``) is display
+    time for BOTH sources: LOCAL shows the stored product margin, PROV shows
+    the margin adoption would apply (supplier default, global fallback) and
+    the AR$ conversion of the offer cost; a missing offer price leaves the
+    columns empty.
     """
     is_local = hit.source == "LOCAL"
     costo = hit.costo if is_local else hit.price
@@ -203,8 +206,8 @@ def _productos_row(hit: ProductSearchHit) -> list[object]:
         hit.stock if hit.stock is not None else "",
         moneda or "",
         str(costo) if costo is not None else "",
-        str(hit.precio_lista_ars) if is_local and hit.precio_lista_ars is not None else "",
-        str(hit.margen_pct) if is_local and hit.margen_pct is not None else "",
+        str(hit.precio_lista_ars) if hit.precio_lista_ars is not None else "",
+        str(hit.margen_pct) if hit.margen_pct is not None else "",
         hit.categoria or "",
         hit.subcategoria or "",
     ]

@@ -25,7 +25,7 @@ from sqlalchemy import text
 import src.backoffice.app as app_module
 from src.backoffice.app import _productos_search, build_app
 from src.config import get_settings
-from src.db.models import Catalogo, Inventory, Supplier
+from src.db.models import Catalogo, ExchangeRate, Inventory, Supplier
 from src.integrations.rag import RagProduct, RagProductError
 from src.sourcing.product_search import rag_products_table
 
@@ -96,7 +96,9 @@ def rag_table(db_engine):
 def _seed(db_session) -> None:
     """Seed suppliers, local catalog rows and indexed RAG rows (committed)."""
     db_session.add(Supplier(id=1, code="SUP", business_name="Supplier", default_margin_pct=Decimal(0)))
-    db_session.add(Supplier(id=2, code="AMX", business_name="Tornimax", default_margin_pct=Decimal(0)))
+    db_session.add(Supplier(id=2, code="AMX", business_name="Tornimax", default_margin_pct=Decimal("0.30")))
+    db_session.add(Supplier(id=3, code="SCO", business_name="Sanitarios del Centro", default_margin_pct=Decimal("0.25")))
+    db_session.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
     for (
         pid, codigo, supplier_id, nombre, costo, margen, base, marca, categoria, subcategoria, stock
     ) in _LOCAL_ROWS:
@@ -188,8 +190,10 @@ def test_productos_search_lists_local_first_then_prov(rag_table, db_session):
     # Composed fallback: the seeded text_content has no ``nombre:`` line.
     assert prov[3] == "Fischer Tarugos Plástico"
     assert prov[5] == ""  # PROV rows carry no stock
-    assert prov[6:9] == ["ARS", "135.5", ""]  # offer price lands in Costo
-    assert prov[9:] == ["", "Tarugos", "Plástico"]
+    # Offer price lands in Costo; Precio lista (AR$) + Margen are display time
+    # (80.50-style cost here 135.5 × 1.30 = 176.15; AMX margin 0.30).
+    assert prov[6:9] == ["ARS", "135.5", "176.15"]
+    assert prov[9:] == ["0.30", "Tarugos", "Plástico"]
     assert status == "2 producto(s) encontrado(s)."
 
 
@@ -239,8 +243,8 @@ def test_productos_search_vector_results_render_as_prov(rag_table, db_session, m
     row = grid[0]
     assert row[0] == "PROV"
     assert row[1:5] == ["SCO", "SM 483-8", "Monocomando de cocina acero", "GENERICA"]
-    assert row[5] == "" and row[6:9] == ["USD", "15.0", ""]
-    assert row[9:] == ["", "Griferías", "Monocomandos de cocina"]
+    assert row[5] == "" and row[6:9] == ["USD", "15.0", "18750.00"]  # (15 × 1.25) × 1000
+    assert row[9:] == ["0.25", "Griferías", "Monocomandos de cocina"]
     assert status == "1 producto(s) encontrado(s)."
 
 

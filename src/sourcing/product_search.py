@@ -36,7 +36,8 @@ injected rag-api vector query.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 from typing import Any, Protocol
@@ -57,13 +58,26 @@ from sqlalchemy.orm import Session
 
 from src.backoffice.sku_mappings import primary_supplier_codes
 from src.config import get_settings
-from src.db.models import Catalogo, ExchangeRate, Inventory, Supplier, SupplierSkuMapping
+from src.db.models import (
+    AppSetting,
+    Catalogo,
+    ExchangeRate,
+    Inventory,
+    Supplier,
+    SupplierSkuMapping,
+)
 from src.pricing.engine import compute_base
 from src.supplier.rag_catalog import RagProduct, RagProductError
 
 _SEARCH_MAX_LIMIT = 1000
 
 _CENT = Decimal("0.01")
+
+# Mirror of ``backoffice.customer_orders`` default RAG margin (the reverse
+# import sourcing -> backoffice is layer-forbidden, so the setting key and
+# fallback live here too): percentage points, 20.00 = 20%.
+_DEFAULT_MARGIN_KEY = "default_margin_pct"
+_DEFAULT_MARGIN = Decimal(20)
 
 # Accent folding for text filters: ILIKE does not ignore accents, so a user
 # typing "griferias" would never match "Griferías". Both sides are folded with
@@ -115,7 +129,11 @@ class ProductSearchHit:
     Pedidos chain keeps its exact previous shape) feed the unified Productos
     grid: ``subcategoria`` plus the LOCAL pricing snapshot (``costo``,
     ``margen_pct`` stored as percentage points, display-time ``precio_lista_ars``
-    and the stored ``moneda_original``). They stay None for RAG hits.
+    and the stored ``moneda_original``). LOCAL hits carry the stored product
+    margin; RAG hits carry the margin the product would receive when adopted
+    (the supplier's ``default_margin_pct``, falling back to the global default
+    RAG margin when the supplier is not registered) plus the display-time AR$
+    list price computed from the offer cost.
     """
 
     sku: str
@@ -154,6 +172,66 @@ def _list_price_ars(product: Catalogo, usd_rate: Decimal | None) -> Decimal | No
         margin = margin / Decimal(100)
     base = compute_base(product.costo_proveedor, margin)
     return (base * rate).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _default_rag_margin(session: Session) -> Decimal:
+    """Global default RAG margin (percentage points) — mirror of
+    ``backoffice.customer_orders.get_default_margin`` (layer contract forbids
+    the reverse import).
+    """
+    setting = session.get(AppSetting, _DEFAULT_MARGIN_KEY)
+    return _DEFAULT_MARGIN if setting is None else Decimal(setting.value)
+
+
+def _supplier_margins(
+    session: Session, supplier_codes: Iterable[str | None]
+) -> dict[str, Decimal]:
+    """Batch-resolve supplier codes to their default margin (percentage points)."""
+    codes = sorted({code.strip().upper() for code in supplier_codes if code and code.strip()})
+    if not codes:
+        return {}
+    rows = session.execute(
+        select(Supplier.code, Supplier.default_margin_pct).where(
+            func.upper(Supplier.code).in_(codes)
+        )
+    )
+    return {code.upper(): margin for code, margin in rows}
+
+
+def _rag_display_pricing(
+    session: Session, hits: list[ProductSearchHit]
+) -> list[ProductSearchHit]:
+    """Fill the display pricing snapshot on RAG hits (never stored).
+
+    The margin is the one adoption would apply: the supplier's
+    ``default_margin_pct`` when the supplier is registered, the global default
+    RAG margin otherwise. The AR$ list price mirrors ``_list_price_ars`` on the
+    offer cost (cost × (1 + margin) × currency rate, USD only), degrading to
+    rate 1 when the USD exchange rate is not configured — display never
+    crashes on missing configuration.
+    """
+    if not hits:
+        return hits
+    supplier_margins = _supplier_margins(session, [hit.supplier for hit in hits])
+    fallback_margin = _default_rag_margin(session)
+    usd_rate = session.scalar(
+        select(ExchangeRate.rate_to_ars).where(ExchangeRate.currency == "USD")
+    )
+    enriched: list[ProductSearchHit] = []
+    for hit in hits:
+        margin = supplier_margins.get((hit.supplier or "").strip().upper(), fallback_margin)
+        precio_ars = None
+        if hit.price is not None:
+            currency = (hit.moneda or "ARS").strip().upper()
+            rate = Decimal(1)
+            if currency == "USD" and usd_rate is not None:
+                rate = usd_rate
+            margin_fraction = margin / Decimal(100) if margin.copy_abs() > 1 else margin
+            precio_ars = (compute_base(hit.price, margin_fraction) * rate).quantize(
+                _CENT, rounding=ROUND_HALF_UP
+            )
+        enriched.append(replace(hit, margen_pct=margin, precio_lista_ars=precio_ars))
+    return enriched
 
 
 def _compose_rag_name(marca: str | None, categoria: str | None, subcategoria: str | None) -> str:
@@ -429,17 +507,25 @@ def _search_rag(
     remaining field filters post-filter the vector hits in Python with the
     same folded-substring semantics as the SQL path. An unavailable vector
     service degrades to the SQL path and reports a note — never a crash.
+
+    Every returned hit carries the display pricing snapshot (supplier default
+    margin + AR$ list price) so the unified grid never shows blank pricing
+    columns for PROV rows.
     """
+    notes: list[str] = []
     if filters["nombre"] and rag_client is not None:
         try:
-            return _search_rag_vector(rag_client, filters, limit), []
+            hits = _search_rag_vector(rag_client, filters, limit)
         except RagProductError as exc:
             note = (
                 f"Búsqueda por similitud no disponible ({exc}); "
                 "se usó el catálogo indexado (SQL)."
             )
-            return _search_rag_sql(session, filters, limit), [note]
-    return _search_rag_sql(session, filters, limit), []
+            hits = _search_rag_sql(session, filters, limit)
+            notes.append(note)
+    else:
+        hits = _search_rag_sql(session, filters, limit)
+    return _rag_display_pricing(session, hits), notes
 
 
 def _search_rag_vector(

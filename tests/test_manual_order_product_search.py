@@ -29,6 +29,7 @@ from src.backoffice.customer_orders import (
 )
 from src.config import get_settings
 from src.db.models import (
+    AppSetting,
     Catalogo,
     Cliente,
     ExchangeRate,
@@ -545,6 +546,105 @@ def test_unified_search_local_usd_hit_converts_list_price(shop_ctx):
     assert hit.precio_lista_ars == Decimal("3000.00")  # (2.00 × 1.50) × 1000
     assert hit.moneda_original == "USD"
     assert hit.moneda == "ARS"  # Pedidos contract keeps its fixed LOCAL label
+
+
+# ------------------------------------------- RAG display pricing (unified grid)
+
+
+def test_unified_search_rag_hit_carries_supplier_margin_and_list_price(rag_table, shop_ctx):
+    """RAG hits show the adoption margin and the AR$ list price of the offer."""
+    _seed_rag(shop_ctx)
+    shop_ctx.get(Supplier, 2).default_margin_pct = Decimal("0.30")
+    shop_ctx.flush()
+    hits, _notes = search_products_unified(shop_ctx, proveedor="amx", scope="prov")
+
+    hit = next(h for h in hits if h.sku == "AT-5044")
+    assert hit.margen_pct == Decimal("0.30")
+    assert hit.precio_lista_ars == Decimal("104.65")  # 80.50 × 1.30
+
+
+def test_unified_search_rag_usd_hit_converts_list_price(rag_table, shop_ctx):
+    """A USD RAG offer converts cost × margin × rate at display time."""
+    _seed_rag(shop_ctx)
+    shop_ctx.add(
+        Supplier(
+            id=3, code="SCO", business_name="Sanitarios del Centro",
+            default_margin_pct=Decimal("0.25"),
+        )
+    )
+    shop_ctx.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
+    shop_ctx.flush()
+    hits, _notes = search_products_unified(shop_ctx, codigo="SM 483-8", scope="prov")
+
+    hit = hits[0]
+    assert hit.margen_pct == Decimal("0.25")
+    assert hit.precio_lista_ars == Decimal("18750.00")  # (15.00 × 1.25) × 1000
+
+
+def test_unified_search_rag_unregistered_supplier_falls_back_to_global_margin(
+    rag_table, shop_ctx
+):
+    """A RAG hit whose supplier is not registered uses the global default 20%."""
+    _seed_rag_named_row(shop_ctx)  # codigo_proveedor FDN has no Supplier row
+    hits, _notes = search_products_unified(shop_ctx, codigo="FDN-MECH-1", scope="prov")
+
+    hit = hits[0]
+    assert hit.margen_pct == Decimal(20)  # percentage points (points > 1 → /100)
+    assert hit.precio_lista_ars == Decimal("1080.00")  # 900 × 1.20
+
+
+def test_unified_search_rag_fallback_reads_default_margin_setting(rag_table, shop_ctx):
+    """The configured global default margin overrides the built-in 20% fallback."""
+    shop_ctx.add(AppSetting(key="default_margin_pct", value="50.00"))
+    _seed_rag_named_row(shop_ctx)
+    shop_ctx.flush()
+    hits, _notes = search_products_unified(shop_ctx, codigo="FDN-MECH-1", scope="prov")
+
+    hit = hits[0]
+    assert hit.margen_pct == Decimal("50.00")
+    assert hit.precio_lista_ars == Decimal("1350.00")  # 900 × 1.50
+
+
+def test_unified_search_vector_hit_carries_display_pricing(rag_table, shop_ctx):
+    """Vector RAG hits carry the same margin/list-price snapshot as SQL hits."""
+    shop_ctx.add(
+        Supplier(
+            id=3, code="SCO", business_name="Sanitarios del Centro",
+            default_margin_pct=Decimal("0.25"),
+        )
+    )
+    shop_ctx.add(ExchangeRate(currency="USD", rate_to_ars=Decimal("1000.0000")))
+    shop_ctx.flush()
+    fake = _FakeVectorRag((_rag_product(),))
+    hits, _notes = search_products_unified(
+        shop_ctx, nombre="monocomando", scope="prov", rag_client=fake
+    )
+
+    assert hits[0].margen_pct == Decimal("0.25")
+    assert hits[0].precio_lista_ars == Decimal("18750.00")  # (15.00 × 1.25) × 1000
+
+
+def test_unified_search_rag_price_none_leaves_pricing_columns_empty(rag_table, shop_ctx):
+    """A RAG row without an offer price keeps the pricing columns empty."""
+    table = rag_products_table(get_settings().rag_table_name)
+    shop_ctx.execute(
+        table.insert().values(
+            node_id="node-free-1",
+            codigo_producto="FREE-1",
+            codigo_orig="FREE-1",
+            nombre_proveedor="Ferretera del Norte",
+            codigo_proveedor="AMX",
+            precio=None,
+            moneda=None,
+            text_content="nombre: Producto sin precio",
+        )
+    )
+    shop_ctx.flush()
+    hits, _notes = search_products_unified(shop_ctx, codigo="FREE-1", scope="prov")
+
+    hit = hits[0]
+    assert hit.price is None
+    assert hit.precio_lista_ars is None  # grid renders empty, never a fake 0
 
 
 # ------------------------------------- source-aware manual creation (domain)
