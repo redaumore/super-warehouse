@@ -314,7 +314,7 @@ class ExtractedProduct(BaseModel):
     codigo_proveedor: Optional[str] = Field(default=None, description="Código de 3 caracteres del proveedor (ej: PRF / FDN)")
     precio: Optional[float] = Field(default=None, description="Precio unitario numérico del producto (obligatorio para ingesta; omitir productos sin precio)")
     moneda: Optional[str] = Field(default=None, description="Moneda del precio ('ARS' para pesos argentinos, 'USD' para dólares estadounidenses)")
-    nombre_producto: str = Field(description="Título claro y estandarizado para catálogo / e-commerce, incluyendo el sustantivo rector y detalles clave")
+    nombre_producto: str = Field(description="Transcripción VERBATIM del nombre/descripción de la fila del catálogo tal como está impresa en el PDF (ej: 'MECHA DE WIDEA 10 *130 x 10 unid'), preservando mayúsculas/minúsculas, redacción, medidas y notación de cantidad originales; recortar únicamente los espacios circundantes. PROHIBIDO inventar un título comercial o de e-commerce, parafrasear, estandarizar o traducir: ese enriquecimiento es trabajo exclusivo de 'descripcion_tecnica'")
     nombre_comercial: Optional[str] = Field(default=None, description="Alias retrocompatible de nombre_producto")
     categoria_padre: str = Field(description="Categoría principal de ferretería (ej: Fijaciones y Sujeciones, Herramientas, Cintas, Seguridad Industrial)")
     categoria: str = Field(description="Categoría específica (ej: Abrazaderas, Cintas Adhesivas, Calzado de Seguridad)")
@@ -408,7 +408,11 @@ class DirectLunaCatalogProcessor:
             "   - Asigna 'es_tabla: true' si proviene de grilla/tabla de especificaciones, o 'false' si es texto continuo.\n\n"
             "5. FILTRADO ESTRICTO DE DISPONIBILIDAD Y PRECIO (CRÍTICO):\n"
             "   - ÚNICAMENTE debes extraer e ingestar productos y variantes que estén DISPONIBLES y cuenten con PRECIO numérico explícito.\n"
-            "   - Si un producto o fila de tabla NO tiene precio (campo vacío, nulo, guionado '-', 's/p', 'consultar', etc.), o indica explícitamente que está agotado, sin stock, faltante, s/stock, no disponible, discontinuado o fuera de stock, DEBES OMITIRLO COMPLETAMENTE y NO incluirlo en la lista 'productos'."
+            "   - Si un producto o fila de tabla NO tiene precio (campo vacío, nulo, guionado '-', 's/p', 'consultar', etc.), o indica explícitamente que está agotado, sin stock, faltante, s/stock, no disponible, discontinuado o fuera de stock, DEBES OMITIRLO COMPLETAMENTE y NO incluirlo en la lista 'productos'.\n\n"
+            "6. TRANSCRIPCIÓN VERBATIM DEL NOMBRE DEL PRODUCTO ('nombre_producto') (CRÍTICO):\n"
+            "   - 'nombre_producto' es una transcripción FIEL y LITERAL del nombre/descripción de la fila del catálogo, tal como figura impresa en el archivo (ej: 'MECHA DE WIDEA 10 *130 x 10 unid').\n"
+            "   - Conserva EXACTAMENTE la redacción original del catálogo: mayúsculas/minúsculas, medidas y notación de cantidad; recorta únicamente los espacios al inicio y al final.\n"
+            "   - PROHIBIDO parafrasear, estandarizar, traducir, expandir o inventar un título comercial/e-commerce: la descripción enriquecida y optimizada para búsqueda es trabajo EXCLUSIVO de 'descripcion_tecnica'.\n\n"
         )
 
         user_content: List[Dict[str, Any]] = [
@@ -624,7 +628,15 @@ class DirectLunaCatalogProcessor:
                 prod.document_id = canonical_ids["document_id"]
                 prod.sku_compuesto = canonical_ids["sku_compuesto"]
                 prod.codigo_orig = canonical_ids["codigo_orig"]
-                prod.codigo = canonical_ids["sku_compuesto"]
+                # `codigo` is the RAW supplier article code (the code printed on
+                # the catalog), matching the system-wide resolution rule
+                # (``codigo_orig or codigo`` in the RAG client adapter). The
+                # composed SKU (provider + code) is reserved for ``node_id``
+                # and ``sku_compuesto`` — internal identity only, never the
+                # user-visible code. Fallback products without a printed code
+                # keep the hash-based composed SKU so the chunker's
+                # ``codigo``-required validation never fails.
+                prod.codigo = canonical_ids["codigo_orig"] or canonical_ids["sku_compuesto"]
 
                 # Inyección / validación de texto de vectorización con cabecera semántica
                 prod.texto_vectorizacion = build_texto_vectorizacion(
