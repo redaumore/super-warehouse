@@ -185,7 +185,8 @@ def test_productos_search_lists_local_first_then_prov(rag_table, db_session):
     assert local[5] == 3 and local[6:9] == ["ARS", "50.00", "60.00"]
     assert local[9:] == ["0.20", "Fijaciones", "Tarugos"]
     assert prov[0] == "PROV" and prov[2] == "AT-5044"
-    assert prov[3] == "Fischer Tarugos Plástico"  # composed from RAG metadata
+    # Composed fallback: the seeded text_content has no ``nombre:`` line.
+    assert prov[3] == "Fischer Tarugos Plástico"
     assert prov[5] == ""  # PROV rows carry no stock
     assert prov[6:9] == ["ARS", "135.5", ""]  # offer price lands in Costo
     assert prov[9:] == ["", "Tarugos", "Plástico"]

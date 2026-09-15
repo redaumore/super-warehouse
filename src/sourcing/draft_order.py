@@ -39,7 +39,10 @@ from src.pricing.order_pricing import (
     PricingLine,
     compute_order,
 )
-from src.sourcing.product_search import rag_products_table
+from src.sourcing.product_search import (
+    rag_name_from_text_content,
+    rag_products_table,
+)
 from src.supplier.rag_catalog import normalize_rag_sku
 
 _CENT = Decimal("0.01")
@@ -185,6 +188,19 @@ def _compose_rag_name(marca: str | None, categoria: str | None, subcategoria: st
     return " ".join(part for part in (marca, categoria, subcategoria) if part).strip()
 
 
+def _rag_display_name(row: Any) -> str:
+    """Literal product name from text_content, composed-metadata fallback.
+
+    Mirrors the RAG SQL search leg: the ``nombre:`` line embedded in
+    ``text_content`` is the source-file name (owner requirement); the
+    marca+categoria+subcategoria composition is only a fallback.
+    """
+    return (
+        rag_name_from_text_content(row.text_content)
+        or _compose_rag_name(row.marca, row.categoria, row.subcategoria)
+    )
+
+
 def _find_rag_product(session: Session, codigo: str) -> Any | None:
     """Exact lookup of one indexed RAG product by ``codigo_producto``."""
     table = rag_products_table(get_settings().rag_table_name)
@@ -197,6 +213,7 @@ def _find_rag_product(session: Session, codigo: str) -> Any | None:
             table.c.subcategoria,
             table.c.precio,
             table.c.moneda,
+            table.c.text_content,
         ).where(table.c.codigo_producto == codigo)
     ).first()
 
@@ -244,7 +261,7 @@ def _resolve_manual_pricing_lines(
                     sku=row.codigo_producto,
                     cantidad=int(line.cantidad),
                     source=_RAG,
-                    name=_compose_rag_name(row.marca, row.categoria, row.subcategoria),
+                    name=_rag_display_name(row),
                     price=row.precio,
                     currency=row.moneda,
                     # The 3-char codigo_proveedor is the OrderItem.supplier

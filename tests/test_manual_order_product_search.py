@@ -204,6 +204,38 @@ def _seed_rag(session) -> None:
     session.flush()
 
 
+def _seed_rag_named_row(session) -> None:
+    """Seed one RAG row whose ``text_content`` carries the literal name line.
+
+    Mirrors the real chunker output: the ``nombre:`` line inside
+    ``text_content`` holds the source-file name the owner expects to see.
+    """
+    table = rag_products_table(get_settings().rag_table_name)
+    session.execute(
+        table.insert().values(
+            node_id="node-mech-1",
+            codigo_producto="FDN-MECH-1",
+            codigo_orig="FDN-MECH-1",
+            nombre_proveedor="Ferretera del Norte",
+            codigo_proveedor="FDN",
+            marca="Genérico",
+            categoria_padre="Herramientas",
+            categoria="Accesorios para herramientas",
+            subcategoria="Mechas de widia para mampostería",
+            precio=900.0,
+            moneda="ARS",
+            pagina_origen=4,
+            archivo_origen="lista-fdn.pdf",
+            text_content=(
+                "proveedor: Ferretera del Norte S.R.L.\n"
+                "nombre: MECHA DE WIDEA 10 *130 x 10 unid\n"
+                "descripcion: Mecha de widia 10 x 130 mm, paquete x 10 unidades\n"
+            ),
+        )
+    )
+    session.flush()
+
+
 # --------------------------------------------------------- search use case
 
 
@@ -285,6 +317,35 @@ def test_search_with_no_matches_returns_empty_list(rag_table, shop_ctx):
     """Empty results come back as an empty list for the UI to handle."""
     _seed_rag(shop_ctx)
     assert search_order_products(shop_ctx, codigo="INEXISTENTE-99") == []
+
+
+def test_search_rag_hit_shows_literal_name_from_text_content(rag_table, shop_ctx):
+    """RAG display name is the literal catalog name from the nombre: line."""
+    _seed_rag(shop_ctx)
+    _seed_rag_named_row(shop_ctx)
+
+    hits = search_order_products(shop_ctx, codigo="FDN-MECH-1")
+    assert [h.name for h in hits] == ["MECHA DE WIDEA 10 *130 x 10 unid"]
+
+    # Rows without a ``nombre:`` line keep the composed metadata fallback.
+    fallback = [
+        h
+        for h in search_order_products(shop_ctx, marca="fischer")
+        if h.source == "RAG" and h.sku == "AT-5044"
+    ]
+    assert [h.name for h in fallback] == ["Fischer Tarugos Plástico"]
+
+
+def test_manual_order_rag_line_uses_literal_name_from_text_content(rag_table, shop_ctx):
+    """A manual RAG line snapshots the literal name, not the metadata."""
+    _seed_rag(shop_ctx)
+    _seed_rag_named_row(shop_ctx)
+    order = create_manual_order(
+        shop_ctx, 1, [ManualLineInput(sku="FDN-MECH-1", cantidad=1, source="RAG")]
+    )
+
+    item = shop_ctx.scalar(select(OrderItem).where(OrderItem.order_id == order.order_id))
+    assert item.name == "MECHA DE WIDEA 10 *130 x 10 unid"
 
 
 # ------------------------------------------------- unified search (Productos)
@@ -517,6 +578,7 @@ def test_create_manual_order_mixed_local_and_rag_lines(rag_table, shop_ctx):
     assert rag.final_price == Decimal("80.50")
     assert rag.precio_original == Decimal("80.5000")
     assert rag.supplier == "AMX"
+    # Composed fallback: the seeded text_content has no ``nombre:`` line.
     assert rag.name == "Fischer Tarugos Plástico"
     assert order.subtotal == Decimal("582.50")  # 3 × 60 + 5 × 80.50
     assert order.total == Decimal("582.50")

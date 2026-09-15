@@ -157,8 +157,33 @@ def _list_price_ars(product: Catalogo, usd_rate: Decimal | None) -> Decimal | No
 
 
 def _compose_rag_name(marca: str | None, categoria: str | None, subcategoria: str | None) -> str:
-    """Best-effort display name from the RAG row metadata (no clean name column)."""
+    """Best-effort display name from the RAG row metadata (no clean name column).
+
+    Documented fallback: used only when the literal product name cannot be
+    parsed from ``text_content`` (see ``rag_name_from_text_content``).
+    """
     return " ".join(part for part in (marca, categoria, subcategoria) if part).strip()
+
+
+def rag_name_from_text_content(text_content: str | None) -> str | None:
+    """Extract the literal product name from the RAG node's ``text_content``.
+
+    The rag-api chunker embeds the catalog row's name as a ``nombre: <value>``
+    line inside ``text_content`` (the text that was vectorized) — the rag-api
+    product route already parses it server-side. Only the first occurrence is
+    honored and the value is trimmed; ``None`` is returned when the line is
+    absent, empty or whitespace-only, so callers fall back to
+    ``_compose_rag_name``. Keys that merely start with ``nombre_`` (e.g.
+    ``nombre_proveedor:``) never match.
+    """
+    if not text_content:
+        return None
+    for line in text_content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("nombre:"):
+            value = stripped[len("nombre:"):].strip()
+            return value or None
+    return None
 
 
 @lru_cache(maxsize=4)
@@ -518,6 +543,7 @@ def _search_rag_sql(
             table.c.codigo_proveedor,
             table.c.precio,
             table.c.moneda,
+            table.c.text_content,
         )
         .where(and_(*conditions))
         .order_by(table.c.codigo_producto)
@@ -526,7 +552,11 @@ def _search_rag_sql(
     return [
         ProductSearchHit(
             sku=row.codigo_producto,
-            name=_compose_rag_name(row.marca, row.categoria, row.subcategoria),
+            # Display name: literal name parsed from text_content (owner
+            # requirement: same name as the source file), falling back to the
+            # composed metadata name when the ``nombre:`` line is missing.
+            name=rag_name_from_text_content(row.text_content)
+            or _compose_rag_name(row.marca, row.categoria, row.subcategoria),
             source="RAG",
             stock=None,
             marca=row.marca,
